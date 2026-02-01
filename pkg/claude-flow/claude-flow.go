@@ -28,6 +28,7 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/application/workflow"
 	"github.com/anthropics/claude-flow-go/internal/domain/agent"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/events"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tools"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/memory"
@@ -140,6 +141,22 @@ type (
 	TopologyState      = shared.TopologyState
 	TopologyStats      = shared.TopologyStats
 	PartitionStrategy  = shared.PartitionStrategy
+
+	// Federation Hub types
+	EphemeralAgentStatus     = shared.EphemeralAgentStatus
+	EphemeralAgent           = shared.EphemeralAgent
+	SpawnEphemeralOptions    = shared.SpawnEphemeralOptions
+	SpawnResult              = shared.SpawnResult
+	SwarmRegistrationStatus  = shared.SwarmRegistrationStatus
+	SwarmRegistration        = shared.SwarmRegistration
+	FederationMessageType    = shared.FederationMessageType
+	FederationMessage        = shared.FederationMessage
+	FederationProposalStatus = shared.FederationProposalStatus
+	FederationProposal       = shared.FederationProposal
+	FederationEventType      = shared.FederationEventType
+	FederationEvent          = shared.FederationEvent
+	FederationConfig         = shared.FederationConfig
+	FederationStats          = shared.FederationStats
 
 	// Plugin types
 	Plugin           = shared.Plugin
@@ -1337,4 +1354,247 @@ func (tm *TopologyManager) SetOnRebalanced(callback func()) {
 // DefaultTopologyConfig returns the default topology configuration.
 func DefaultTopologyConfig() TopologyConfig {
 	return shared.DefaultTopologyConfig()
+}
+
+// ============================================================================
+// Federation Hub
+// ============================================================================
+
+// Ephemeral agent status constants
+const (
+	EphemeralStatusSpawning   = shared.EphemeralStatusSpawning
+	EphemeralStatusActive     = shared.EphemeralStatusActive
+	EphemeralStatusCompleting = shared.EphemeralStatusCompleting
+	EphemeralStatusTerminated = shared.EphemeralStatusTerminated
+)
+
+// Swarm registration status constants
+const (
+	SwarmStatusActive   = shared.SwarmStatusActive
+	SwarmStatusInactive = shared.SwarmStatusInactive
+	SwarmStatusDegraded = shared.SwarmStatusDegraded
+)
+
+// Federation message type constants
+const (
+	FederationMsgBroadcast = shared.FederationMsgBroadcast
+	FederationMsgDirect    = shared.FederationMsgDirect
+	FederationMsgConsensus = shared.FederationMsgConsensus
+	FederationMsgHeartbeat = shared.FederationMsgHeartbeat
+)
+
+// Federation proposal status constants
+const (
+	FederationProposalPending  = shared.FederationProposalPending
+	FederationProposalAccepted = shared.FederationProposalAccepted
+	FederationProposalRejected = shared.FederationProposalRejected
+)
+
+// Federation event type constants
+const (
+	FederationEventSwarmJoined        = shared.FederationEventSwarmJoined
+	FederationEventSwarmLeft          = shared.FederationEventSwarmLeft
+	FederationEventSwarmDegraded      = shared.FederationEventSwarmDegraded
+	FederationEventAgentSpawned       = shared.FederationEventAgentSpawned
+	FederationEventAgentCompleted     = shared.FederationEventAgentCompleted
+	FederationEventAgentFailed        = shared.FederationEventAgentFailed
+	FederationEventAgentExpired       = shared.FederationEventAgentExpired
+	FederationEventMessageSent        = shared.FederationEventMessageSent
+	FederationEventMessageReceived    = shared.FederationEventMessageReceived
+	FederationEventConsensusStarted   = shared.FederationEventConsensusStarted
+	FederationEventConsensusCompleted = shared.FederationEventConsensusCompleted
+	FederationEventSynced             = shared.FederationEventSynced
+)
+
+// FederationHub wraps the internal federation hub for public use.
+type FederationHub struct {
+	internal *federation.FederationHub
+}
+
+// FederationEventHandler is a callback for federation events.
+type FederationEventHandler = federation.EventHandler
+
+// NewFederationHub creates a new FederationHub with the given configuration.
+func NewFederationHub(config FederationConfig) *FederationHub {
+	return &FederationHub{internal: federation.NewFederationHub(config)}
+}
+
+// NewFederationHubWithDefaults creates a new FederationHub with default configuration.
+func NewFederationHubWithDefaults() *FederationHub {
+	return &FederationHub{internal: federation.NewFederationHubWithDefaults()}
+}
+
+// Initialize starts the federation hub background processes.
+func (fh *FederationHub) Initialize() error {
+	return fh.internal.Initialize()
+}
+
+// Shutdown stops the federation hub and cleans up resources.
+func (fh *FederationHub) Shutdown() error {
+	return fh.internal.Shutdown()
+}
+
+// Swarm Registration
+
+// RegisterSwarm registers a swarm with the federation.
+func (fh *FederationHub) RegisterSwarm(swarm SwarmRegistration) error {
+	return fh.internal.RegisterSwarm(swarm)
+}
+
+// UnregisterSwarm removes a swarm from the federation.
+func (fh *FederationHub) UnregisterSwarm(swarmID string) error {
+	return fh.internal.UnregisterSwarm(swarmID)
+}
+
+// Heartbeat updates the heartbeat for a swarm.
+func (fh *FederationHub) Heartbeat(swarmID string) error {
+	return fh.internal.Heartbeat(swarmID)
+}
+
+// GetSwarm returns a swarm by ID.
+func (fh *FederationHub) GetSwarm(swarmID string) (*SwarmRegistration, bool) {
+	return fh.internal.GetSwarm(swarmID)
+}
+
+// GetSwarms returns all registered swarms.
+func (fh *FederationHub) GetSwarms() []*SwarmRegistration {
+	return fh.internal.GetSwarms()
+}
+
+// GetActiveSwarms returns all active swarms.
+func (fh *FederationHub) GetActiveSwarms() []*SwarmRegistration {
+	return fh.internal.GetActiveSwarms()
+}
+
+// Ephemeral Agents
+
+// SpawnEphemeralAgent spawns a new ephemeral agent.
+func (fh *FederationHub) SpawnEphemeralAgent(opts SpawnEphemeralOptions) (*SpawnResult, error) {
+	return fh.internal.SpawnEphemeralAgent(opts)
+}
+
+// CompleteAgent marks an agent as completing with a result.
+func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error {
+	return fh.internal.CompleteAgent(agentID, result)
+}
+
+// TerminateAgent terminates an agent with an optional error.
+func (fh *FederationHub) TerminateAgent(agentID string, errorMsg string) error {
+	return fh.internal.TerminateAgent(agentID, errorMsg)
+}
+
+// GetAgent returns an agent by ID.
+func (fh *FederationHub) GetAgent(agentID string) (*EphemeralAgent, bool) {
+	return fh.internal.GetAgent(agentID)
+}
+
+// GetAgents returns all ephemeral agents.
+func (fh *FederationHub) GetAgents() []*EphemeralAgent {
+	return fh.internal.GetAgents()
+}
+
+// GetActiveAgents returns all active ephemeral agents.
+func (fh *FederationHub) GetActiveAgents() []*EphemeralAgent {
+	return fh.internal.GetActiveAgents()
+}
+
+// GetAgentsBySwarm returns all agents in a swarm. O(1) lookup.
+func (fh *FederationHub) GetAgentsBySwarm(swarmID string) []*EphemeralAgent {
+	return fh.internal.GetAgentsBySwarm(swarmID)
+}
+
+// GetAgentsByStatus returns all agents with a given status. O(1) lookup.
+func (fh *FederationHub) GetAgentsByStatus(status EphemeralAgentStatus) []*EphemeralAgent {
+	return fh.internal.GetAgentsByStatus(status)
+}
+
+// Cross-Swarm Messaging
+
+// SendMessage sends a direct message to a specific swarm.
+func (fh *FederationHub) SendMessage(sourceSwarmID, targetSwarmID string, payload interface{}) (*FederationMessage, error) {
+	return fh.internal.SendMessage(sourceSwarmID, targetSwarmID, payload)
+}
+
+// Broadcast sends a message to all active swarms except the sender.
+func (fh *FederationHub) Broadcast(sourceSwarmID string, payload interface{}) (*FederationMessage, error) {
+	return fh.internal.Broadcast(sourceSwarmID, payload)
+}
+
+// GetMessages returns recent messages.
+func (fh *FederationHub) GetMessages(limit int) []*FederationMessage {
+	return fh.internal.GetMessages(limit)
+}
+
+// GetMessagesBySwarm returns messages for a specific swarm.
+func (fh *FederationHub) GetMessagesBySwarm(swarmID string, limit int) []*FederationMessage {
+	return fh.internal.GetMessagesBySwarm(swarmID, limit)
+}
+
+// GetMessage returns a message by ID.
+func (fh *FederationHub) GetMessage(messageID string) (*FederationMessage, bool) {
+	return fh.internal.GetMessage(messageID)
+}
+
+// Federation Consensus
+
+// Propose creates a new consensus proposal.
+func (fh *FederationHub) Propose(proposerID, proposalType string, value interface{}) (*FederationProposal, error) {
+	return fh.internal.Propose(proposerID, proposalType, value)
+}
+
+// Vote submits a vote on a proposal.
+func (fh *FederationHub) Vote(voterID, proposalID string, approve bool) error {
+	return fh.internal.Vote(voterID, proposalID, approve)
+}
+
+// GetProposal returns a proposal by ID.
+func (fh *FederationHub) GetProposal(proposalID string) (*FederationProposal, bool) {
+	return fh.internal.GetProposal(proposalID)
+}
+
+// GetProposals returns all proposals.
+func (fh *FederationHub) GetProposals() []*FederationProposal {
+	return fh.internal.GetProposals()
+}
+
+// GetPendingProposals returns all pending proposals.
+func (fh *FederationHub) GetPendingProposals() []*FederationProposal {
+	return fh.internal.GetPendingProposals()
+}
+
+// GetQuorumInfo returns information about quorum requirements.
+func (fh *FederationHub) GetQuorumInfo() (activeSwarms int, requiredVotes int, quorumPercentage float64) {
+	return fh.internal.GetQuorumInfo()
+}
+
+// Events and Stats
+
+// SetEventHandler sets the event handler for federation events.
+func (fh *FederationHub) SetEventHandler(handler FederationEventHandler) {
+	fh.internal.SetEventHandler(handler)
+}
+
+// GetEvents returns recent federation events.
+func (fh *FederationHub) GetEvents(limit int) []*FederationEvent {
+	return fh.internal.GetEvents(limit)
+}
+
+// GetStats returns federation statistics.
+func (fh *FederationHub) GetStats() FederationStats {
+	return fh.internal.GetStats()
+}
+
+// GetConfig returns the federation configuration.
+func (fh *FederationHub) GetConfig() FederationConfig {
+	return fh.internal.GetConfig()
+}
+
+// DefaultFederationConfig returns the default federation configuration.
+func DefaultFederationConfig() FederationConfig {
+	return shared.DefaultFederationConfig()
+}
+
+// NewFederationTools creates MCP tools for federation operations.
+func NewFederationTools(hub *FederationHub) *tools.FederationTools {
+	return tools.NewFederationTools(hub.internal)
 }

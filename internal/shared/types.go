@@ -685,6 +685,204 @@ type TopologyStats struct {
 	LeaderID       string  `json:"leaderId,omitempty"`
 }
 
+// ============================================================================
+// Federation Hub Types
+// ============================================================================
+
+// EphemeralAgentStatus represents the lifecycle status of an ephemeral agent.
+type EphemeralAgentStatus string
+
+const (
+	EphemeralStatusSpawning   EphemeralAgentStatus = "spawning"
+	EphemeralStatusActive     EphemeralAgentStatus = "active"
+	EphemeralStatusCompleting EphemeralAgentStatus = "completing"
+	EphemeralStatusTerminated EphemeralAgentStatus = "terminated"
+)
+
+// EphemeralAgent represents a TTL-based ephemeral agent.
+type EphemeralAgent struct {
+	ID          string                 `json:"id"`
+	SwarmID     string                 `json:"swarmId"`
+	Type        string                 `json:"type"`
+	Task        string                 `json:"task"`
+	Status      EphemeralAgentStatus   `json:"status"`
+	TTL         int64                  `json:"ttl"`         // TTL in milliseconds
+	CreatedAt   int64                  `json:"createdAt"`   // Unix timestamp ms
+	ExpiresAt   int64                  `json:"expiresAt"`   // Unix timestamp ms
+	CompletedAt int64                  `json:"completedAt,omitempty"`
+	Result      interface{}            `json:"result,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// SpawnEphemeralOptions holds options for spawning an ephemeral agent.
+type SpawnEphemeralOptions struct {
+	SwarmID           string                 `json:"swarmId,omitempty"`   // Optional, auto-selects if empty
+	Type              string                 `json:"type"`                // Agent type
+	Task              string                 `json:"task"`                // Task description
+	TTL               int64                  `json:"ttl,omitempty"`       // TTL in milliseconds (default: 60000)
+	Capabilities      []string               `json:"capabilities,omitempty"`
+	Priority          int                    `json:"priority,omitempty"`
+	WaitForCompletion bool                   `json:"waitForCompletion,omitempty"`
+	CompletionTimeout int64                  `json:"completionTimeout,omitempty"`
+	Metadata          map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// SpawnResult represents the result of spawning an ephemeral agent.
+type SpawnResult struct {
+	AgentID      string      `json:"agentId"`
+	SwarmID      string      `json:"swarmId"`
+	Status       string      `json:"status"` // spawned, queued, failed
+	EstimatedTTL int64       `json:"estimatedTtl"`
+	Result       interface{} `json:"result,omitempty"`
+	Error        string      `json:"error,omitempty"`
+}
+
+// SwarmRegistrationStatus represents the status of a registered swarm.
+type SwarmRegistrationStatus string
+
+const (
+	SwarmStatusActive   SwarmRegistrationStatus = "active"
+	SwarmStatusInactive SwarmRegistrationStatus = "inactive"
+	SwarmStatusDegraded SwarmRegistrationStatus = "degraded"
+)
+
+// SwarmRegistration represents a swarm registered with the federation.
+type SwarmRegistration struct {
+	SwarmID       string                  `json:"swarmId"`
+	Name          string                  `json:"name"`
+	Endpoint      string                  `json:"endpoint,omitempty"`
+	Capabilities  []string                `json:"capabilities"`
+	MaxAgents     int                     `json:"maxAgents"`
+	CurrentAgents int                     `json:"currentAgents"`
+	Status        SwarmRegistrationStatus `json:"status"`
+	RegisteredAt  int64                   `json:"registeredAt"`
+	LastHeartbeat int64                   `json:"lastHeartbeat"`
+	Metadata      map[string]interface{}  `json:"metadata,omitempty"`
+}
+
+// FederationMessageType represents the type of federation message.
+type FederationMessageType string
+
+const (
+	FederationMsgBroadcast FederationMessageType = "broadcast"
+	FederationMsgDirect    FederationMessageType = "direct"
+	FederationMsgConsensus FederationMessageType = "consensus"
+	FederationMsgHeartbeat FederationMessageType = "heartbeat"
+)
+
+// FederationMessage represents a message in the federation.
+type FederationMessage struct {
+	ID            string                `json:"id"`
+	Type          FederationMessageType `json:"type"`
+	SourceSwarmID string                `json:"sourceSwarmId"`
+	TargetSwarmID string                `json:"targetSwarmId,omitempty"` // Empty for broadcast
+	Payload       interface{}           `json:"payload"`
+	Timestamp     int64                 `json:"timestamp"`
+	TTL           int64                 `json:"ttl,omitempty"`
+}
+
+// FederationProposalStatus represents the status of a federation proposal.
+type FederationProposalStatus string
+
+const (
+	FederationProposalPending  FederationProposalStatus = "pending"
+	FederationProposalAccepted FederationProposalStatus = "accepted"
+	FederationProposalRejected FederationProposalStatus = "rejected"
+)
+
+// FederationProposal represents a consensus proposal in the federation.
+type FederationProposal struct {
+	ID         string                   `json:"id"`
+	ProposerID string                   `json:"proposerId"` // SwarmID of proposer
+	Type       string                   `json:"type"`
+	Value      interface{}              `json:"value"`
+	Votes      map[string]bool          `json:"votes"` // SwarmID -> approve/reject
+	Status     FederationProposalStatus `json:"status"`
+	CreatedAt  int64                    `json:"createdAt"`
+	ExpiresAt  int64                    `json:"expiresAt"`
+}
+
+// FederationEventType represents the type of federation event.
+type FederationEventType string
+
+const (
+	// Swarm events
+	FederationEventSwarmJoined   FederationEventType = "swarm_joined"
+	FederationEventSwarmLeft     FederationEventType = "swarm_left"
+	FederationEventSwarmDegraded FederationEventType = "swarm_degraded"
+
+	// Agent events
+	FederationEventAgentSpawned   FederationEventType = "agent_spawned"
+	FederationEventAgentCompleted FederationEventType = "agent_completed"
+	FederationEventAgentFailed    FederationEventType = "agent_failed"
+	FederationEventAgentExpired   FederationEventType = "agent_expired"
+
+	// Message events
+	FederationEventMessageSent     FederationEventType = "message_sent"
+	FederationEventMessageReceived FederationEventType = "message_received"
+
+	// Consensus events
+	FederationEventConsensusStarted   FederationEventType = "consensus_started"
+	FederationEventConsensusCompleted FederationEventType = "consensus_completed"
+
+	// System events
+	FederationEventSynced FederationEventType = "federation_synced"
+)
+
+// FederationEvent represents an event in the federation.
+type FederationEvent struct {
+	Type      FederationEventType `json:"type"`
+	SwarmID   string              `json:"swarmId,omitempty"`
+	AgentID   string              `json:"agentId,omitempty"`
+	Data      interface{}         `json:"data,omitempty"`
+	Timestamp int64               `json:"timestamp"`
+}
+
+// FederationConfig holds configuration for the federation hub.
+type FederationConfig struct {
+	FederationID       string `json:"federationId"`
+	EnableConsensus    bool   `json:"enableConsensus"`
+	ConsensusQuorum    float64 `json:"consensusQuorum"`    // 0.0-1.0, default 0.66
+	HeartbeatInterval  int64  `json:"heartbeatInterval"`   // ms
+	SyncInterval       int64  `json:"syncInterval"`        // ms
+	CleanupInterval    int64  `json:"cleanupInterval"`     // ms
+	DefaultAgentTTL    int64  `json:"defaultAgentTtl"`     // ms
+	ProposalTimeout    int64  `json:"proposalTimeout"`     // ms
+	MaxMessageHistory  int    `json:"maxMessageHistory"`
+	AutoCleanupEnabled bool   `json:"autoCleanupEnabled"`
+}
+
+// DefaultFederationConfig returns the default federation configuration.
+func DefaultFederationConfig() FederationConfig {
+	return FederationConfig{
+		FederationID:       "default",
+		EnableConsensus:    true,
+		ConsensusQuorum:    0.66,
+		HeartbeatInterval:  5000,  // 5s
+		SyncInterval:       10000, // 10s
+		CleanupInterval:    5000,  // 5s
+		DefaultAgentTTL:    60000, // 60s
+		ProposalTimeout:    30000, // 30s
+		MaxMessageHistory:  1000,
+		AutoCleanupEnabled: true,
+	}
+}
+
+// FederationStats holds statistics about the federation.
+type FederationStats struct {
+	TotalSwarms        int     `json:"totalSwarms"`
+	ActiveSwarms       int     `json:"activeSwarms"`
+	TotalAgents        int     `json:"totalAgents"`
+	ActiveAgents       int     `json:"activeAgents"`
+	TotalMessages      int64   `json:"totalMessages"`
+	PendingProposals   int     `json:"pendingProposals"`
+	AcceptedProposals  int     `json:"acceptedProposals"`
+	RejectedProposals  int     `json:"rejectedProposals"`
+	AvgSpawnTimeMs     float64 `json:"avgSpawnTimeMs"`
+	AvgMessageLatencyMs float64 `json:"avgMessageLatencyMs"`
+}
+
 // AgentMessage represents a message between agents.
 type AgentMessage struct {
 	From      string                 `json:"from"`
