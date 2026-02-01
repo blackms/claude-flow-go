@@ -15,6 +15,7 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/prompts"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/resources"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sampling"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sessions"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tasks"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
@@ -42,6 +43,9 @@ type Server struct {
 
 	// Hooks system
 	hooks       *hooks.HooksManager
+
+	// Session management
+	sessions    *sessions.SessionManager
 }
 
 // Options holds configuration options for the MCP server.
@@ -53,6 +57,7 @@ type Options struct {
 	SamplingConfig      *shared.SamplingConfig
 	TaskManagerConfig   *shared.TaskManagerConfig
 	HooksConfig         *shared.HooksConfig
+	SessionConfig       *shared.SessionConfig
 }
 
 // NewServer creates a new MCP server.
@@ -107,6 +112,14 @@ func NewServer(opts Options) *Server {
 		hooksManager = hooks.NewHooksManagerWithDefaults()
 	}
 
+	// Create session manager
+	var sessionManager *sessions.SessionManager
+	if opts.SessionConfig != nil {
+		sessionManager = sessions.NewSessionManager(*opts.SessionConfig)
+	} else {
+		sessionManager = sessions.NewSessionManagerWithDefaults()
+	}
+
 	// Build capabilities
 	capabilities := &shared.MCPCapabilities{
 		Resources: &shared.ResourcesCapability{
@@ -138,6 +151,7 @@ func NewServer(opts Options) *Server {
 		capabilities: capabilities,
 		tasks:        taskManager,
 		hooks:        hooksManager,
+		sessions:     sessionManager,
 	}
 }
 
@@ -160,6 +174,13 @@ func (s *Server) Start() error {
 	// Initialize hooks manager
 	if s.hooks != nil {
 		if err := s.hooks.Initialize(); err != nil {
+			return err
+		}
+	}
+
+	// Initialize session manager
+	if s.sessions != nil {
+		if err := s.sessions.Initialize(); err != nil {
 			return err
 		}
 	}
@@ -217,6 +238,11 @@ func (s *Server) Stop() error {
 	// Shutdown hooks manager
 	if s.hooks != nil {
 		s.hooks.Shutdown()
+	}
+
+	// Shutdown session manager
+	if s.sessions != nil {
+		s.sessions.Shutdown()
 	}
 
 	if s.httpServer != nil {
@@ -773,4 +799,9 @@ func (s *Server) GetTasks() *tasks.TaskManager {
 // GetHooks returns the hooks manager.
 func (s *Server) GetHooks() *hooks.HooksManager {
 	return s.hooks
+}
+
+// GetSessions returns the session manager.
+func (s *Server) GetSessions() *sessions.SessionManager {
+	return s.sessions
 }

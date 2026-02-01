@@ -2735,6 +2735,218 @@ var (
 )
 
 // ============================================================================
+// Session Management Types
+// ============================================================================
+
+// SessionState represents the state of a session.
+type SessionState string
+
+const (
+	SessionStateCreated  SessionState = "created"
+	SessionStateReady    SessionState = "ready"
+	SessionStateActive   SessionState = "active"
+	SessionStateClosing  SessionState = "closing"
+	SessionStateClosed   SessionState = "closed"
+	SessionStateExpired  SessionState = "expired"
+	SessionStateError    SessionState = "error"
+)
+
+// TransportType represents the transport type for a session.
+type TransportType string
+
+const (
+	TransportStdio     TransportType = "stdio"
+	TransportHTTP      TransportType = "http"
+	TransportWebSocket TransportType = "websocket"
+	TransportInProcess TransportType = "in-process"
+)
+
+// Session represents an MCP session.
+type Session struct {
+	ID              string                 `json:"id"`
+	State           SessionState           `json:"state"`
+	Transport       TransportType          `json:"transport"`
+	CreatedAt       int64                  `json:"createdAt"`
+	LastActivityAt  int64                  `json:"lastActivityAt"`
+	ExpiresAt       int64                  `json:"expiresAt,omitempty"`
+	IsInitialized   bool                   `json:"isInitialized"`
+	IsAuthenticated bool                   `json:"isAuthenticated"`
+	ClientInfo      *SessionClientInfo     `json:"clientInfo,omitempty"`
+	ProtocolVersion string                 `json:"protocolVersion,omitempty"`
+	Capabilities    map[string]interface{} `json:"capabilities,omitempty"`
+	Agents          []string               `json:"agents,omitempty"`
+	Tasks           []string               `json:"tasks,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// SessionClientInfo contains client information.
+type SessionClientInfo struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+}
+
+// SessionConfig holds configuration for session management.
+type SessionConfig struct {
+	MaxSessions     int   `json:"maxSessions"`     // Default: 100
+	SessionTimeout  int64 `json:"sessionTimeout"`  // Default: 30 minutes (in ms)
+	CleanupInterval int64 `json:"cleanupInterval"` // Default: 60 seconds (in ms)
+	EnableMetrics   bool  `json:"enableMetrics"`   // Default: true
+}
+
+// DefaultSessionConfig returns the default session configuration.
+func DefaultSessionConfig() SessionConfig {
+	return SessionConfig{
+		MaxSessions:     100,
+		SessionTimeout:  30 * 60 * 1000, // 30 minutes in ms
+		CleanupInterval: 60 * 1000,      // 60 seconds in ms
+		EnableMetrics:   true,
+	}
+}
+
+// SessionStats holds session statistics.
+type SessionStats struct {
+	TotalCreated  int64                    `json:"totalCreated"`
+	TotalClosed   int64                    `json:"totalClosed"`
+	TotalExpired  int64                    `json:"totalExpired"`
+	ActiveCount   int                      `json:"activeCount"`
+	ByState       map[SessionState]int     `json:"byState"`
+	ByTransport   map[TransportType]int    `json:"byTransport"`
+	AvgDurationMs float64                  `json:"avgDurationMs"`
+}
+
+// SessionSaveRequest represents a request to save a session.
+type SessionSaveRequest struct {
+	SessionID     string   `json:"sessionId"`
+	Name          string   `json:"name,omitempty"`
+	Description   string   `json:"description,omitempty"`
+	IncludeTasks  bool     `json:"includeTasks"`
+	IncludeAgents bool     `json:"includeAgents"`
+	IncludeMemory bool     `json:"includeMemory"`
+	Tags          []string `json:"tags,omitempty"`
+}
+
+// SessionSaveResult represents the result of saving a session.
+type SessionSaveResult struct {
+	SessionID string `json:"sessionId"`
+	FilePath  string `json:"filePath"`
+	Size      int64  `json:"size"`
+	Checksum  string `json:"checksum"`
+	SavedAt   int64  `json:"savedAt"`
+}
+
+// SessionRestoreRequest represents a request to restore a session.
+type SessionRestoreRequest struct {
+	SessionID     string `json:"sessionId,omitempty"`
+	Name          string `json:"name,omitempty"`
+	ClearExisting bool   `json:"clearExisting"`
+	RestoreTasks  bool   `json:"restoreTasks"`
+	RestoreAgents bool   `json:"restoreAgents"`
+	RestoreMemory bool   `json:"restoreMemory"`
+}
+
+// SessionRestoreResult represents the result of restoring a session.
+type SessionRestoreResult struct {
+	SessionID     string `json:"sessionId"`
+	RestoredAt    int64  `json:"restoredAt"`
+	TasksRestored int    `json:"tasksRestored"`
+	AgentsRestored int   `json:"agentsRestored"`
+	MemoryRestored int   `json:"memoryRestored"`
+}
+
+// SessionListRequest represents a request to list sessions.
+type SessionListRequest struct {
+	Type    string   `json:"type"` // active, saved, all
+	Limit   int      `json:"limit"`
+	Offset  int      `json:"offset"`
+	SortBy  string   `json:"sortBy"`
+	Tags    []string `json:"tags,omitempty"`
+}
+
+// SessionListResult represents the result of listing sessions.
+type SessionListResult struct {
+	Sessions []*SessionSummary `json:"sessions"`
+	Total    int               `json:"total"`
+	Limit    int               `json:"limit"`
+	Offset   int               `json:"offset"`
+}
+
+// SessionSummary provides a summary of a session.
+type SessionSummary struct {
+	ID             string       `json:"id"`
+	Name           string       `json:"name,omitempty"`
+	State          SessionState `json:"state"`
+	Transport      TransportType `json:"transport"`
+	CreatedAt      int64        `json:"createdAt"`
+	LastActivityAt int64        `json:"lastActivityAt"`
+	AgentCount     int          `json:"agentCount"`
+	TaskCount      int          `json:"taskCount"`
+	Tags           []string     `json:"tags,omitempty"`
+}
+
+// SavedSession represents a session saved to disk.
+type SavedSession struct {
+	ID          string                 `json:"id"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Version     string                 `json:"version"`
+	CreatedAt   int64                  `json:"createdAt"`
+	SavedAt     int64                  `json:"savedAt"`
+	Agents      []SavedSessionAgent    `json:"agents,omitempty"`
+	Tasks       []SavedSessionTask     `json:"tasks,omitempty"`
+	Memory      []SavedSessionMemory   `json:"memory,omitempty"`
+	Tags        []string               `json:"tags,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Checksum    string                 `json:"checksum,omitempty"`
+}
+
+// SavedSessionAgent represents an agent in a saved session.
+type SavedSessionAgent struct {
+	ID           string                 `json:"id"`
+	Type         string                 `json:"type"`
+	Status       string                 `json:"status"`
+	Capabilities []string               `json:"capabilities,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// SavedSessionTask represents a task in a saved session.
+type SavedSessionTask struct {
+	ID          string                 `json:"id"`
+	Type        string                 `json:"type"`
+	Description string                 `json:"description"`
+	Status      string                 `json:"status"`
+	Priority    int                    `json:"priority"`
+	AssignedTo  string                 `json:"assignedTo,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// SavedSessionMemory represents memory in a saved session.
+type SavedSessionMemory struct {
+	ID       string                 `json:"id"`
+	AgentID  string                 `json:"agentId"`
+	Type     string                 `json:"type"`
+	Content  string                 `json:"content"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// Session-related errors
+var (
+	// ErrSessionNotFound is returned when a session is not found.
+	ErrSessionNotFound = errors.New("session not found")
+	// ErrMaxSessionsReached is returned when the maximum number of sessions is reached.
+	ErrMaxSessionsReached = errors.New("maximum number of sessions reached")
+	// ErrSessionExpired is returned when a session has expired.
+	ErrSessionExpired = errors.New("session has expired")
+	// ErrSessionClosed is returned when operating on a closed session.
+	ErrSessionClosed = errors.New("session is closed")
+	// ErrInvalidSessionState is returned for invalid session state transitions.
+	ErrInvalidSessionState = errors.New("invalid session state")
+	// ErrSessionSaveNotFound is returned when a saved session is not found.
+	ErrSessionSaveNotFound = errors.New("saved session not found")
+	// ErrSessionChecksumMismatch is returned when checksum validation fails.
+	ErrSessionChecksumMismatch = errors.New("session checksum mismatch")
+)
+
+// ============================================================================
 // Utility Functions
 // ============================================================================
 

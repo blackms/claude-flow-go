@@ -37,6 +37,7 @@ import (
 	mcpprompts "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/prompts"
 	mcpresources "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/resources"
 	mcpsampling "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sampling"
+	mcpsessions "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sessions"
 	mcptasks "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tasks"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tools"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/memory"
@@ -285,6 +286,25 @@ type (
 	PreCommandResult    = shared.PreCommandResult
 	PostCommandContext  = shared.PostCommandContext
 	PostCommandResult   = shared.PostCommandResult
+
+	// Session Management Types
+	SessionState         = shared.SessionState
+	TransportType        = shared.TransportType
+	Session              = shared.Session
+	SessionClientInfo    = shared.SessionClientInfo
+	SessionConfig        = shared.SessionConfig
+	SessionStats         = shared.SessionStats
+	SessionSaveRequest   = shared.SessionSaveRequest
+	SessionSaveResult    = shared.SessionSaveResult
+	SessionRestoreRequest = shared.SessionRestoreRequest
+	SessionRestoreResult = shared.SessionRestoreResult
+	SessionListRequest   = shared.SessionListRequest
+	SessionListResult    = shared.SessionListResult
+	SessionSummary       = shared.SessionSummary
+	SavedSession         = shared.SavedSession
+	SavedSessionAgent    = shared.SavedSessionAgent
+	SavedSessionTask     = shared.SavedSessionTask
+	SavedSessionMemory   = shared.SavedSessionMemory
 
 	// Backend types
 	MemoryBackend = shared.MemoryBackend
@@ -2789,4 +2809,147 @@ func (hm *HooksManager) HookCount() int {
 // DefaultHooksConfig returns the default hooks configuration.
 func DefaultHooksConfig() HooksConfig {
 	return shared.DefaultHooksConfig()
+}
+
+// ============================================================================
+// Session Management
+// ============================================================================
+
+// Session state constants
+const (
+	SessionStateCreated  = shared.SessionStateCreated
+	SessionStateReady    = shared.SessionStateReady
+	SessionStateActive   = shared.SessionStateActive
+	SessionStateClosing  = shared.SessionStateClosing
+	SessionStateClosed   = shared.SessionStateClosed
+	SessionStateExpired  = shared.SessionStateExpired
+	SessionStateError    = shared.SessionStateError
+)
+
+// Transport type constants
+const (
+	TransportStdio     = shared.TransportStdio
+	TransportHTTP      = shared.TransportHTTP
+	TransportWebSocket = shared.TransportWebSocket
+	TransportInProcess = shared.TransportInProcess
+)
+
+// SessionManager manages MCP sessions.
+type SessionManager struct {
+	internal *mcpsessions.SessionManager
+}
+
+// NewSessionManager creates a new SessionManager.
+func NewSessionManager(config SessionConfig) *SessionManager {
+	return &SessionManager{internal: mcpsessions.NewSessionManager(config)}
+}
+
+// NewSessionManagerWithDefaults creates a SessionManager with default configuration.
+func NewSessionManagerWithDefaults() *SessionManager {
+	return &SessionManager{internal: mcpsessions.NewSessionManagerWithDefaults()}
+}
+
+// Initialize starts the SessionManager.
+func (sm *SessionManager) Initialize() error {
+	return sm.internal.Initialize()
+}
+
+// Shutdown stops the SessionManager.
+func (sm *SessionManager) Shutdown() error {
+	return sm.internal.Shutdown()
+}
+
+// CreateSession creates a new session.
+func (sm *SessionManager) CreateSession(transport TransportType) (*Session, error) {
+	return sm.internal.CreateSession(transport)
+}
+
+// GetSession returns a session by ID.
+func (sm *SessionManager) GetSession(id string) (*Session, error) {
+	return sm.internal.GetSession(id)
+}
+
+// UpdateActivity updates the last activity timestamp for a session.
+func (sm *SessionManager) UpdateActivity(id string) error {
+	return sm.internal.UpdateActivity(id)
+}
+
+// InitializeSession marks a session as initialized.
+func (sm *SessionManager) InitializeSession(id string, clientInfo *SessionClientInfo, protocolVersion string) error {
+	return sm.internal.InitializeSession(id, clientInfo, protocolVersion)
+}
+
+// CloseSession closes a session.
+func (sm *SessionManager) CloseSession(id, reason string) error {
+	return sm.internal.CloseSession(id, reason)
+}
+
+// AddAgent adds an agent to a session.
+func (sm *SessionManager) AddAgent(sessionID, agentID string) error {
+	return sm.internal.AddAgent(sessionID, agentID)
+}
+
+// RemoveAgent removes an agent from a session.
+func (sm *SessionManager) RemoveAgent(sessionID, agentID string) error {
+	return sm.internal.RemoveAgent(sessionID, agentID)
+}
+
+// AddTask adds a task to a session.
+func (sm *SessionManager) AddTask(sessionID, taskID string) error {
+	return sm.internal.AddTask(sessionID, taskID)
+}
+
+// RemoveTask removes a task from a session.
+func (sm *SessionManager) RemoveTask(sessionID, taskID string) error {
+	return sm.internal.RemoveTask(sessionID, taskID)
+}
+
+// ListSessions returns sessions matching the filter.
+func (sm *SessionManager) ListSessions(filter *SessionListRequest) *SessionListResult {
+	return sm.internal.ListSessions(filter)
+}
+
+// CleanupExpiredSessions removes expired sessions.
+func (sm *SessionManager) CleanupExpiredSessions() int {
+	return sm.internal.CleanupExpiredSessions()
+}
+
+// GetStats returns session statistics.
+func (sm *SessionManager) GetStats() *SessionStats {
+	return sm.internal.GetStats()
+}
+
+// GetConfig returns the session configuration.
+func (sm *SessionManager) GetConfig() SessionConfig {
+	return sm.internal.GetConfig()
+}
+
+// SessionCount returns the total number of sessions.
+func (sm *SessionManager) SessionCount() int {
+	return sm.internal.SessionCount()
+}
+
+// ActiveSessionCount returns the number of active sessions.
+func (sm *SessionManager) ActiveSessionCount() int {
+	return sm.internal.ActiveSessionCount()
+}
+
+// SaveSession saves a session to disk.
+func (sm *SessionManager) SaveSession(req *SessionSaveRequest) (*SessionSaveResult, error) {
+	return sm.internal.SaveSession(req)
+}
+
+// RestoreSession restores a session from disk.
+func (sm *SessionManager) RestoreSession(req *SessionRestoreRequest) (*SessionRestoreResult, error) {
+	return sm.internal.RestoreSession(req)
+}
+
+// ListSavedSessions lists saved sessions.
+func (sm *SessionManager) ListSavedSessions(tags []string) ([]*SessionSummary, error) {
+	return sm.internal.ListSavedSessions(tags)
+}
+
+// DefaultSessionConfig returns the default session configuration.
+func DefaultSessionConfig() SessionConfig {
+	return shared.DefaultSessionConfig()
 }
