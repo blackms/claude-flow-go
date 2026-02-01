@@ -33,6 +33,7 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/memory"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/messaging"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/plugins"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/topology"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
@@ -122,11 +123,23 @@ type (
 	WorkflowMetrics    = shared.WorkflowMetrics
 
 	// Swarm types
-	SwarmTopology = shared.SwarmTopology
-	SwarmConfig   = shared.SwarmConfig
-	SwarmState    = shared.SwarmState
-	AgentMessage  = shared.AgentMessage
-	AgentMetrics  = shared.AgentMetrics
+	SwarmTopology  = shared.SwarmTopology
+	SwarmConfig    = shared.SwarmConfig
+	SwarmState     = shared.SwarmState
+	SwarmHierarchy = shared.SwarmHierarchy
+	AgentMessage   = shared.AgentMessage
+	AgentMetrics   = shared.AgentMetrics
+
+	// Topology Manager types
+	TopologyNodeRole   = shared.TopologyNodeRole
+	TopologyNodeStatus = shared.TopologyNodeStatus
+	TopologyNode       = shared.TopologyNode
+	TopologyEdge       = shared.TopologyEdge
+	TopologyPartition  = shared.TopologyPartition
+	TopologyConfig     = shared.TopologyConfig
+	TopologyState      = shared.TopologyState
+	TopologyStats      = shared.TopologyStats
+	PartitionStrategy  = shared.PartitionStrategy
 
 	// Plugin types
 	Plugin           = shared.Plugin
@@ -1090,4 +1103,238 @@ func (mb *MessageBus) SetOnFailed(callback func(messageID string, err error)) {
 // DefaultMessageBusConfig returns the default message bus configuration.
 func DefaultMessageBusConfig() MessageBusConfig {
 	return shared.DefaultMessageBusConfig()
+}
+
+// ============================================================================
+// Topology Manager
+// ============================================================================
+
+// Topology type constants
+const (
+	TopologyRing   = shared.TopologyRing
+	TopologyStar   = shared.TopologyStar
+	TopologyHybrid = shared.TopologyHybrid
+)
+
+// Topology role constants
+const (
+	TopologyRoleQueen       = shared.TopologyRoleQueen
+	TopologyRoleWorker      = shared.TopologyRoleWorker
+	TopologyRoleCoordinator = shared.TopologyRoleCoordinator
+	TopologyRolePeer        = shared.TopologyRolePeer
+)
+
+// Topology status constants
+const (
+	TopologyStatusActive   = shared.TopologyStatusActive
+	TopologyStatusInactive = shared.TopologyStatusInactive
+	TopologyStatusSyncing  = shared.TopologyStatusSyncing
+	TopologyStatusFailed   = shared.TopologyStatusFailed
+)
+
+// Partition strategy constants
+const (
+	PartitionStrategyHash       = shared.PartitionStrategyHash
+	PartitionStrategyRange      = shared.PartitionStrategyRange
+	PartitionStrategyRoundRobin = shared.PartitionStrategyRoundRobin
+)
+
+// TopologyManager wraps the internal topology manager for public use.
+type TopologyManager struct {
+	internal *topology.TopologyManager
+}
+
+// NewTopologyManager creates a new TopologyManager with the given configuration.
+func NewTopologyManager(config TopologyConfig) *TopologyManager {
+	return &TopologyManager{internal: topology.NewTopologyManager(config)}
+}
+
+// NewTopologyManagerWithDefaults creates a new TopologyManager with default configuration.
+func NewTopologyManagerWithDefaults() *TopologyManager {
+	return &TopologyManager{internal: topology.NewTopologyManagerWithDefaults()}
+}
+
+// Initialize initializes the topology manager.
+func (tm *TopologyManager) Initialize() error {
+	return tm.internal.Initialize()
+}
+
+// Shutdown shuts down the topology manager.
+func (tm *TopologyManager) Shutdown() error {
+	return tm.internal.Shutdown()
+}
+
+// AddNode adds a node to the topology with the given role.
+func (tm *TopologyManager) AddNode(agentID string, role TopologyNodeRole) (*TopologyNode, error) {
+	return tm.internal.AddNode(agentID, role)
+}
+
+// RemoveNode removes a node from the topology.
+func (tm *TopologyManager) RemoveNode(agentID string) error {
+	return tm.internal.RemoveNode(agentID)
+}
+
+// UpdateNode updates a node's properties.
+func (tm *TopologyManager) UpdateNode(agentID string, updates map[string]interface{}) error {
+	return tm.internal.UpdateNode(agentID, updates)
+}
+
+// GetNode returns a node by agentID. O(1).
+func (tm *TopologyManager) GetNode(agentID string) (*TopologyNode, bool) {
+	return tm.internal.GetNode(agentID)
+}
+
+// GetNeighbors returns the neighbors of a node. O(1).
+func (tm *TopologyManager) GetNeighbors(agentID string) []string {
+	return tm.internal.GetNeighbors(agentID)
+}
+
+// GetNodesByRole returns all nodes with the given role. O(1).
+func (tm *TopologyManager) GetNodesByRole(role TopologyNodeRole) []*TopologyNode {
+	return tm.internal.GetNodesByRole(role)
+}
+
+// GetQueen returns the queen node. O(1).
+func (tm *TopologyManager) GetQueen() *TopologyNode {
+	return tm.internal.GetQueen()
+}
+
+// GetCoordinator returns the coordinator node. O(1).
+func (tm *TopologyManager) GetCoordinator() *TopologyNode {
+	return tm.internal.GetCoordinator()
+}
+
+// GetLeader returns the current leader agentID.
+func (tm *TopologyManager) GetLeader() string {
+	return tm.internal.GetLeader()
+}
+
+// ElectLeader performs leader election based on role priority.
+func (tm *TopologyManager) ElectLeader() string {
+	return tm.internal.ElectLeader()
+}
+
+// Rebalance rebalances the topology.
+func (tm *TopologyManager) Rebalance() {
+	tm.internal.Rebalance()
+}
+
+// GetState returns the current topology state.
+func (tm *TopologyManager) GetState() TopologyState {
+	return tm.internal.GetState()
+}
+
+// GetConfig returns the current configuration.
+func (tm *TopologyManager) GetConfig() TopologyConfig {
+	return tm.internal.GetConfig()
+}
+
+// GetStats returns topology statistics.
+func (tm *TopologyManager) GetStats() TopologyStats {
+	return tm.internal.GetStats()
+}
+
+// FindOptimalPath finds the shortest path between two nodes using BFS.
+func (tm *TopologyManager) FindOptimalPath(from, to string) []string {
+	return tm.internal.FindOptimalPath(from, to)
+}
+
+// FindAllPaths finds all paths between two nodes (up to maxPaths).
+func (tm *TopologyManager) FindAllPaths(from, to string, maxPaths int) [][]string {
+	return tm.internal.FindAllPaths(from, to, maxPaths)
+}
+
+// GetShortestDistance returns the shortest distance (hops) between two nodes.
+func (tm *TopologyManager) GetShortestDistance(from, to string) int {
+	return tm.internal.GetShortestDistance(from, to)
+}
+
+// IsConnected checks if the topology is fully connected.
+func (tm *TopologyManager) IsConnected() bool {
+	return tm.internal.IsConnected()
+}
+
+// GetConnectedComponents returns all connected components in the topology.
+func (tm *TopologyManager) GetConnectedComponents() [][]string {
+	return tm.internal.GetConnectedComponents()
+}
+
+// GetNodeDegree returns the degree (number of connections) of a node.
+func (tm *TopologyManager) GetNodeDegree(agentID string) int {
+	return tm.internal.GetNodeDegree(agentID)
+}
+
+// Ring topology methods
+
+// GetRingSuccessor returns the next node in the ring.
+func (tm *TopologyManager) GetRingSuccessor(agentID string) string {
+	return tm.internal.GetRingSuccessor(agentID)
+}
+
+// GetRingPredecessor returns the previous node in the ring.
+func (tm *TopologyManager) GetRingPredecessor(agentID string) string {
+	return tm.internal.GetRingPredecessor(agentID)
+}
+
+// Star topology methods
+
+// GetHub returns the hub (coordinator) node.
+func (tm *TopologyManager) GetHub() *TopologyNode {
+	return tm.internal.GetHub()
+}
+
+// GetSpokes returns all non-hub nodes.
+func (tm *TopologyManager) GetSpokes() []*TopologyNode {
+	return tm.internal.GetSpokes()
+}
+
+// IsHub checks if the given agent is the hub.
+func (tm *TopologyManager) IsHub(agentID string) bool {
+	return tm.internal.IsHub(agentID)
+}
+
+// Hybrid topology methods
+
+// GetHybridCoordinators returns all coordinator nodes (queen + coordinators).
+func (tm *TopologyManager) GetHybridCoordinators() []*TopologyNode {
+	return tm.internal.GetHybridCoordinators()
+}
+
+// GetHybridWorkers returns all worker nodes.
+func (tm *TopologyManager) GetHybridWorkers() []*TopologyNode {
+	return tm.internal.GetHybridWorkers()
+}
+
+// Hierarchical topology methods
+
+// GetHierarchy returns the hierarchy structure.
+func (tm *TopologyManager) GetHierarchy() SwarmHierarchy {
+	return tm.internal.GetHierarchy()
+}
+
+// Callback setters
+
+// SetOnNodeAdded sets the callback for when a node is added.
+func (tm *TopologyManager) SetOnNodeAdded(callback func(node *TopologyNode)) {
+	tm.internal.SetOnNodeAdded(callback)
+}
+
+// SetOnNodeRemoved sets the callback for when a node is removed.
+func (tm *TopologyManager) SetOnNodeRemoved(callback func(agentID string)) {
+	tm.internal.SetOnNodeRemoved(callback)
+}
+
+// SetOnLeaderElected sets the callback for when a leader is elected.
+func (tm *TopologyManager) SetOnLeaderElected(callback func(leaderID string)) {
+	tm.internal.SetOnLeaderElected(callback)
+}
+
+// SetOnRebalanced sets the callback for when the topology is rebalanced.
+func (tm *TopologyManager) SetOnRebalanced(callback func()) {
+	tm.internal.SetOnRebalanced(callback)
+}
+
+// DefaultTopologyConfig returns the default topology configuration.
+func DefaultTopologyConfig() TopologyConfig {
+	return shared.DefaultTopologyConfig()
 }

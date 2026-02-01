@@ -546,6 +546,9 @@ const (
 	TopologyMesh         SwarmTopology = "mesh"
 	TopologySimple       SwarmTopology = "simple"
 	TopologyAdaptive     SwarmTopology = "adaptive"
+	TopologyRing         SwarmTopology = "ring"
+	TopologyStar         SwarmTopology = "star"
+	TopologyHybrid       SwarmTopology = "hybrid"
 )
 
 // SwarmConfig holds configuration for a swarm.
@@ -581,6 +584,105 @@ type MeshConnection struct {
 	To     string  `json:"to"`
 	Type   string  `json:"type"`
 	Weight float64 `json:"weight,omitempty"`
+}
+
+// ============================================================================
+// Topology Manager Types
+// ============================================================================
+
+// TopologyNodeRole represents the role of a node in the topology.
+type TopologyNodeRole string
+
+const (
+	TopologyRoleQueen       TopologyNodeRole = "queen"
+	TopologyRoleWorker      TopologyNodeRole = "worker"
+	TopologyRoleCoordinator TopologyNodeRole = "coordinator"
+	TopologyRolePeer        TopologyNodeRole = "peer"
+)
+
+// TopologyNodeStatus represents the status of a node.
+type TopologyNodeStatus string
+
+const (
+	TopologyStatusActive   TopologyNodeStatus = "active"
+	TopologyStatusInactive TopologyNodeStatus = "inactive"
+	TopologyStatusSyncing  TopologyNodeStatus = "syncing"
+	TopologyStatusFailed   TopologyNodeStatus = "failed"
+)
+
+// TopologyNode represents a node in the topology.
+type TopologyNode struct {
+	ID          string                 `json:"id"`          // Format: "node_{agentId}"
+	AgentID     string                 `json:"agentId"`     // Unique agent identifier
+	Role        TopologyNodeRole       `json:"role"`        // queen, worker, coordinator, peer
+	Status      TopologyNodeStatus     `json:"status"`      // active, inactive, syncing, failed
+	Connections []string               `json:"connections"` // Connected agentIds
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// TopologyEdge represents an edge between nodes.
+type TopologyEdge struct {
+	From          string  `json:"from"`          // Source agentId
+	To            string  `json:"to"`            // Target agentId
+	Weight        float64 `json:"weight"`        // Edge weight (default: 1)
+	Bidirectional bool    `json:"bidirectional"` // True for mesh, false for hierarchical
+	LatencyMs     int64   `json:"latencyMs,omitempty"`
+}
+
+// PartitionStrategy represents the partition strategy.
+type PartitionStrategy string
+
+const (
+	PartitionStrategyHash       PartitionStrategy = "hash"
+	PartitionStrategyRange      PartitionStrategy = "range"
+	PartitionStrategyRoundRobin PartitionStrategy = "round-robin"
+)
+
+// TopologyPartition represents a partition in mesh/hybrid topologies.
+type TopologyPartition struct {
+	ID           string   `json:"id"`           // Format: "partition_{index}"
+	Nodes        []string `json:"nodes"`        // AgentIds in partition
+	Leader       string   `json:"leader"`       // Partition leader agentId
+	ReplicaCount int      `json:"replicaCount"` // Replication count
+}
+
+// TopologyConfig holds configuration for the topology manager.
+type TopologyConfig struct {
+	Type              SwarmTopology     `json:"type"`
+	MaxAgents         int               `json:"maxAgents"`
+	ReplicationFactor int               `json:"replicationFactor"` // default: 2
+	PartitionStrategy PartitionStrategy `json:"partitionStrategy"` // hash, range, round-robin
+	FailoverEnabled   bool              `json:"failoverEnabled"`
+	AutoRebalance     bool              `json:"autoRebalance"`
+}
+
+// DefaultTopologyConfig returns the default topology configuration.
+func DefaultTopologyConfig() TopologyConfig {
+	return TopologyConfig{
+		Type:              TopologyMesh,
+		MaxAgents:         100,
+		ReplicationFactor: 2,
+		PartitionStrategy: PartitionStrategyRoundRobin,
+		FailoverEnabled:   true,
+		AutoRebalance:     true,
+	}
+}
+
+// TopologyState holds the current state of the topology.
+type TopologyState struct {
+	Nodes      []TopologyNode      `json:"nodes"`
+	Edges      []TopologyEdge      `json:"edges"`
+	Leader     string              `json:"leader,omitempty"`
+	Partitions []TopologyPartition `json:"partitions,omitempty"`
+}
+
+// TopologyStats holds statistics about the topology.
+type TopologyStats struct {
+	NodeCount      int     `json:"nodeCount"`
+	EdgeCount      int     `json:"edgeCount"`
+	PartitionCount int     `json:"partitionCount"`
+	AvgConnections float64 `json:"avgConnections"`
+	LeaderID       string  `json:"leaderId,omitempty"`
 }
 
 // AgentMessage represents a message between agents.
