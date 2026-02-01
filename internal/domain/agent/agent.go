@@ -308,9 +308,23 @@ func GetDefaultCapabilities(agentType shared.AgentType) []string {
 		shared.AgentTypeNeuralIntegrator: {"neural-integration", "learning", "patterns"},
 
 		// Support Domain (Agents 13-15)
-		shared.AgentTypeTDDTester:          {"tdd-testing", "unit-test", "test-driven"},
+		shared.AgentTypeTDDTester:           {"tdd-testing", "unit-test", "test-driven"},
 		shared.AgentTypePerformanceEngineer: {"performance-benchmarking", "optimization", "profiling"},
 		shared.AgentTypeReleaseManager:      {"deployment", "release-management", "ci-cd"},
+
+		// Extended Agent Types (12 new types)
+		shared.AgentTypeResearcher:          {"web-search", "data-analysis", "summarization", "citation"},
+		shared.AgentTypeArchitect:           {"system-design", "pattern-analysis", "scalability", "documentation"},
+		shared.AgentTypeAnalyst:             {"performance-analysis", "metrics", "reporting", "insights"},
+		shared.AgentTypeOptimizer:           {"performance-optimization", "resource-management", "efficiency"},
+		shared.AgentTypeSecurityAuditor:     {"security-audit", "vulnerability-scan", "compliance", "cve-detection"},
+		shared.AgentTypeCoreArchitect:       {"ddd-design", "core-architecture", "domain-modeling", "clean-architecture"},
+		shared.AgentTypeTestArchitect:       {"test-architecture", "tdd-london", "test-strategy", "coverage-planning"},
+		shared.AgentTypeIntegrationArchitect: {"external-integration", "api-design", "protocol-design", "interoperability"},
+		shared.AgentTypeHooksDeveloper:      {"hooks-development", "self-learning", "event-handling", "extensibility"},
+		shared.AgentTypeMCPSpecialist:       {"mcp-protocol", "tool-development", "server-management", "resource-handling"},
+		shared.AgentTypeDocumentationLead:   {"documentation", "technical-writing", "api-docs", "tutorials"},
+		shared.AgentTypeDevOpsEngineer:      {"ci-cd", "infrastructure", "deployment", "monitoring", "containerization"},
 	}
 
 	caps, exists := defaults[agentType]

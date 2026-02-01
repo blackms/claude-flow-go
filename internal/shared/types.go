@@ -3,8 +3,24 @@ package shared
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+)
+
+// ============================================================================
+// Errors
+// ============================================================================
+
+var (
+	// ErrMaxAgentsReached is returned when the maximum number of agents is reached.
+	ErrMaxAgentsReached = errors.New("maximum number of agents reached")
+	// ErrAgentNotFound is returned when an agent is not found.
+	ErrAgentNotFound = errors.New("agent not found")
+	// ErrPoolNotFound is returned when a pool is not found.
+	ErrPoolNotFound = errors.New("pool not found")
+	// ErrInvalidAgentType is returned when an invalid agent type is provided.
+	ErrInvalidAgentType = errors.New("invalid agent type")
 )
 
 // ============================================================================
@@ -65,9 +81,23 @@ const (
 	AgentTypeNeuralIntegrator AgentType = "neural-integrator"
 
 	// Support Domain (Agents 13-15)
-	AgentTypeTDDTester          AgentType = "tdd-tester"
+	AgentTypeTDDTester           AgentType = "tdd-tester"
 	AgentTypePerformanceEngineer AgentType = "performance-engineer"
 	AgentTypeReleaseManager      AgentType = "release-manager"
+
+	// Extended Agent Types (20+ types)
+	AgentTypeResearcher         AgentType = "researcher"
+	AgentTypeArchitect          AgentType = "architect"
+	AgentTypeAnalyst            AgentType = "analyst"
+	AgentTypeOptimizer          AgentType = "optimizer"
+	AgentTypeSecurityAuditor    AgentType = "security-auditor"
+	AgentTypeCoreArchitect      AgentType = "core-architect"
+	AgentTypeTestArchitect      AgentType = "test-architect"
+	AgentTypeIntegrationArchitect AgentType = "integration-architect"
+	AgentTypeHooksDeveloper     AgentType = "hooks-developer"
+	AgentTypeMCPSpecialist      AgentType = "mcp-specialist"
+	AgentTypeDocumentationLead  AgentType = "documentation-lead"
+	AgentTypeDevOpsEngineer     AgentType = "devops-engineer"
 )
 
 // AgentDomain represents a domain in the 15-agent architecture.

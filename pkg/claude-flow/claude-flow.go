@@ -35,6 +35,8 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/memory"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/messaging"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/plugins"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/pool"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/routing"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/topology"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
@@ -222,21 +224,35 @@ const (
 	AgentTypeDeployer    = shared.AgentTypeDeployer
 
 	// 15-Agent Domain Architecture Types
-	AgentTypeQueen             = shared.AgentTypeQueen
-	AgentTypeSecurityArchitect = shared.AgentTypeSecurityArchitect
-	AgentTypeCVERemediation    = shared.AgentTypeCVERemediation
-	AgentTypeThreatModeler     = shared.AgentTypeThreatModeler
-	AgentTypeDDDDesigner       = shared.AgentTypeDDDDesigner
-	AgentTypeMemorySpecialist  = shared.AgentTypeMemorySpecialist
-	AgentTypeTypeModernizer    = shared.AgentTypeTypeModernizer
-	AgentTypeSwarmSpecialist   = shared.AgentTypeSwarmSpecialist
-	AgentTypeMCPOptimizer      = shared.AgentTypeMCPOptimizer
-	AgentTypeAgenticFlow       = shared.AgentTypeAgenticFlow
-	AgentTypeCLIDeveloper      = shared.AgentTypeCLIDeveloper
-	AgentTypeNeuralIntegrator  = shared.AgentTypeNeuralIntegrator
-	AgentTypeTDDTester         = shared.AgentTypeTDDTester
+	AgentTypeQueen               = shared.AgentTypeQueen
+	AgentTypeSecurityArchitect   = shared.AgentTypeSecurityArchitect
+	AgentTypeCVERemediation      = shared.AgentTypeCVERemediation
+	AgentTypeThreatModeler       = shared.AgentTypeThreatModeler
+	AgentTypeDDDDesigner         = shared.AgentTypeDDDDesigner
+	AgentTypeMemorySpecialist    = shared.AgentTypeMemorySpecialist
+	AgentTypeTypeModernizer      = shared.AgentTypeTypeModernizer
+	AgentTypeSwarmSpecialist     = shared.AgentTypeSwarmSpecialist
+	AgentTypeMCPOptimizer        = shared.AgentTypeMCPOptimizer
+	AgentTypeAgenticFlow         = shared.AgentTypeAgenticFlow
+	AgentTypeCLIDeveloper        = shared.AgentTypeCLIDeveloper
+	AgentTypeNeuralIntegrator    = shared.AgentTypeNeuralIntegrator
+	AgentTypeTDDTester           = shared.AgentTypeTDDTester
 	AgentTypePerformanceEngineer = shared.AgentTypePerformanceEngineer
-	AgentTypeReleaseManager    = shared.AgentTypeReleaseManager
+	AgentTypeReleaseManager      = shared.AgentTypeReleaseManager
+
+	// Extended Agent Types (12 additional types)
+	AgentTypeResearcher          = shared.AgentTypeResearcher
+	AgentTypeArchitect           = shared.AgentTypeArchitect
+	AgentTypeAnalyst             = shared.AgentTypeAnalyst
+	AgentTypeOptimizer           = shared.AgentTypeOptimizer
+	AgentTypeSecurityAuditor     = shared.AgentTypeSecurityAuditor
+	AgentTypeCoreArchitect       = shared.AgentTypeCoreArchitect
+	AgentTypeTestArchitect       = shared.AgentTypeTestArchitect
+	AgentTypeIntegrationArchitect = shared.AgentTypeIntegrationArchitect
+	AgentTypeHooksDeveloper      = shared.AgentTypeHooksDeveloper
+	AgentTypeMCPSpecialist       = shared.AgentTypeMCPSpecialist
+	AgentTypeDocumentationLead   = shared.AgentTypeDocumentationLead
+	AgentTypeDevOpsEngineer      = shared.AgentTypeDevOpsEngineer
 )
 
 // Domain constants
@@ -1752,3 +1768,371 @@ func DefaultMoEConfig() MoEConfig {
 func DefaultGraphRoPEConfig() GraphRoPEConfig {
 	return shared.DefaultGraphRoPEConfig()
 }
+
+// ============================================================================
+// Agent Type Registry
+// ============================================================================
+
+// ModelTier represents the model tier for an agent type.
+type ModelTier = agent.ModelTier
+
+// Model tier constants
+const (
+	ModelTierOpus   = agent.ModelTierOpus
+	ModelTierSonnet = agent.ModelTierSonnet
+	ModelTierHaiku  = agent.ModelTierHaiku
+)
+
+// AgentTypeSpec defines the specification for an agent type.
+type AgentTypeSpec = agent.AgentTypeSpec
+
+// NeuralPatternConfig holds neural pattern configuration for an agent type.
+type NeuralPatternConfig = agent.NeuralPatternConfig
+
+// AgentTypeRegistry manages all agent type specifications.
+type AgentTypeRegistry struct {
+	internal *agent.AgentTypeRegistry
+}
+
+// NewAgentTypeRegistry creates a new AgentTypeRegistry with all default specs.
+func NewAgentTypeRegistry() *AgentTypeRegistry {
+	return &AgentTypeRegistry{internal: agent.NewAgentTypeRegistry()}
+}
+
+// GetSpec returns the specification for an agent type.
+func (r *AgentTypeRegistry) GetSpec(t AgentType) *AgentTypeSpec {
+	return r.internal.GetSpec(t)
+}
+
+// ListAll returns all registered agent types.
+func (r *AgentTypeRegistry) ListAll() []AgentType {
+	return r.internal.ListAll()
+}
+
+// ListByCapability returns agent types that have the specified capability.
+func (r *AgentTypeRegistry) ListByCapability(capability string) []AgentType {
+	return r.internal.ListByCapability(capability)
+}
+
+// ListByTag returns agent types that have the specified tag.
+func (r *AgentTypeRegistry) ListByTag(tag string) []AgentType {
+	return r.internal.ListByTag(tag)
+}
+
+// ListByModelTier returns agent types for the specified model tier.
+func (r *AgentTypeRegistry) ListByModelTier(tier ModelTier) []AgentType {
+	return r.internal.ListByModelTier(tier)
+}
+
+// ListByDomain returns agent types in the specified domain.
+func (r *AgentTypeRegistry) ListByDomain(domain AgentDomain) []AgentType {
+	return r.internal.ListByDomain(domain)
+}
+
+// GetCapabilities returns the capabilities for an agent type.
+func (r *AgentTypeRegistry) GetCapabilities(t AgentType) []string {
+	return r.internal.GetCapabilities(t)
+}
+
+// GetModelTier returns the model tier for an agent type.
+func (r *AgentTypeRegistry) GetModelTier(t AgentType) ModelTier {
+	return r.internal.GetModelTier(t)
+}
+
+// GetNeuralPatterns returns the neural patterns for an agent type.
+func (r *AgentTypeRegistry) GetNeuralPatterns(t AgentType) []string {
+	return r.internal.GetNeuralPatterns(t)
+}
+
+// FindBestMatch finds the best agent type for the given capabilities.
+func (r *AgentTypeRegistry) FindBestMatch(requiredCapabilities []string) (AgentType, float64) {
+	return r.internal.FindBestMatch(requiredCapabilities)
+}
+
+// Count returns the total number of registered agent types.
+func (r *AgentTypeRegistry) Count() int {
+	return r.internal.Count()
+}
+
+// HasType checks if an agent type is registered.
+func (r *AgentTypeRegistry) HasType(t AgentType) bool {
+	return r.internal.HasType(t)
+}
+
+// GetAllSpecs returns all registered specifications.
+func (r *AgentTypeRegistry) GetAllSpecs() []*AgentTypeSpec {
+	return r.internal.GetAllSpecs()
+}
+
+// GetDefaultCapabilities returns default capabilities for an agent type.
+func GetDefaultCapabilities(agentType AgentType) []string {
+	return agent.GetDefaultCapabilities(agentType)
+}
+
+// GetNeuralPatternsForType returns the neural pattern configuration for an agent type.
+func GetNeuralPatternsForType(t AgentType) *NeuralPatternConfig {
+	return agent.GetNeuralPatternsForType(t)
+}
+
+// DefaultNeuralPatternConfig returns the default neural pattern configuration.
+func DefaultNeuralPatternConfig() NeuralPatternConfig {
+	return agent.DefaultNeuralPatternConfig()
+}
+
+// ============================================================================
+// Agent Pool Manager
+// ============================================================================
+
+// TypePoolConfig holds configuration for a type-specific agent pool.
+type TypePoolConfig = pool.TypePoolConfig
+
+// PoolStats holds statistics for an agent pool.
+type PoolStats = pool.PoolStats
+
+// AgentPoolManager manages pools of agents by type.
+type AgentPoolManager struct {
+	internal *pool.AgentPoolManager
+}
+
+// NewAgentPoolManager creates a new AgentPoolManager.
+func NewAgentPoolManager(registry *AgentTypeRegistry) *AgentPoolManager {
+	return &AgentPoolManager{internal: pool.NewAgentPoolManager(registry.internal)}
+}
+
+// Initialize initializes the pool manager and starts background tasks.
+func (pm *AgentPoolManager) Initialize() error {
+	return pm.internal.Initialize()
+}
+
+// Shutdown shuts down the pool manager.
+func (pm *AgentPoolManager) Shutdown() error {
+	return pm.internal.Shutdown()
+}
+
+// SetConfig sets the configuration for a specific agent type.
+func (pm *AgentPoolManager) SetConfig(agentType AgentType, config TypePoolConfig) {
+	pm.internal.SetConfig(agentType, config)
+}
+
+// GetConfig returns the configuration for a specific agent type.
+func (pm *AgentPoolManager) GetConfig(agentType AgentType) TypePoolConfig {
+	return pm.internal.GetConfig(agentType)
+}
+
+// Acquire acquires an available agent of the specified type.
+func (pm *AgentPoolManager) Acquire(agentType AgentType) (*Agent, error) {
+	a, err := pm.internal.Acquire(agentType)
+	if err != nil {
+		return nil, err
+	}
+	return &Agent{internal: a}, nil
+}
+
+// Release releases an agent back to the pool.
+func (pm *AgentPoolManager) Release(a *Agent) {
+	pm.internal.Release(a.internal)
+}
+
+// GetPoolStats returns statistics for a specific agent type pool.
+func (pm *AgentPoolManager) GetPoolStats(agentType AgentType) PoolStats {
+	return pm.internal.GetPoolStats(agentType)
+}
+
+// GetAllPoolStats returns statistics for all pools.
+func (pm *AgentPoolManager) GetAllPoolStats() []PoolStats {
+	return pm.internal.GetAllPoolStats()
+}
+
+// Scale scales a pool to the specified target size.
+func (pm *AgentPoolManager) Scale(agentType AgentType, targetSize int) error {
+	return pm.internal.Scale(agentType, targetSize)
+}
+
+// WarmUp pre-spawns agents into the warm pool.
+func (pm *AgentPoolManager) WarmUp(agentType AgentType, count int) error {
+	return pm.internal.WarmUp(agentType, count)
+}
+
+// ListPoolTypes returns all pool types that have been created.
+func (pm *AgentPoolManager) ListPoolTypes() []AgentType {
+	return pm.internal.ListPoolTypes()
+}
+
+// GetTotalAgentCount returns the total number of agents across all pools.
+func (pm *AgentPoolManager) GetTotalAgentCount() int {
+	return pm.internal.GetTotalAgentCount()
+}
+
+// DefaultTypePoolConfig returns the default pool configuration.
+func DefaultTypePoolConfig() TypePoolConfig {
+	return pool.DefaultTypePoolConfig()
+}
+
+// ============================================================================
+// Type Router
+// ============================================================================
+
+// RoutingResult holds the result of a routing decision.
+type RoutingResult = routing.RoutingResult
+
+// RoutingStats holds routing statistics.
+type RoutingStats = routing.RoutingStats
+
+// TypeRouter routes tasks to appropriate agent types.
+type TypeRouter struct {
+	internal *routing.TypeRouter
+}
+
+// NewTypeRouter creates a new TypeRouter.
+func NewTypeRouter(registry *AgentTypeRegistry, pools *AgentPoolManager) *TypeRouter {
+	var poolMgr *pool.AgentPoolManager
+	if pools != nil {
+		poolMgr = pools.internal
+	}
+	return &TypeRouter{internal: routing.NewTypeRouter(registry.internal, poolMgr)}
+}
+
+// RouteTask routes a task to the best agent type.
+func (tr *TypeRouter) RouteTask(task Task) (*RoutingResult, error) {
+	return tr.internal.RouteTask(task)
+}
+
+// SelectModel returns the recommended model for an agent type.
+func (tr *TypeRouter) SelectModel(agentType AgentType) string {
+	return tr.internal.SelectModel(agentType)
+}
+
+// FindBestType finds the best agent type for the given capabilities.
+func (tr *TypeRouter) FindBestType(capabilities []string) (AgentType, float64) {
+	return tr.internal.FindBestType(capabilities)
+}
+
+// GetAvailableType returns the best available agent type.
+func (tr *TypeRouter) GetAvailableType(requiredCaps []string) (AgentType, error) {
+	return tr.internal.GetAvailableType(requiredCaps)
+}
+
+// RouteByCapability routes to the best agent type for a single capability.
+func (tr *TypeRouter) RouteByCapability(capability string) []AgentType {
+	return tr.internal.RouteByCapability(capability)
+}
+
+// RouteByTag routes to agent types with a specific tag.
+func (tr *TypeRouter) RouteByTag(tag string) []AgentType {
+	return tr.internal.RouteByTag(tag)
+}
+
+// RouteByDomain routes to agent types in a specific domain.
+func (tr *TypeRouter) RouteByDomain(domain AgentDomain) []AgentType {
+	return tr.internal.RouteByDomain(domain)
+}
+
+// SetPreferAvailable sets whether to prefer available agents.
+func (tr *TypeRouter) SetPreferAvailable(prefer bool) {
+	tr.internal.SetPreferAvailable(prefer)
+}
+
+// GetRoutingStats returns routing statistics.
+func (tr *TypeRouter) GetRoutingStats() RoutingStats {
+	return tr.internal.GetRoutingStats()
+}
+
+// ============================================================================
+// Type Health Monitor
+// ============================================================================
+
+// TypeMetrics holds health metrics for an agent type.
+type TypeMetrics = pool.TypeMetrics
+
+// HealthStatus represents the health status of an agent type.
+type HealthStatus = pool.HealthStatus
+
+// Health status constants
+const (
+	HealthStatusHealthy   = pool.HealthStatusHealthy
+	HealthStatusDegraded  = pool.HealthStatusDegraded
+	HealthStatusUnhealthy = pool.HealthStatusUnhealthy
+	HealthStatusUnknown   = pool.HealthStatusUnknown
+)
+
+// HealthAlert represents a health alert for an agent type.
+type HealthAlert = pool.HealthAlert
+
+// HealthConfig holds configuration for health monitoring.
+type HealthConfig = pool.HealthConfig
+
+// TypeHealthMonitor monitors health metrics per agent type.
+type TypeHealthMonitor struct {
+	internal *pool.TypeHealthMonitor
+}
+
+// NewTypeHealthMonitor creates a new TypeHealthMonitor.
+func NewTypeHealthMonitor(pools *AgentPoolManager, config HealthConfig) *TypeHealthMonitor {
+	var poolMgr *pool.AgentPoolManager
+	if pools != nil {
+		poolMgr = pools.internal
+	}
+	return &TypeHealthMonitor{internal: pool.NewTypeHealthMonitor(poolMgr, config)}
+}
+
+// NewTypeHealthMonitorWithDefaults creates a TypeHealthMonitor with default config.
+func NewTypeHealthMonitorWithDefaults(pools *AgentPoolManager) *TypeHealthMonitor {
+	var poolMgr *pool.AgentPoolManager
+	if pools != nil {
+		poolMgr = pools.internal
+	}
+	return &TypeHealthMonitor{internal: pool.NewTypeHealthMonitorWithDefaults(poolMgr)}
+}
+
+// Initialize starts the health monitoring.
+func (thm *TypeHealthMonitor) Initialize() error {
+	return thm.internal.Initialize()
+}
+
+// Shutdown stops the health monitoring.
+func (thm *TypeHealthMonitor) Shutdown() error {
+	return thm.internal.Shutdown()
+}
+
+// RecordTaskCompletion records a task completion for an agent type.
+func (thm *TypeHealthMonitor) RecordTaskCompletion(agentType AgentType, success bool, latencyMs float64) {
+	thm.internal.RecordTaskCompletion(agentType, success, latencyMs)
+}
+
+// GetMetrics returns metrics for an agent type.
+func (thm *TypeHealthMonitor) GetMetrics(agentType AgentType) *TypeMetrics {
+	return thm.internal.GetMetrics(agentType)
+}
+
+// GetAllMetrics returns metrics for all agent types.
+func (thm *TypeHealthMonitor) GetAllMetrics() []*TypeMetrics {
+	return thm.internal.GetAllMetrics()
+}
+
+// GetHealthStatus returns the health status for an agent type.
+func (thm *TypeHealthMonitor) GetHealthStatus(agentType AgentType) HealthStatus {
+	return thm.internal.GetHealthStatus(agentType)
+}
+
+// GetAlerts returns recent alerts.
+func (thm *TypeHealthMonitor) GetAlerts(limit int) []HealthAlert {
+	return thm.internal.GetAlerts(limit)
+}
+
+// GetUnresolvedAlerts returns unresolved alerts.
+func (thm *TypeHealthMonitor) GetUnresolvedAlerts() []HealthAlert {
+	return thm.internal.GetUnresolvedAlerts()
+}
+
+// GetOverallHealth returns the overall health of all agent types.
+func (thm *TypeHealthMonitor) GetOverallHealth() HealthStatus {
+	return thm.internal.GetOverallHealth()
+}
+
+// DefaultHealthConfig returns the default health configuration.
+func DefaultHealthConfig() HealthConfig {
+	return pool.DefaultHealthConfig()
+}
+
+// AllowedAgentTypes returns all valid agent types (33 types total).
+var AllowedAgentTypes = tools.AllowedAgentTypes
