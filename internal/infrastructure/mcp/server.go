@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/hooks"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/completion"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/logging"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/prompts"
@@ -38,6 +39,9 @@ type Server struct {
 
 	// Task management
 	tasks       *tasks.TaskManager
+
+	// Hooks system
+	hooks       *hooks.HooksManager
 }
 
 // Options holds configuration options for the MCP server.
@@ -48,6 +52,7 @@ type Options struct {
 	ResourceCacheConfig *shared.ResourceCacheConfig
 	SamplingConfig      *shared.SamplingConfig
 	TaskManagerConfig   *shared.TaskManagerConfig
+	HooksConfig         *shared.HooksConfig
 }
 
 // NewServer creates a new MCP server.
@@ -94,6 +99,14 @@ func NewServer(opts Options) *Server {
 		taskManager = tasks.NewTaskManagerWithDefaults(nil)
 	}
 
+	// Create hooks manager
+	var hooksManager *hooks.HooksManager
+	if opts.HooksConfig != nil {
+		hooksManager = hooks.NewHooksManager(*opts.HooksConfig)
+	} else {
+		hooksManager = hooks.NewHooksManagerWithDefaults()
+	}
+
 	// Build capabilities
 	capabilities := &shared.MCPCapabilities{
 		Resources: &shared.ResourcesCapability{
@@ -124,6 +137,7 @@ func NewServer(opts Options) *Server {
 		logging:      logManager,
 		capabilities: capabilities,
 		tasks:        taskManager,
+		hooks:        hooksManager,
 	}
 }
 
@@ -139,6 +153,13 @@ func (s *Server) Start() error {
 	// Initialize task manager
 	if s.tasks != nil {
 		if err := s.tasks.Initialize(); err != nil {
+			return err
+		}
+	}
+
+	// Initialize hooks manager
+	if s.hooks != nil {
+		if err := s.hooks.Initialize(); err != nil {
 			return err
 		}
 	}
@@ -191,6 +212,11 @@ func (s *Server) Stop() error {
 	// Shutdown task manager
 	if s.tasks != nil {
 		s.tasks.Shutdown()
+	}
+
+	// Shutdown hooks manager
+	if s.hooks != nil {
+		s.hooks.Shutdown()
 	}
 
 	if s.httpServer != nil {
@@ -742,4 +768,9 @@ func (s *Server) RegisterMockProvider() {
 // GetTasks returns the task manager.
 func (s *Server) GetTasks() *tasks.TaskManager {
 	return s.tasks
+}
+
+// GetHooks returns the hooks manager.
+func (s *Server) GetHooks() *hooks.HooksManager {
+	return s.hooks
 }

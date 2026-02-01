@@ -30,6 +30,7 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/attention"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/events"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/hooks"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp"
 	mcpcompletion "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/completion"
 	mcplogging "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/logging"
@@ -256,6 +257,34 @@ type (
 	TaskListResult       = shared.TaskListResult
 	TaskDependencyAction = shared.TaskDependencyAction
 	TaskResultFormat     = shared.TaskResultFormat
+
+	// Hooks System Types
+	HookEvent           = shared.HookEvent
+	HookPriority        = shared.HookPriority
+	HookRegistration    = shared.HookRegistration
+	HookContext         = shared.HookContext
+	HookResult          = shared.HookResult
+	HookExecutionResult = shared.HookExecutionResult
+	PatternType         = shared.PatternType
+	Pattern             = shared.Pattern
+	RiskLevel           = shared.RiskLevel
+	RiskAssessment      = shared.RiskAssessment
+	RoutingResult       = shared.RoutingResult
+	RoutingAlternative  = shared.RoutingAlternative
+	RoutingFactor       = shared.RoutingFactor
+	RoutingExplanation  = shared.RoutingExplanation
+	RoutingHistory      = shared.RoutingHistory
+	AgentRoutingStats   = shared.AgentRoutingStats
+	HooksMetrics        = shared.HooksMetrics
+	HooksConfig         = shared.HooksConfig
+	PreEditContext      = shared.PreEditContext
+	PreEditResult       = shared.PreEditResult
+	PostEditContext     = shared.PostEditContext
+	PostEditResult      = shared.PostEditResult
+	PreCommandContext   = shared.PreCommandContext
+	PreCommandResult    = shared.PreCommandResult
+	PostCommandContext  = shared.PostCommandContext
+	PostCommandResult   = shared.PostCommandResult
 
 	// Backend types
 	MemoryBackend = shared.MemoryBackend
@@ -2631,4 +2660,133 @@ func (tm *TaskManager) GetConfig() TaskManagerConfig {
 // DefaultTaskManagerConfig returns the default TaskManager configuration.
 func DefaultTaskManagerConfig() TaskManagerConfig {
 	return shared.DefaultTaskManagerConfig()
+}
+
+// ============================================================================
+// Hooks System
+// ============================================================================
+
+// Hook event constants
+const (
+	HookEventPreEdit        = shared.HookEventPreEdit
+	HookEventPostEdit       = shared.HookEventPostEdit
+	HookEventPreCommand     = shared.HookEventPreCommand
+	HookEventPostCommand    = shared.HookEventPostCommand
+	HookEventPreRoute       = shared.HookEventPreRoute
+	HookEventPostRoute      = shared.HookEventPostRoute
+	HookEventPreTask        = shared.HookEventPreTask
+	HookEventPostTask       = shared.HookEventPostTask
+	HookEventAgentSpawn     = shared.HookEventAgentSpawn
+	HookEventAgentTerminate = shared.HookEventAgentTerminate
+	HookEventSessionStart   = shared.HookEventSessionStart
+	HookEventSessionEnd     = shared.HookEventSessionEnd
+	HookEventPatternLearned = shared.HookEventPatternLearned
+)
+
+// Hook priority constants
+const (
+	HookPriorityCritical   = shared.HookPriorityCritical
+	HookPriorityHigh       = shared.HookPriorityHigh
+	HookPriorityNormal     = shared.HookPriorityNormal
+	HookPriorityLow        = shared.HookPriorityLow
+	HookPriorityBackground = shared.HookPriorityBackground
+)
+
+// Pattern type constants
+const (
+	PatternTypeEdit    = shared.PatternTypeEdit
+	PatternTypeCommand = shared.PatternTypeCommand
+	PatternTypeRoute   = shared.PatternTypeRoute
+	PatternTypeTask    = shared.PatternTypeTask
+)
+
+// Risk level constants
+const (
+	RiskLevelLow      = shared.RiskLevelLow
+	RiskLevelMedium   = shared.RiskLevelMedium
+	RiskLevelHigh     = shared.RiskLevelHigh
+	RiskLevelCritical = shared.RiskLevelCritical
+)
+
+// HookHandler is a function that handles a hook event.
+type HookHandler = shared.HookHandler
+
+// HooksManager manages hook registration, execution, and learning.
+type HooksManager struct {
+	internal *hooks.HooksManager
+}
+
+// NewHooksManager creates a new HooksManager.
+func NewHooksManager(config HooksConfig) *HooksManager {
+	return &HooksManager{internal: hooks.NewHooksManager(config)}
+}
+
+// NewHooksManagerWithDefaults creates a HooksManager with default configuration.
+func NewHooksManagerWithDefaults() *HooksManager {
+	return &HooksManager{internal: hooks.NewHooksManagerWithDefaults()}
+}
+
+// Initialize starts the HooksManager.
+func (hm *HooksManager) Initialize() error {
+	return hm.internal.Initialize()
+}
+
+// Shutdown stops the HooksManager.
+func (hm *HooksManager) Shutdown() error {
+	return hm.internal.Shutdown()
+}
+
+// Register registers a hook.
+func (hm *HooksManager) Register(hook *HookRegistration) error {
+	return hm.internal.Register(hook)
+}
+
+// Unregister removes a hook.
+func (hm *HooksManager) Unregister(hookID string) error {
+	return hm.internal.Unregister(hookID)
+}
+
+// Execute executes all hooks for an event.
+func (hm *HooksManager) Execute(ctx context.Context, hookCtx *HookContext) (*HookExecutionResult, error) {
+	return hm.internal.Execute(ctx, hookCtx)
+}
+
+// GetHook returns a hook by ID.
+func (hm *HooksManager) GetHook(id string) *HookRegistration {
+	return hm.internal.GetHook(id)
+}
+
+// ListHooks returns hooks, optionally filtered by event.
+func (hm *HooksManager) ListHooks(event HookEvent, includeDisabled bool) []*HookRegistration {
+	return hm.internal.ListHooks(event, includeDisabled)
+}
+
+// EnableHook enables a hook.
+func (hm *HooksManager) EnableHook(id string) error {
+	return hm.internal.EnableHook(id)
+}
+
+// DisableHook disables a hook.
+func (hm *HooksManager) DisableHook(id string) error {
+	return hm.internal.DisableHook(id)
+}
+
+// GetMetrics returns the hooks metrics.
+func (hm *HooksManager) GetMetrics() *HooksMetrics {
+	return hm.internal.GetMetrics()
+}
+
+// GetConfig returns the hooks configuration.
+func (hm *HooksManager) GetConfig() HooksConfig {
+	return hm.internal.GetConfig()
+}
+
+// HookCount returns the total number of registered hooks.
+func (hm *HooksManager) HookCount() int {
+	return hm.internal.HookCount()
+}
+
+// DefaultHooksConfig returns the default hooks configuration.
+func DefaultHooksConfig() HooksConfig {
+	return shared.DefaultHooksConfig()
 }

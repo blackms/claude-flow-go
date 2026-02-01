@@ -2431,6 +2431,310 @@ var (
 )
 
 // ============================================================================
+// Hooks System Types
+// ============================================================================
+
+// HookEvent represents a hook event type.
+type HookEvent string
+
+const (
+	HookEventPreEdit      HookEvent = "pre-edit"
+	HookEventPostEdit     HookEvent = "post-edit"
+	HookEventPreCommand   HookEvent = "pre-command"
+	HookEventPostCommand  HookEvent = "post-command"
+	HookEventPreRoute     HookEvent = "pre-route"
+	HookEventPostRoute    HookEvent = "post-route"
+	HookEventPreTask      HookEvent = "pre-task"
+	HookEventPostTask     HookEvent = "post-task"
+	HookEventAgentSpawn   HookEvent = "agent-spawn"
+	HookEventAgentTerminate HookEvent = "agent-terminate"
+	HookEventSessionStart HookEvent = "session-start"
+	HookEventSessionEnd   HookEvent = "session-end"
+	HookEventPatternLearned HookEvent = "pattern-learned"
+)
+
+// HookPriority represents the priority of a hook.
+type HookPriority int
+
+const (
+	HookPriorityCritical   HookPriority = 100
+	HookPriorityHigh       HookPriority = 75
+	HookPriorityNormal     HookPriority = 50
+	HookPriorityLow        HookPriority = 25
+	HookPriorityBackground HookPriority = 10
+)
+
+// HookHandler is a function that handles a hook event.
+type HookHandler func(ctx context.Context, data interface{}) (interface{}, error)
+
+// HookRegistration represents a registered hook.
+type HookRegistration struct {
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Event       HookEvent    `json:"event"`
+	Priority    HookPriority `json:"priority"`
+	Enabled     bool         `json:"enabled"`
+	Description string       `json:"description,omitempty"`
+	Handler     HookHandler  `json:"-"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt   int64        `json:"createdAt"`
+	ExecutionCount int64     `json:"executionCount"`
+	LastExecutedAt int64     `json:"lastExecutedAt,omitempty"`
+	AvgExecutionMs float64   `json:"avgExecutionMs"`
+}
+
+// HookContext represents the context for hook execution.
+type HookContext struct {
+	Event     HookEvent              `json:"event"`
+	Data      interface{}            `json:"data"`
+	Timestamp int64                  `json:"timestamp"`
+	SessionID string                 `json:"sessionId,omitempty"`
+	AgentID   string                 `json:"agentId,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// HookResult represents the result of hook execution.
+type HookResult struct {
+	HookID      string        `json:"hookId"`
+	Success     bool          `json:"success"`
+	Result      interface{}   `json:"result,omitempty"`
+	Error       string        `json:"error,omitempty"`
+	ExecutionMs int64         `json:"executionMs"`
+	Timestamp   int64         `json:"timestamp"`
+}
+
+// HookExecutionResult represents the aggregate result of executing all hooks for an event.
+type HookExecutionResult struct {
+	Event       HookEvent     `json:"event"`
+	HooksRun    int           `json:"hooksRun"`
+	Successful  int           `json:"successful"`
+	Failed      int           `json:"failed"`
+	Results     []*HookResult `json:"results"`
+	TotalTimeMs int64         `json:"totalTimeMs"`
+}
+
+// PatternType represents the type of a learned pattern.
+type PatternType string
+
+const (
+	PatternTypeEdit    PatternType = "edit"
+	PatternTypeCommand PatternType = "command"
+	PatternTypeRoute   PatternType = "route"
+	PatternTypeTask    PatternType = "task"
+)
+
+// Pattern represents a learned pattern from hook execution.
+type Pattern struct {
+	ID           string                 `json:"id"`
+	Type         PatternType            `json:"type"`
+	Content      string                 `json:"content"`
+	Keywords     []string               `json:"keywords"`
+	SuccessCount int64                  `json:"successCount"`
+	FailureCount int64                  `json:"failureCount"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt    int64                  `json:"createdAt"`
+	UpdatedAt    int64                  `json:"updatedAt"`
+	LastUsedAt   int64                  `json:"lastUsedAt,omitempty"`
+}
+
+// GetSuccessRate returns the success rate for a pattern.
+func (p *Pattern) GetSuccessRate() float64 {
+	total := p.SuccessCount + p.FailureCount
+	if total == 0 {
+		return 0.0
+	}
+	return float64(p.SuccessCount) / float64(total)
+}
+
+// RiskLevel represents the risk level of an operation.
+type RiskLevel string
+
+const (
+	RiskLevelLow      RiskLevel = "low"
+	RiskLevelMedium   RiskLevel = "medium"
+	RiskLevelHigh     RiskLevel = "high"
+	RiskLevelCritical RiskLevel = "critical"
+)
+
+// RiskAssessment represents the risk assessment of an operation.
+type RiskAssessment struct {
+	Level         RiskLevel `json:"level"`
+	Score         float64   `json:"score"` // 0.0-1.0
+	Concerns      []string  `json:"concerns,omitempty"`
+	Recommendations []string `json:"recommendations,omitempty"`
+	ShouldProceed bool      `json:"shouldProceed"`
+}
+
+// RoutingResult represents the result of routing a task.
+type RoutingResult struct {
+	ID             string                 `json:"id"`
+	RecommendedAgent string               `json:"recommendedAgent"`
+	Confidence     float64                `json:"confidence"` // 0.0-1.0
+	Alternatives   []RoutingAlternative   `json:"alternatives,omitempty"`
+	Explanation    string                 `json:"explanation,omitempty"`
+	Factors        []RoutingFactor        `json:"factors,omitempty"`
+	Timestamp      int64                  `json:"timestamp"`
+}
+
+// RoutingAlternative represents an alternative routing option.
+type RoutingAlternative struct {
+	AgentID    string  `json:"agentId"`
+	AgentType  string  `json:"agentType"`
+	Confidence float64 `json:"confidence"`
+	Reason     string  `json:"reason,omitempty"`
+}
+
+// RoutingFactor represents a factor in the routing decision.
+type RoutingFactor struct {
+	Name   string  `json:"name"`
+	Weight float64 `json:"weight"`
+	Score  float64 `json:"score"`
+	Reason string  `json:"reason,omitempty"`
+}
+
+// RoutingExplanation provides detailed explanation of a routing decision.
+type RoutingExplanation struct {
+	Task           string           `json:"task"`
+	Analysis       string           `json:"analysis"`
+	Factors        []RoutingFactor  `json:"factors"`
+	HistoricalData *RoutingHistory  `json:"historicalData,omitempty"`
+	Patterns       []*Pattern       `json:"patterns,omitempty"`
+}
+
+// RoutingHistory represents historical routing data.
+type RoutingHistory struct {
+	TotalRoutings  int64              `json:"totalRoutings"`
+	SuccessRate    float64            `json:"successRate"`
+	AgentStats     map[string]AgentRoutingStats `json:"agentStats"`
+}
+
+// AgentRoutingStats represents routing statistics for an agent.
+type AgentRoutingStats struct {
+	AgentID      string  `json:"agentId"`
+	AgentType    string  `json:"agentType"`
+	TasksRouted  int64   `json:"tasksRouted"`
+	SuccessRate  float64 `json:"successRate"`
+	AvgLatencyMs float64 `json:"avgLatencyMs"`
+}
+
+// HooksMetrics represents metrics for the hooks system.
+type HooksMetrics struct {
+	TotalExecutions    int64   `json:"totalExecutions"`
+	SuccessfulExecutions int64 `json:"successfulExecutions"`
+	FailedExecutions   int64   `json:"failedExecutions"`
+	AvgExecutionMs     float64 `json:"avgExecutionMs"`
+	PatternCount       int64   `json:"patternCount"`
+	RoutingCount       int64   `json:"routingCount"`
+	RoutingSuccessRate float64 `json:"routingSuccessRate"`
+	EditPatterns       int64   `json:"editPatterns"`
+	CommandPatterns    int64   `json:"commandPatterns"`
+	HooksByEvent       map[HookEvent]int64 `json:"hooksByEvent"`
+}
+
+// HooksConfig holds configuration for the hooks system.
+type HooksConfig struct {
+	MaxPatterns       int   `json:"maxPatterns"`       // Default: 10000
+	MaxHooksPerEvent  int   `json:"maxHooksPerEvent"`  // Default: 100
+	DefaultTimeoutMs  int64 `json:"defaultTimeoutMs"`  // Default: 5000
+	EnableLearning    bool  `json:"enableLearning"`    // Default: true
+	LearningRate      float64 `json:"learningRate"`    // Default: 0.1
+}
+
+// DefaultHooksConfig returns the default hooks configuration.
+func DefaultHooksConfig() HooksConfig {
+	return HooksConfig{
+		MaxPatterns:      10000,
+		MaxHooksPerEvent: 100,
+		DefaultTimeoutMs: 5000,
+		EnableLearning:   true,
+		LearningRate:     0.1,
+	}
+}
+
+// PreEditContext represents context for pre-edit hooks.
+type PreEditContext struct {
+	FilePath       string                 `json:"filePath"`
+	Operation      string                 `json:"operation"`
+	IncludeContext bool                   `json:"includeContext"`
+	IncludeSuggestions bool               `json:"includeSuggestions"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// PreEditResult represents the result of a pre-edit hook.
+type PreEditResult struct {
+	FilePath        string           `json:"filePath"`
+	SimilarPatterns []*Pattern       `json:"similarPatterns,omitempty"`
+	Warnings        []string         `json:"warnings,omitempty"`
+	Suggestions     []string         `json:"suggestions,omitempty"`
+	Context         map[string]interface{} `json:"context,omitempty"`
+}
+
+// PostEditContext represents context for post-edit hooks.
+type PostEditContext struct {
+	FilePath  string                 `json:"filePath"`
+	Operation string                 `json:"operation"`
+	Success   bool                   `json:"success"`
+	Outcome   string                 `json:"outcome,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// PostEditResult represents the result of a post-edit hook.
+type PostEditResult struct {
+	Recorded  bool   `json:"recorded"`
+	PatternID string `json:"patternId,omitempty"`
+	Message   string `json:"message,omitempty"`
+}
+
+// PreCommandContext represents context for pre-command hooks.
+type PreCommandContext struct {
+	Command            string `json:"command"`
+	WorkingDirectory   string `json:"workingDirectory,omitempty"`
+	IncludeRiskAssessment bool `json:"includeRiskAssessment"`
+	IncludeSuggestions bool   `json:"includeSuggestions"`
+}
+
+// PreCommandResult represents the result of a pre-command hook.
+type PreCommandResult struct {
+	Command        string          `json:"command"`
+	RiskAssessment *RiskAssessment `json:"riskAssessment,omitempty"`
+	Suggestions    []string        `json:"suggestions,omitempty"`
+	SimilarPatterns []*Pattern     `json:"similarPatterns,omitempty"`
+}
+
+// PostCommandContext represents context for post-command hooks.
+type PostCommandContext struct {
+	Command       string `json:"command"`
+	ExitCode      int    `json:"exitCode"`
+	Success       bool   `json:"success"`
+	Output        string `json:"output,omitempty"`
+	Error         string `json:"error,omitempty"`
+	ExecutionTime int64  `json:"executionTimeMs"`
+}
+
+// PostCommandResult represents the result of a post-command hook.
+type PostCommandResult struct {
+	Recorded  bool   `json:"recorded"`
+	PatternID string `json:"patternId,omitempty"`
+	Message   string `json:"message,omitempty"`
+}
+
+// Hooks-related errors
+var (
+	// ErrHookNotFound is returned when a hook is not found.
+	ErrHookNotFound = errors.New("hook not found")
+	// ErrHookAlreadyExists is returned when a hook already exists.
+	ErrHookAlreadyExists = errors.New("hook already exists")
+	// ErrMaxHooksReached is returned when the maximum number of hooks is reached.
+	ErrMaxHooksReached = errors.New("maximum number of hooks reached")
+	// ErrPatternNotFound is returned when a pattern is not found.
+	ErrPatternNotFound = errors.New("pattern not found")
+	// ErrMaxPatternsReached is returned when the maximum number of patterns is reached.
+	ErrMaxPatternsReached = errors.New("maximum number of patterns reached")
+	// ErrHookExecutionTimeout is returned when hook execution times out.
+	ErrHookExecutionTimeout = errors.New("hook execution timed out")
+)
+
+// ============================================================================
 // Utility Functions
 // ============================================================================
 
