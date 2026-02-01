@@ -27,6 +27,7 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/application/hivemind"
 	"github.com/anthropics/claude-flow-go/internal/application/workflow"
 	"github.com/anthropics/claude-flow-go/internal/domain/agent"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/attention"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/events"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp"
@@ -157,6 +158,22 @@ type (
 	FederationEvent          = shared.FederationEvent
 	FederationConfig         = shared.FederationConfig
 	FederationStats          = shared.FederationStats
+
+	// Attention Mechanism types
+	AttentionMechanism         = shared.AttentionMechanism
+	AttentionAgentOutput       = shared.AttentionAgentOutput
+	AttentionCoordinationResult = shared.AttentionCoordinationResult
+	FlashAttentionConfig       = shared.FlashAttentionConfig
+	MultiHeadAttentionConfig   = shared.MultiHeadAttentionConfig
+	LinearAttentionConfig      = shared.LinearAttentionConfig
+	HyperbolicAttentionConfig  = shared.HyperbolicAttentionConfig
+	MoEConfig                  = shared.MoEConfig
+	GraphRoPEConfig            = shared.GraphRoPEConfig
+	AttentionConfig            = shared.AttentionConfig
+	Expert                     = shared.Expert
+	ExpertRoutingResult        = shared.ExpertRoutingResult
+	ExpertSelection            = shared.ExpertSelection
+	AttentionPerformanceStats  = shared.AttentionPerformanceStats
 
 	// Plugin types
 	Plugin           = shared.Plugin
@@ -1597,4 +1614,141 @@ func DefaultFederationConfig() FederationConfig {
 // NewFederationTools creates MCP tools for federation operations.
 func NewFederationTools(hub *FederationHub) *tools.FederationTools {
 	return tools.NewFederationTools(hub.internal)
+}
+
+// ============================================================================
+// Attention Coordinator
+// ============================================================================
+
+// Attention mechanism constants
+const (
+	AttentionFlash      = shared.AttentionFlash
+	AttentionMultiHead  = shared.AttentionMultiHead
+	AttentionLinear     = shared.AttentionLinear
+	AttentionHyperbolic = shared.AttentionHyperbolic
+	AttentionMoE        = shared.AttentionMoE
+	AttentionGraphRoPE  = shared.AttentionGraphRoPE
+)
+
+// AttentionCoordinator wraps the internal attention coordinator for public use.
+type AttentionCoordinator struct {
+	internal *attention.AttentionCoordinator
+}
+
+// AttentionEventHandler is a callback for attention coordination events.
+type AttentionEventHandler = attention.EventHandler
+
+// AttentionEvent represents an attention coordination event.
+type AttentionEvent = attention.AttentionEvent
+
+// NewAttentionCoordinator creates a new AttentionCoordinator with the given configuration.
+func NewAttentionCoordinator(config AttentionConfig) *AttentionCoordinator {
+	return &AttentionCoordinator{internal: attention.NewAttentionCoordinator(config)}
+}
+
+// NewAttentionCoordinatorWithDefaults creates an AttentionCoordinator with default configuration.
+func NewAttentionCoordinatorWithDefaults() *AttentionCoordinator {
+	return &AttentionCoordinator{internal: attention.NewAttentionCoordinatorWithDefaults()}
+}
+
+// Coordinate dispatches coordination to the default attention mechanism.
+func (ac *AttentionCoordinator) Coordinate(outputs []AttentionAgentOutput) *AttentionCoordinationResult {
+	return ac.internal.Coordinate(outputs)
+}
+
+// CoordinateWithMechanism coordinates using a specific attention mechanism.
+func (ac *AttentionCoordinator) CoordinateWithMechanism(outputs []AttentionAgentOutput, mechanism AttentionMechanism) *AttentionCoordinationResult {
+	return ac.internal.CoordinateWithMechanism(outputs, mechanism)
+}
+
+// RouteToExperts routes a task to experts using MoE.
+func (ac *AttentionCoordinator) RouteToExperts(taskEmbedding []float64, experts []Expert) *ExpertRoutingResult {
+	return ac.internal.RouteToExperts(taskEmbedding, experts)
+}
+
+// TopologyAwareCoordination performs GraphRoPE-based coordination.
+func (ac *AttentionCoordinator) TopologyAwareCoordination(outputs []AttentionAgentOutput, topology map[string][]string) *AttentionCoordinationResult {
+	return ac.internal.TopologyAwareCoordination(outputs, topology)
+}
+
+// HierarchicalCoordination performs hyperbolic attention for hierarchical swarms.
+func (ac *AttentionCoordinator) HierarchicalCoordination(outputs []AttentionAgentOutput, roles map[string]string) *AttentionCoordinationResult {
+	return ac.internal.HierarchicalCoordination(outputs, roles)
+}
+
+// GetStats returns the performance statistics.
+func (ac *AttentionCoordinator) GetStats() AttentionPerformanceStats {
+	return ac.internal.GetStats()
+}
+
+// GetConfig returns the current configuration.
+func (ac *AttentionCoordinator) GetConfig() AttentionConfig {
+	return ac.internal.GetConfig()
+}
+
+// SetEventHandler sets the event handler for coordination events.
+func (ac *AttentionCoordinator) SetEventHandler(handler AttentionEventHandler) {
+	ac.internal.SetEventHandler(handler)
+}
+
+// SetTopology sets the topology for GraphRoPE.
+func (ac *AttentionCoordinator) SetTopology(adjacency map[string][]string) {
+	ac.internal.SetTopology(adjacency)
+}
+
+// SetTopologyFromEdges sets the topology from edges for GraphRoPE.
+func (ac *AttentionCoordinator) SetTopologyFromEdges(edges []TopologyEdge) {
+	ac.internal.SetTopologyFromEdges(edges)
+}
+
+// SetRoles sets the agent roles for hyperbolic attention.
+func (ac *AttentionCoordinator) SetRoles(roles map[string]string) {
+	ac.internal.SetRoles(roles)
+}
+
+// BenchmarkMechanisms benchmarks all mechanisms with the same input.
+func (ac *AttentionCoordinator) BenchmarkMechanisms(outputs []AttentionAgentOutput) map[AttentionMechanism]*AttentionCoordinationResult {
+	return ac.internal.BenchmarkMechanisms(outputs)
+}
+
+// RecommendMechanism recommends the best mechanism based on input characteristics.
+func (ac *AttentionCoordinator) RecommendMechanism(numAgents int, hasTopology bool, isHierarchical bool, needsFastRouting bool) AttentionMechanism {
+	return ac.internal.RecommendMechanism(numAgents, hasTopology, isHierarchical, needsFastRouting)
+}
+
+// Default configuration functions
+
+// DefaultAttentionConfig returns the default attention configuration.
+func DefaultAttentionConfig() AttentionConfig {
+	return shared.DefaultAttentionConfig()
+}
+
+// DefaultFlashAttentionConfig returns the default Flash Attention configuration.
+func DefaultFlashAttentionConfig() FlashAttentionConfig {
+	return shared.DefaultFlashAttentionConfig()
+}
+
+// DefaultMultiHeadAttentionConfig returns the default Multi-Head Attention configuration.
+func DefaultMultiHeadAttentionConfig() MultiHeadAttentionConfig {
+	return shared.DefaultMultiHeadAttentionConfig()
+}
+
+// DefaultLinearAttentionConfig returns the default Linear Attention configuration.
+func DefaultLinearAttentionConfig() LinearAttentionConfig {
+	return shared.DefaultLinearAttentionConfig()
+}
+
+// DefaultHyperbolicAttentionConfig returns the default Hyperbolic Attention configuration.
+func DefaultHyperbolicAttentionConfig() HyperbolicAttentionConfig {
+	return shared.DefaultHyperbolicAttentionConfig()
+}
+
+// DefaultMoEConfig returns the default MoE configuration.
+func DefaultMoEConfig() MoEConfig {
+	return shared.DefaultMoEConfig()
+}
+
+// DefaultGraphRoPEConfig returns the default GraphRoPE configuration.
+func DefaultGraphRoPEConfig() GraphRoPEConfig {
+	return shared.DefaultGraphRoPEConfig()
 }

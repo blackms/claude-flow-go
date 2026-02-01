@@ -883,6 +883,187 @@ type FederationStats struct {
 	AvgMessageLatencyMs float64 `json:"avgMessageLatencyMs"`
 }
 
+// ============================================================================
+// Attention Mechanism Types
+// ============================================================================
+
+// AttentionMechanism represents the type of attention mechanism.
+type AttentionMechanism string
+
+const (
+	AttentionFlash      AttentionMechanism = "flash"
+	AttentionMultiHead  AttentionMechanism = "multi_head"
+	AttentionLinear     AttentionMechanism = "linear"
+	AttentionHyperbolic AttentionMechanism = "hyperbolic"
+	AttentionMoE        AttentionMechanism = "moe"
+	AttentionGraphRoPE  AttentionMechanism = "graph_rope"
+)
+
+// AttentionAgentOutput represents an agent's output for attention coordination.
+type AttentionAgentOutput struct {
+	AgentID    string                 `json:"agentId"`
+	Content    string                 `json:"content"`
+	Embedding  []float64              `json:"embedding,omitempty"`
+	Confidence float64                `json:"confidence"`
+	Tokens     int                    `json:"tokens,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// AttentionCoordinationResult represents the result of attention coordination.
+type AttentionCoordinationResult struct {
+	ConsensusOutput  interface{}        `json:"consensusOutput"`
+	AttentionWeights map[string]float64 `json:"attentionWeights"`
+	Confidence       float64            `json:"confidence"`
+	LatencyMs        float64            `json:"latencyMs"`
+	MemoryBytes      int64              `json:"memoryBytes"`
+	Participants     []string           `json:"participants"`
+	Mechanism        AttentionMechanism `json:"mechanism"`
+}
+
+// FlashAttentionConfig holds configuration for Flash Attention.
+type FlashAttentionConfig struct {
+	BlockSize int  `json:"blockSize"` // Default: 256
+	Causal    bool `json:"causal"`
+}
+
+// DefaultFlashAttentionConfig returns the default Flash Attention configuration.
+func DefaultFlashAttentionConfig() FlashAttentionConfig {
+	return FlashAttentionConfig{
+		BlockSize: 256,
+		Causal:    false,
+	}
+}
+
+// MultiHeadAttentionConfig holds configuration for Multi-Head Attention.
+type MultiHeadAttentionConfig struct {
+	NumHeads      int `json:"numHeads"`      // Default: 8
+	HeadDimension int `json:"headDimension"` // Default: 64
+}
+
+// DefaultMultiHeadAttentionConfig returns the default Multi-Head Attention configuration.
+func DefaultMultiHeadAttentionConfig() MultiHeadAttentionConfig {
+	return MultiHeadAttentionConfig{
+		NumHeads:      8,
+		HeadDimension: 64,
+	}
+}
+
+// LinearAttentionConfig holds configuration for Linear Attention.
+type LinearAttentionConfig struct {
+	FeatureMapType string `json:"featureMapType"` // "relu", "elu", "softmax"
+}
+
+// DefaultLinearAttentionConfig returns the default Linear Attention configuration.
+func DefaultLinearAttentionConfig() LinearAttentionConfig {
+	return LinearAttentionConfig{
+		FeatureMapType: "relu",
+	}
+}
+
+// HyperbolicAttentionConfig holds configuration for Hyperbolic Attention.
+type HyperbolicAttentionConfig struct {
+	Curvature          float64 `json:"curvature"`          // Default: -1.0
+	Dimension          int     `json:"dimension"`          // Default: 64
+	HierarchicalWeight float64 `json:"hierarchicalWeight"` // Weight boost for queen vs worker
+}
+
+// DefaultHyperbolicAttentionConfig returns the default Hyperbolic Attention configuration.
+func DefaultHyperbolicAttentionConfig() HyperbolicAttentionConfig {
+	return HyperbolicAttentionConfig{
+		Curvature:          -1.0,
+		Dimension:          64,
+		HierarchicalWeight: 2.0,
+	}
+}
+
+// MoEConfig holds configuration for Mixture of Experts.
+type MoEConfig struct {
+	TopK              int     `json:"topK"`              // Default: 2
+	CapacityFactor    float64 `json:"capacityFactor"`    // Default: 1.25
+	LoadBalancingLoss bool    `json:"loadBalancingLoss"` // Enable load balancing
+}
+
+// DefaultMoEConfig returns the default MoE configuration.
+func DefaultMoEConfig() MoEConfig {
+	return MoEConfig{
+		TopK:              2,
+		CapacityFactor:    1.25,
+		LoadBalancingLoss: true,
+	}
+}
+
+// GraphRoPEConfig holds configuration for GraphRoPE.
+type GraphRoPEConfig struct {
+	MaxDistance   int     `json:"maxDistance"`   // Default: 10
+	DistanceScale float64 `json:"distanceScale"` // Default: 1.0
+	EncodingDim   int     `json:"encodingDim"`   // Default: 32
+}
+
+// DefaultGraphRoPEConfig returns the default GraphRoPE configuration.
+func DefaultGraphRoPEConfig() GraphRoPEConfig {
+	return GraphRoPEConfig{
+		MaxDistance:   10,
+		DistanceScale: 1.0,
+		EncodingDim:   32,
+	}
+}
+
+// AttentionConfig holds configuration for the attention coordinator.
+type AttentionConfig struct {
+	DefaultMechanism AttentionMechanism       `json:"defaultMechanism"`
+	Flash            FlashAttentionConfig     `json:"flash"`
+	MultiHead        MultiHeadAttentionConfig `json:"multiHead"`
+	Linear           LinearAttentionConfig    `json:"linear"`
+	Hyperbolic       HyperbolicAttentionConfig `json:"hyperbolic"`
+	MoE              MoEConfig                `json:"moe"`
+	GraphRoPE        GraphRoPEConfig          `json:"graphRope"`
+}
+
+// DefaultAttentionConfig returns the default attention configuration.
+func DefaultAttentionConfig() AttentionConfig {
+	return AttentionConfig{
+		DefaultMechanism: AttentionFlash,
+		Flash:            DefaultFlashAttentionConfig(),
+		MultiHead:        DefaultMultiHeadAttentionConfig(),
+		Linear:           DefaultLinearAttentionConfig(),
+		Hyperbolic:       DefaultHyperbolicAttentionConfig(),
+		MoE:              DefaultMoEConfig(),
+		GraphRoPE:        DefaultGraphRoPEConfig(),
+	}
+}
+
+// Expert represents a specialized agent for MoE routing.
+type Expert struct {
+	AgentID     string    `json:"agentId"`
+	Expertise   []string  `json:"expertise"`
+	Embedding   []float64 `json:"embedding,omitempty"`
+	Capacity    int       `json:"capacity"`
+	CurrentLoad int       `json:"currentLoad"`
+}
+
+// ExpertRoutingResult represents the result of MoE expert routing.
+type ExpertRoutingResult struct {
+	SelectedExperts []ExpertSelection `json:"selectedExperts"`
+	RoutingLatencyMs float64          `json:"routingLatencyMs"`
+	LoadBalanced    bool              `json:"loadBalanced"`
+}
+
+// ExpertSelection represents a selected expert with its score.
+type ExpertSelection struct {
+	Expert Expert  `json:"expert"`
+	Score  float64 `json:"score"`
+	Weight float64 `json:"weight"`
+}
+
+// AttentionPerformanceStats holds performance statistics for attention.
+type AttentionPerformanceStats struct {
+	TotalCoordinations int64   `json:"totalCoordinations"`
+	AvgLatencyMs       float64 `json:"avgLatencyMs"`
+	AvgMemoryBytes     int64   `json:"avgMemoryBytes"`
+	SpeedupFactor      float64 `json:"speedupFactor"`
+	MemoryReduction    float64 `json:"memoryReduction"` // 0.0 - 1.0
+}
+
 // AgentMessage represents a message between agents.
 type AgentMessage struct {
 	From      string                 `json:"from"`
