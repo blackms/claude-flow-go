@@ -18,6 +18,8 @@ type Agent struct {
 	Capabilities []string
 	Role         shared.AgentRole
 	Parent       string
+	Domain       shared.AgentDomain
+	AgentNumber  int
 	Metadata     map[string]interface{}
 	CreatedAt    int64
 	LastActive   int64
@@ -30,6 +32,8 @@ type Config struct {
 	Capabilities []string
 	Role         shared.AgentRole
 	Parent       string
+	Domain       shared.AgentDomain
+	AgentNumber  int
 	Metadata     map[string]interface{}
 }
 
@@ -38,11 +42,18 @@ func New(config Config) *Agent {
 	now := shared.Now()
 	capabilities := config.Capabilities
 	if capabilities == nil {
-		capabilities = []string{}
+		// Use default capabilities for the agent type
+		capabilities = GetDefaultCapabilities(config.Type)
 	}
 	metadata := config.Metadata
 	if metadata == nil {
 		metadata = make(map[string]interface{})
+	}
+
+	// Determine domain from agent number if not specified
+	domain := config.Domain
+	if domain == "" && config.AgentNumber > 0 {
+		domain = shared.GetDomainForAgentNumber(config.AgentNumber)
 	}
 
 	return &Agent{
@@ -52,6 +63,8 @@ func New(config Config) *Agent {
 		Capabilities: capabilities,
 		Role:         config.Role,
 		Parent:       config.Parent,
+		Domain:       domain,
+		AgentNumber:  config.AgentNumber,
 		Metadata:     metadata,
 		CreatedAt:    now,
 		LastActive:   now,
@@ -66,6 +79,8 @@ func FromConfig(config shared.AgentConfig) *Agent {
 		Capabilities: config.Capabilities,
 		Role:         config.Role,
 		Parent:       config.Parent,
+		Domain:       config.Domain,
+		AgentNumber:  config.AgentNumber,
 		Metadata:     config.Metadata,
 	})
 }
@@ -232,21 +247,70 @@ func (a *Agent) ToShared() shared.Agent {
 		Capabilities: a.Capabilities,
 		Role:         a.Role,
 		Parent:       a.Parent,
+		Domain:       a.Domain,
+		AgentNumber:  a.AgentNumber,
 		Metadata:     a.Metadata,
 		CreatedAt:    a.CreatedAt,
 		LastActive:   a.LastActive,
 	}
 }
 
+// GetDomain returns the domain of the agent.
+func (a *Agent) GetDomain() shared.AgentDomain {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.Domain
+}
+
+// GetAgentNumber returns the agent number (1-15) in the hierarchy.
+func (a *Agent) GetAgentNumber() int {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.AgentNumber
+}
+
+// IsQueen returns true if this is the Queen agent.
+func (a *Agent) IsQueen() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.AgentNumber == 1 || a.Type == shared.AgentTypeQueen
+}
+
 // GetDefaultCapabilities returns default capabilities for an agent type.
 func GetDefaultCapabilities(agentType shared.AgentType) []string {
 	defaults := map[shared.AgentType][]string{
+		// Basic agent types
 		shared.AgentTypeCoder:       {"code", "refactor", "debug"},
 		shared.AgentTypeTester:      {"test", "validate", "e2e"},
 		shared.AgentTypeReviewer:    {"review", "analyze", "security-audit"},
 		shared.AgentTypeCoordinator: {"coordinate", "manage", "orchestrate"},
 		shared.AgentTypeDesigner:    {"design", "prototype"},
 		shared.AgentTypeDeployer:    {"deploy", "release"},
+
+		// Queen Domain (Agent 1)
+		shared.AgentTypeQueen: {"coordination", "planning", "oversight", "consensus", "delegation"},
+
+		// Security Domain (Agents 2-4)
+		shared.AgentTypeSecurityArchitect: {"security-architecture", "threat-modeling", "security-design"},
+		shared.AgentTypeCVERemediation:    {"cve-remediation", "vulnerability-fix", "security-patch"},
+		shared.AgentTypeThreatModeler:     {"threat-modeling", "risk-assessment", "security-analysis"},
+
+		// Core Domain (Agents 5-9)
+		shared.AgentTypeDDDDesigner:      {"ddd-design", "domain-modeling", "architecture"},
+		shared.AgentTypeMemorySpecialist: {"memory-unification", "vector-search", "agentdb"},
+		shared.AgentTypeTypeModernizer:   {"type-modernization", "refactor", "code-quality"},
+		shared.AgentTypeSwarmSpecialist:  {"swarm-coordination", "topology", "consensus"},
+		shared.AgentTypeMCPOptimizer:     {"mcp-optimization", "protocol", "integration"},
+
+		// Integration Domain (Agents 10-12)
+		shared.AgentTypeAgenticFlow:     {"agentic-flow-integration", "workflow", "automation"},
+		shared.AgentTypeCLIDeveloper:    {"cli-modernization", "command-line", "user-interface"},
+		shared.AgentTypeNeuralIntegrator: {"neural-integration", "learning", "patterns"},
+
+		// Support Domain (Agents 13-15)
+		shared.AgentTypeTDDTester:          {"tdd-testing", "unit-test", "test-driven"},
+		shared.AgentTypePerformanceEngineer: {"performance-benchmarking", "optimization", "profiling"},
+		shared.AgentTypeReleaseManager:      {"deployment", "release-management", "ci-cd"},
 	}
 
 	caps, exists := defaults[agentType]

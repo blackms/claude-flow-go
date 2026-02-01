@@ -42,6 +42,19 @@ type (
 	AgentConfig = shared.AgentConfig
 	Agent       = shared.Agent
 
+	// 15-Agent Domain Architecture types
+	AgentDomain       = shared.AgentDomain
+	DomainConfig      = shared.DomainConfig
+	AgentScore        = shared.AgentScore
+	TaskAnalysis      = shared.TaskAnalysis
+	DelegationResult  = shared.DelegationResult
+	ExecutionStrategy = shared.ExecutionStrategy
+	DomainHealth      = shared.DomainHealth
+	AgentHealth       = shared.AgentHealth
+	HealthAlert       = shared.HealthAlert
+	AlertLevel        = shared.AlertLevel
+	DomainMetrics     = shared.DomainMetrics
+
 	// Task types
 	TaskPriority = shared.TaskPriority
 	TaskStatus   = shared.TaskStatus
@@ -114,6 +127,48 @@ const (
 	AgentTypeCoordinator = shared.AgentTypeCoordinator
 	AgentTypeDesigner    = shared.AgentTypeDesigner
 	AgentTypeDeployer    = shared.AgentTypeDeployer
+
+	// 15-Agent Domain Architecture Types
+	AgentTypeQueen             = shared.AgentTypeQueen
+	AgentTypeSecurityArchitect = shared.AgentTypeSecurityArchitect
+	AgentTypeCVERemediation    = shared.AgentTypeCVERemediation
+	AgentTypeThreatModeler     = shared.AgentTypeThreatModeler
+	AgentTypeDDDDesigner       = shared.AgentTypeDDDDesigner
+	AgentTypeMemorySpecialist  = shared.AgentTypeMemorySpecialist
+	AgentTypeTypeModernizer    = shared.AgentTypeTypeModernizer
+	AgentTypeSwarmSpecialist   = shared.AgentTypeSwarmSpecialist
+	AgentTypeMCPOptimizer      = shared.AgentTypeMCPOptimizer
+	AgentTypeAgenticFlow       = shared.AgentTypeAgenticFlow
+	AgentTypeCLIDeveloper      = shared.AgentTypeCLIDeveloper
+	AgentTypeNeuralIntegrator  = shared.AgentTypeNeuralIntegrator
+	AgentTypeTDDTester         = shared.AgentTypeTDDTester
+	AgentTypePerformanceEngineer = shared.AgentTypePerformanceEngineer
+	AgentTypeReleaseManager    = shared.AgentTypeReleaseManager
+)
+
+// Domain constants
+const (
+	DomainQueen       = shared.DomainQueen
+	DomainSecurity    = shared.DomainSecurity
+	DomainCore        = shared.DomainCore
+	DomainIntegration = shared.DomainIntegration
+	DomainSupport     = shared.DomainSupport
+)
+
+// Execution strategy constants
+const (
+	StrategySequential  = shared.StrategySequential
+	StrategyParallel    = shared.StrategyParallel
+	StrategyPipeline    = shared.StrategyPipeline
+	StrategyFanOutFanIn = shared.StrategyFanOutFanIn
+	StrategyHybrid      = shared.StrategyHybrid
+)
+
+// Alert level constants
+const (
+	AlertLevelInfo     = shared.AlertLevelInfo
+	AlertLevelWarning  = shared.AlertLevelWarning
+	AlertLevelCritical = shared.AlertLevelCritical
 )
 
 // Task priority constants
@@ -419,3 +474,143 @@ func GetDefaultCapabilities(agentType AgentType) []string {
 func Now() int64 {
 	return shared.Now()
 }
+
+// DefaultDomainConfigs returns the default domain configurations for the 15-agent architecture.
+func DefaultDomainConfigs() []DomainConfig {
+	return shared.DefaultDomainConfigs()
+}
+
+// GetDomainForAgentNumber returns the domain for a given agent number (1-15).
+func GetDomainForAgentNumber(agentNumber int) AgentDomain {
+	return shared.GetDomainForAgentNumber(agentNumber)
+}
+
+// GetAgentTypeForNumber returns the default agent type for a given agent number (1-15).
+func GetAgentTypeForNumber(agentNumber int) AgentType {
+	return shared.GetAgentTypeForNumber(agentNumber)
+}
+
+// ============================================================================
+// Queen Coordinator (15-Agent Domain Architecture)
+// ============================================================================
+
+// QueenCoordinator wraps the internal Queen Coordinator for public use.
+type QueenCoordinator struct {
+	internal *coordinator.QueenCoordinator
+}
+
+// QueenConfig holds configuration for the Queen Coordinator.
+type QueenConfig = coordinator.QueenConfig
+
+// DefaultQueenConfig returns the default Queen Coordinator configuration.
+func DefaultQueenConfig() QueenConfig {
+	return coordinator.DefaultQueenConfig()
+}
+
+// NewQueenCoordinator creates a new Queen Coordinator.
+func NewQueenCoordinator(swarm *SwarmCoordinator, config QueenConfig) (*QueenCoordinator, error) {
+	qc, err := coordinator.NewQueenCoordinator(swarm.internal, config)
+	if err != nil {
+		return nil, err
+	}
+	return &QueenCoordinator{internal: qc}, nil
+}
+
+// Start starts the Queen Coordinator and its health monitoring.
+func (qc *QueenCoordinator) Start() {
+	qc.internal.Start()
+}
+
+// Stop stops the Queen Coordinator.
+func (qc *QueenCoordinator) Stop() {
+	qc.internal.Stop()
+}
+
+// SpawnFullHierarchy spawns the complete 15-agent hierarchy.
+func (qc *QueenCoordinator) SpawnFullHierarchy(ctx context.Context) error {
+	return qc.internal.SpawnFullHierarchy(ctx)
+}
+
+// AnalyzeTask performs strategic analysis of a task.
+func (qc *QueenCoordinator) AnalyzeTask(ctx context.Context, task Task) (*TaskAnalysis, error) {
+	return qc.internal.AnalyzeTask(ctx, task)
+}
+
+// DelegateTask delegates a task to the best available agent.
+func (qc *QueenCoordinator) DelegateTask(ctx context.Context, task Task) (*DelegationResult, error) {
+	return qc.internal.DelegateTask(ctx, task)
+}
+
+// ExecuteTask executes a task through delegation.
+func (qc *QueenCoordinator) ExecuteTask(ctx context.Context, task Task) (*TaskResult, error) {
+	return qc.internal.ExecuteTask(ctx, task)
+}
+
+// ExecuteTasksParallel executes multiple tasks in parallel across domains.
+func (qc *QueenCoordinator) ExecuteTasksParallel(ctx context.Context, tasks []Task) ([]TaskResult, error) {
+	return qc.internal.ExecuteTasksParallel(ctx, tasks)
+}
+
+// GetDomainHealth returns the health status of all domains.
+func (qc *QueenCoordinator) GetDomainHealth() map[AgentDomain]*DomainHealth {
+	return qc.internal.GetDomainHealth()
+}
+
+// GetAgentsByDomain returns all agents in a specific domain.
+func (qc *QueenCoordinator) GetAgentsByDomain(domain AgentDomain) []Agent {
+	agents := qc.internal.GetAgentsByDomain(domain)
+	result := make([]Agent, len(agents))
+	for i, a := range agents {
+		result[i] = a.ToShared()
+	}
+	return result
+}
+
+// ScoreAgentsForTask scores all available agents for a task.
+func (qc *QueenCoordinator) ScoreAgentsForTask(ctx context.Context, task Task) []AgentScore {
+	return qc.internal.ScoreAgentsForTask(ctx, task)
+}
+
+// ReachConsensus coordinates a consensus decision across agents.
+func (qc *QueenCoordinator) ReachConsensus(ctx context.Context, decision shared.ConsensusDecision, consensusType string) (*shared.ConsensusResult, error) {
+	return qc.internal.ReachConsensus(ctx, decision, coordinator.ConsensusType(consensusType))
+}
+
+// AssignTaskToDomain assigns a task directly to a specific domain.
+func (qc *QueenCoordinator) AssignTaskToDomain(ctx context.Context, task Task, domain AgentDomain) error {
+	return qc.internal.AssignTaskToDomain(ctx, task, domain)
+}
+
+// BroadcastMessage broadcasts a message to all agents in a domain.
+func (qc *QueenCoordinator) BroadcastMessage(ctx context.Context, domain AgentDomain, message AgentMessage) error {
+	return qc.internal.BroadcastMessage(ctx, domain, message)
+}
+
+// GetAlerts returns recent health alerts.
+func (qc *QueenCoordinator) GetAlerts(limit int) []HealthAlert {
+	return qc.internal.GetAlerts(limit)
+}
+
+// DetectBottlenecks detects bottlenecks in the system.
+func (qc *QueenCoordinator) DetectBottlenecks() []coordinator.BottleneckInfo {
+	return qc.internal.DetectBottlenecks()
+}
+
+// GetMetrics returns metrics about the Queen Coordinator.
+func (qc *QueenCoordinator) GetMetrics() coordinator.QueenMetrics {
+	return qc.internal.GetMetrics()
+}
+
+// GetSwarm returns the underlying swarm coordinator.
+func (qc *QueenCoordinator) GetSwarm() *SwarmCoordinator {
+	return &SwarmCoordinator{internal: qc.internal.GetSwarm()}
+}
+
+// Consensus type constants
+const (
+	ConsensusMajority      = string(coordinator.ConsensusMajority)
+	ConsensusSuperMajority = string(coordinator.ConsensusSuperMajority)
+	ConsensusUnanimous     = string(coordinator.ConsensusUnanimous)
+	ConsensusWeighted      = string(coordinator.ConsensusWeighted)
+	ConsensusQueenOverride = string(coordinator.ConsensusQueenOverride)
+)

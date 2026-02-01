@@ -35,13 +35,157 @@ const (
 type AgentType string
 
 const (
+	// Basic agent types
 	AgentTypeCoder       AgentType = "coder"
 	AgentTypeTester      AgentType = "tester"
 	AgentTypeReviewer    AgentType = "reviewer"
 	AgentTypeCoordinator AgentType = "coordinator"
 	AgentTypeDesigner    AgentType = "designer"
 	AgentTypeDeployer    AgentType = "deployer"
+
+	// 15-Agent Domain Architecture Types
+	// Queen Domain (Agent 1)
+	AgentTypeQueen AgentType = "queen"
+
+	// Security Domain (Agents 2-4)
+	AgentTypeSecurityArchitect AgentType = "security-architect"
+	AgentTypeCVERemediation    AgentType = "cve-remediation"
+	AgentTypeThreatModeler     AgentType = "threat-modeler"
+
+	// Core Domain (Agents 5-9)
+	AgentTypeDDDDesigner      AgentType = "ddd-designer"
+	AgentTypeMemorySpecialist AgentType = "memory-specialist"
+	AgentTypeTypeModernizer   AgentType = "type-modernizer"
+	AgentTypeSwarmSpecialist  AgentType = "swarm-specialist"
+	AgentTypeMCPOptimizer     AgentType = "mcp-optimizer"
+
+	// Integration Domain (Agents 10-12)
+	AgentTypeAgenticFlow     AgentType = "agentic-flow"
+	AgentTypeCLIDeveloper    AgentType = "cli-developer"
+	AgentTypeNeuralIntegrator AgentType = "neural-integrator"
+
+	// Support Domain (Agents 13-15)
+	AgentTypeTDDTester          AgentType = "tdd-tester"
+	AgentTypePerformanceEngineer AgentType = "performance-engineer"
+	AgentTypeReleaseManager      AgentType = "release-manager"
 )
+
+// AgentDomain represents a domain in the 15-agent architecture.
+type AgentDomain string
+
+const (
+	DomainQueen       AgentDomain = "queen"
+	DomainSecurity    AgentDomain = "security"
+	DomainCore        AgentDomain = "core"
+	DomainIntegration AgentDomain = "integration"
+	DomainSupport     AgentDomain = "support"
+)
+
+// DomainConfig holds the configuration for a domain in the 15-agent architecture.
+type DomainConfig struct {
+	Name         AgentDomain `json:"name"`
+	AgentNumbers []int       `json:"agentNumbers"`
+	Priority     int         `json:"priority"`
+	Capabilities []string    `json:"capabilities"`
+	Description  string      `json:"description"`
+}
+
+// DefaultDomainConfigs returns the default domain configurations for the 15-agent architecture.
+func DefaultDomainConfigs() []DomainConfig {
+	return []DomainConfig{
+		{
+			Name:         DomainQueen,
+			AgentNumbers: []int{1},
+			Priority:     0,
+			Capabilities: []string{"coordination", "planning", "oversight", "consensus"},
+			Description:  "Top-level swarm coordination and orchestration",
+		},
+		{
+			Name:         DomainSecurity,
+			AgentNumbers: []int{2, 3, 4},
+			Priority:     1,
+			Capabilities: []string{"security-architecture", "cve-remediation", "security-testing", "threat-modeling"},
+			Description:  "Security architecture, CVE fixes, and security testing",
+		},
+		{
+			Name:         DomainCore,
+			AgentNumbers: []int{5, 6, 7, 8, 9},
+			Priority:     2,
+			Capabilities: []string{"ddd-design", "type-modernization", "memory-unification", "swarm-coordination", "mcp-optimization"},
+			Description:  "Core architecture, DDD, memory unification, and MCP optimization",
+		},
+		{
+			Name:         DomainIntegration,
+			AgentNumbers: []int{10, 11, 12},
+			Priority:     3,
+			Capabilities: []string{"agentic-flow-integration", "cli-modernization", "neural-integration", "hooks-system"},
+			Description:  "agentic-flow integration, CLI modernization, and neural features",
+		},
+		{
+			Name:         DomainSupport,
+			AgentNumbers: []int{13, 14, 15},
+			Priority:     4,
+			Capabilities: []string{"tdd-testing", "performance-benchmarking", "deployment", "release-management"},
+			Description:  "Testing, performance optimization, and deployment",
+		},
+	}
+}
+
+// GetDomainForAgentNumber returns the domain for a given agent number (1-15).
+func GetDomainForAgentNumber(agentNumber int) AgentDomain {
+	switch {
+	case agentNumber == 1:
+		return DomainQueen
+	case agentNumber >= 2 && agentNumber <= 4:
+		return DomainSecurity
+	case agentNumber >= 5 && agentNumber <= 9:
+		return DomainCore
+	case agentNumber >= 10 && agentNumber <= 12:
+		return DomainIntegration
+	case agentNumber >= 13 && agentNumber <= 15:
+		return DomainSupport
+	default:
+		return ""
+	}
+}
+
+// GetAgentTypeForNumber returns the default agent type for a given agent number (1-15).
+func GetAgentTypeForNumber(agentNumber int) AgentType {
+	switch agentNumber {
+	case 1:
+		return AgentTypeQueen
+	case 2:
+		return AgentTypeSecurityArchitect
+	case 3:
+		return AgentTypeCVERemediation
+	case 4:
+		return AgentTypeThreatModeler
+	case 5:
+		return AgentTypeDDDDesigner
+	case 6:
+		return AgentTypeMemorySpecialist
+	case 7:
+		return AgentTypeTypeModernizer
+	case 8:
+		return AgentTypeSwarmSpecialist
+	case 9:
+		return AgentTypeMCPOptimizer
+	case 10:
+		return AgentTypeAgenticFlow
+	case 11:
+		return AgentTypeCLIDeveloper
+	case 12:
+		return AgentTypeNeuralIntegrator
+	case 13:
+		return AgentTypeTDDTester
+	case 14:
+		return AgentTypePerformanceEngineer
+	case 15:
+		return AgentTypeReleaseManager
+	default:
+		return AgentTypeCoder
+	}
+}
 
 // AgentConfig holds configuration for creating an agent.
 type AgentConfig struct {
@@ -50,6 +194,8 @@ type AgentConfig struct {
 	Capabilities []string               `json:"capabilities,omitempty"`
 	Role         AgentRole              `json:"role,omitempty"`
 	Parent       string                 `json:"parent,omitempty"`
+	Domain       AgentDomain            `json:"domain,omitempty"`
+	AgentNumber  int                    `json:"agentNumber,omitempty"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -61,9 +207,119 @@ type Agent struct {
 	Capabilities []string               `json:"capabilities"`
 	Role         AgentRole              `json:"role,omitempty"`
 	Parent       string                 `json:"parent,omitempty"`
+	Domain       AgentDomain            `json:"domain,omitempty"`
+	AgentNumber  int                    `json:"agentNumber,omitempty"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	CreatedAt    int64                  `json:"createdAt"`
 	LastActive   int64                  `json:"lastActive"`
+}
+
+// AgentConfig holds configuration for creating an agent.
+// (Moved to be after Agent struct for logical grouping)
+
+// ============================================================================
+// Agent Scoring Types (15-Agent Architecture)
+// ============================================================================
+
+// AgentScore represents the scoring of an agent for task delegation.
+type AgentScore struct {
+	AgentID          string  `json:"agentId"`
+	CapabilityScore  float64 `json:"capabilityScore"`  // 0.4 weight
+	LoadScore        float64 `json:"loadScore"`        // 0.25 weight
+	PerformanceScore float64 `json:"performanceScore"` // 0.2 weight
+	HealthScore      float64 `json:"healthScore"`      // 0.15 weight
+	TotalScore       float64 `json:"totalScore"`
+}
+
+// CalculateTotalScore computes the weighted total score.
+func (s *AgentScore) CalculateTotalScore() float64 {
+	s.TotalScore = s.CapabilityScore*0.4 + s.LoadScore*0.25 + s.PerformanceScore*0.2 + s.HealthScore*0.15
+	return s.TotalScore
+}
+
+// TaskAnalysis represents the analysis of a task by the Queen Coordinator.
+type TaskAnalysis struct {
+	TaskID              string                 `json:"taskId"`
+	ComplexityScore     float64                `json:"complexityScore"`     // 0.0 - 1.0
+	RequiredCapabilities []string              `json:"requiredCapabilities"`
+	RecommendedDomain   AgentDomain            `json:"recommendedDomain"`
+	EstimatedDuration   int64                  `json:"estimatedDuration"`   // milliseconds
+	ParallelizationScore float64               `json:"parallelizationScore"` // 0.0 - 1.0
+	PatternMatches      []string               `json:"patternMatches,omitempty"`
+	Metadata            map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// DelegationResult represents the result of task delegation.
+type DelegationResult struct {
+	TaskID        string       `json:"taskId"`
+	PrimaryAgent  AgentScore   `json:"primaryAgent"`
+	BackupAgents  []AgentScore `json:"backupAgents,omitempty"`
+	Domain        AgentDomain  `json:"domain"`
+	Strategy      ExecutionStrategy `json:"strategy"`
+	EstimatedTime int64        `json:"estimatedTime"` // milliseconds
+}
+
+// ExecutionStrategy represents the strategy for task execution.
+type ExecutionStrategy string
+
+const (
+	StrategySequential   ExecutionStrategy = "sequential"
+	StrategyParallel     ExecutionStrategy = "parallel"
+	StrategyPipeline     ExecutionStrategy = "pipeline"
+	StrategyFanOutFanIn  ExecutionStrategy = "fan-out-fan-in"
+	StrategyHybrid       ExecutionStrategy = "hybrid"
+)
+
+// DomainHealth represents the health status of a domain.
+type DomainHealth struct {
+	Domain       AgentDomain `json:"domain"`
+	HealthScore  float64     `json:"healthScore"`  // 0.0 - 1.0
+	ActiveAgents int         `json:"activeAgents"`
+	TotalAgents  int         `json:"totalAgents"`
+	AvgLoad      float64     `json:"avgLoad"`      // 0.0 - 1.0
+	Bottlenecks  []string    `json:"bottlenecks,omitempty"`
+	LastCheck    int64       `json:"lastCheck"`
+}
+
+// AgentHealth represents the health status of an individual agent.
+type AgentHealth struct {
+	AgentID       string  `json:"agentId"`
+	HealthScore   float64 `json:"healthScore"`   // 0.0 - 1.0
+	CurrentLoad   float64 `json:"currentLoad"`   // 0.0 - 1.0
+	TasksInQueue  int     `json:"tasksInQueue"`
+	AvgResponseTime int64 `json:"avgResponseTime"` // milliseconds
+	ErrorRate     float64 `json:"errorRate"`     // 0.0 - 1.0
+	LastHeartbeat int64   `json:"lastHeartbeat"`
+	IsAvailable   bool    `json:"isAvailable"`
+}
+
+// HealthAlert represents an alert from the health monitoring system.
+type HealthAlert struct {
+	ID        string      `json:"id"`
+	Level     AlertLevel  `json:"level"`
+	Domain    AgentDomain `json:"domain,omitempty"`
+	AgentID   string      `json:"agentId,omitempty"`
+	Message   string      `json:"message"`
+	Timestamp int64       `json:"timestamp"`
+}
+
+// AlertLevel represents the severity level of an alert.
+type AlertLevel string
+
+const (
+	AlertLevelInfo     AlertLevel = "info"
+	AlertLevelWarning  AlertLevel = "warning"
+	AlertLevelCritical AlertLevel = "critical"
+)
+
+// DomainMetrics represents metrics for a domain.
+type DomainMetrics struct {
+	Domain           AgentDomain `json:"domain"`
+	TasksCompleted   int         `json:"tasksCompleted"`
+	TasksFailed      int         `json:"tasksFailed"`
+	AvgExecutionTime float64     `json:"avgExecutionTime"` // milliseconds
+	SuccessRate      float64     `json:"successRate"`      // 0.0 - 1.0
+	ThroughputPerSec float64     `json:"throughputPerSec"`
 }
 
 // ============================================================================
@@ -474,6 +730,37 @@ type MCPResponse struct {
 type MCPError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+// ============================================================================
+// Queen Coordinator Interfaces
+// ============================================================================
+
+// NeuralLearningSystem defines the interface for neural learning integration.
+type NeuralLearningSystem interface {
+	// LearnFromOutcome records the outcome of a task for learning.
+	LearnFromOutcome(ctx context.Context, taskID string, outcome TaskResult) error
+	// GetPatternMatches retrieves patterns matching the given task description.
+	GetPatternMatches(ctx context.Context, description string, k int) ([]string, error)
+	// RecordTrajectory records an agent's execution trajectory.
+	RecordTrajectory(ctx context.Context, agentID string, trajectory []TrajectoryStep) error
+}
+
+// TrajectoryStep represents a step in an agent's execution trajectory.
+type TrajectoryStep struct {
+	Timestamp int64                  `json:"timestamp"`
+	Action    string                 `json:"action"`
+	Context   map[string]interface{} `json:"context,omitempty"`
+	Outcome   string                 `json:"outcome,omitempty"`
+	Reward    float64                `json:"reward,omitempty"`
+}
+
+// MemoryService defines the interface for memory operations used by Queen Coordinator.
+type MemoryService interface {
+	// StoreTaskMemory stores a memory entry for a task.
+	StoreTaskMemory(ctx context.Context, agentID string, taskID string, content string) error
+	// RetrieveContext retrieves relevant context for a task.
+	RetrieveContext(ctx context.Context, taskDescription string, k int) ([]Memory, error)
 }
 
 // ============================================================================
