@@ -623,6 +623,124 @@ type AgentVote struct {
 }
 
 // ============================================================================
+// Hive Mind Consensus Types
+// ============================================================================
+
+// ConsensusType represents the type of consensus mechanism.
+type ConsensusType string
+
+const (
+	ConsensusTypeMajority      ConsensusType = "majority"
+	ConsensusTypeSuperMajority ConsensusType = "supermajority"
+	ConsensusTypeUnanimous     ConsensusType = "unanimous"
+	ConsensusTypeWeighted      ConsensusType = "weighted"
+	ConsensusTypeQueenOverride ConsensusType = "queen-override"
+)
+
+// ProposalStatus represents the status of a proposal.
+type ProposalStatus string
+
+const (
+	ProposalStatusPending  ProposalStatus = "pending"
+	ProposalStatusVoting   ProposalStatus = "voting"
+	ProposalStatusApproved ProposalStatus = "approved"
+	ProposalStatusRejected ProposalStatus = "rejected"
+	ProposalStatusExpired  ProposalStatus = "expired"
+	ProposalStatusCancelled ProposalStatus = "cancelled"
+)
+
+// Proposal represents a consensus proposal in the Hive Mind system.
+type Proposal struct {
+	ID              string                 `json:"id"`
+	Type            string                 `json:"type"`
+	Title           string                 `json:"title"`
+	Description     string                 `json:"description"`
+	Payload         map[string]interface{} `json:"payload,omitempty"`
+	RequiredType    ConsensusType          `json:"requiredType"`
+	Proposer        string                 `json:"proposer"`
+	Domain          AgentDomain            `json:"domain,omitempty"`
+	CreatedAt       int64                  `json:"createdAt"`
+	ExpiresAt       int64                  `json:"expiresAt"`
+	Status          ProposalStatus         `json:"status"`
+	RequiredQuorum  float64                `json:"requiredQuorum"` // 0.0 - 1.0
+	Priority        TaskPriority           `json:"priority,omitempty"`
+}
+
+// WeightedVote represents a vote with weight and reasoning.
+type WeightedVote struct {
+	AgentID    string  `json:"agentId"`
+	ProposalID string  `json:"proposalId"`
+	Vote       bool    `json:"vote"`
+	Weight     float64 `json:"weight"`     // 0.0 - 1.0, based on agent performance
+	Confidence float64 `json:"confidence"` // 0.0 - 1.0
+	Reason     string  `json:"reason,omitempty"`
+	Timestamp  int64   `json:"timestamp"`
+}
+
+// ProposalResult represents the result of a proposal vote.
+type ProposalResult struct {
+	ProposalID       string         `json:"proposalId"`
+	Status           ProposalStatus `json:"status"`
+	TotalVotes       int            `json:"totalVotes"`
+	ApprovalVotes    int            `json:"approvalVotes"`
+	RejectionVotes   int            `json:"rejectionVotes"`
+	WeightedApproval float64        `json:"weightedApproval"` // 0.0 - 1.0
+	WeightedRejection float64       `json:"weightedRejection"`
+	QuorumReached    bool           `json:"quorumReached"`
+	ConsensusReached bool           `json:"consensusReached"`
+	Votes            []WeightedVote `json:"votes"`
+	CompletedAt      int64          `json:"completedAt,omitempty"`
+	Duration         int64          `json:"duration,omitempty"` // milliseconds
+}
+
+// HiveMindConfig holds configuration for the Hive Mind system.
+type HiveMindConfig struct {
+	ConsensusAlgorithm ConsensusType `json:"consensusAlgorithm"`
+	VoteTimeout        int64         `json:"voteTimeout"`   // milliseconds
+	MaxProposals       int           `json:"maxProposals"`
+	EnableLearning     bool          `json:"enableLearning"`
+	DefaultQuorum      float64       `json:"defaultQuorum"` // 0.0 - 1.0
+	MinVoteWeight      float64       `json:"minVoteWeight"` // minimum weight for a vote to count
+}
+
+// DefaultHiveMindConfig returns the default Hive Mind configuration.
+func DefaultHiveMindConfig() HiveMindConfig {
+	return HiveMindConfig{
+		ConsensusAlgorithm: ConsensusTypeMajority,
+		VoteTimeout:        30000, // 30 seconds
+		MaxProposals:       100,
+		EnableLearning:     true,
+		DefaultQuorum:      0.5,
+		MinVoteWeight:      0.1,
+	}
+}
+
+// HiveMindState represents the current state of the Hive Mind.
+type HiveMindState struct {
+	Initialized     bool           `json:"initialized"`
+	Algorithm       ConsensusType  `json:"algorithm"`
+	ActiveProposals int            `json:"activeProposals"`
+	TotalAgents     int            `json:"totalAgents"`
+	ActiveAgents    int            `json:"activeAgents"`
+	DomainsActive   []AgentDomain  `json:"domainsActive"`
+	LastConsensus   int64          `json:"lastConsensus,omitempty"`
+	QueenAgentID    string         `json:"queenAgentId,omitempty"`
+}
+
+// ProposalOutcome represents the outcome of a completed proposal for learning.
+type ProposalOutcome struct {
+	ProposalID     string                 `json:"proposalId"`
+	ProposalType   string                 `json:"proposalType"`
+	ConsensusType  ConsensusType          `json:"consensusType"`
+	WasApproved    bool                   `json:"wasApproved"`
+	VoteCount      int                    `json:"voteCount"`
+	WeightedScore  float64                `json:"weightedScore"`
+	Duration       int64                  `json:"duration"`
+	Timestamp      int64                  `json:"timestamp"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// ============================================================================
 // Plugin Types
 // ============================================================================
 

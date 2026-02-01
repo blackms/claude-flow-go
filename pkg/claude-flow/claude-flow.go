@@ -23,6 +23,7 @@ import (
 	"context"
 
 	"github.com/anthropics/claude-flow-go/internal/application/coordinator"
+	"github.com/anthropics/claude-flow-go/internal/application/hivemind"
 	"github.com/anthropics/claude-flow-go/internal/application/workflow"
 	"github.com/anthropics/claude-flow-go/internal/domain/agent"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/events"
@@ -54,6 +55,16 @@ type (
 	HealthAlert       = shared.HealthAlert
 	AlertLevel        = shared.AlertLevel
 	DomainMetrics     = shared.DomainMetrics
+
+	// Hive Mind Consensus types
+	ConsensusType    = shared.ConsensusType
+	ProposalStatus   = shared.ProposalStatus
+	Proposal         = shared.Proposal
+	WeightedVote     = shared.WeightedVote
+	ProposalResult   = shared.ProposalResult
+	HiveMindConfig   = shared.HiveMindConfig
+	HiveMindState    = shared.HiveMindState
+	ProposalOutcome  = shared.ProposalOutcome
 
 	// Task types
 	TaskPriority = shared.TaskPriority
@@ -614,3 +625,125 @@ const (
 	ConsensusWeighted      = string(coordinator.ConsensusWeighted)
 	ConsensusQueenOverride = string(coordinator.ConsensusQueenOverride)
 )
+
+// Hive Mind consensus type constants
+const (
+	ConsensusTypeMajority      = shared.ConsensusTypeMajority
+	ConsensusTypeSuperMajority = shared.ConsensusTypeSuperMajority
+	ConsensusTypeUnanimous     = shared.ConsensusTypeUnanimous
+	ConsensusTypeWeighted      = shared.ConsensusTypeWeighted
+	ConsensusTypeQueenOverride = shared.ConsensusTypeQueenOverride
+)
+
+// Proposal status constants
+const (
+	ProposalStatusPending   = shared.ProposalStatusPending
+	ProposalStatusVoting    = shared.ProposalStatusVoting
+	ProposalStatusApproved  = shared.ProposalStatusApproved
+	ProposalStatusRejected  = shared.ProposalStatusRejected
+	ProposalStatusExpired   = shared.ProposalStatusExpired
+	ProposalStatusCancelled = shared.ProposalStatusCancelled
+)
+
+// ============================================================================
+// Hive Mind Manager (Consensus System)
+// ============================================================================
+
+// HiveMindManager wraps the internal Hive Mind Manager for public use.
+type HiveMindManager struct {
+	internal *hivemind.Manager
+}
+
+// DefaultHiveMindConfig returns the default Hive Mind configuration.
+func DefaultHiveMindConfig() HiveMindConfig {
+	return shared.DefaultHiveMindConfig()
+}
+
+// NewHiveMindManager creates a new Hive Mind Manager.
+func NewHiveMindManager(queen *QueenCoordinator, config HiveMindConfig) (*HiveMindManager, error) {
+	m, err := hivemind.NewManager(queen.internal, config)
+	if err != nil {
+		return nil, err
+	}
+	return &HiveMindManager{internal: m}, nil
+}
+
+// Initialize initializes the Hive Mind system.
+func (hm *HiveMindManager) Initialize(ctx context.Context) error {
+	return hm.internal.Initialize(ctx)
+}
+
+// Shutdown shuts down the Hive Mind Manager.
+func (hm *HiveMindManager) Shutdown() error {
+	return hm.internal.Shutdown()
+}
+
+// CreateProposal creates a new proposal for voting.
+func (hm *HiveMindManager) CreateProposal(ctx context.Context, proposal Proposal) (*Proposal, error) {
+	return hm.internal.CreateProposal(ctx, proposal)
+}
+
+// Vote submits a vote for a proposal.
+func (hm *HiveMindManager) Vote(ctx context.Context, vote WeightedVote) error {
+	return hm.internal.Vote(ctx, vote)
+}
+
+// GetProposal returns a proposal by ID.
+func (hm *HiveMindManager) GetProposal(proposalID string) (*Proposal, bool) {
+	return hm.internal.GetProposal(proposalID)
+}
+
+// GetProposalResult returns the result of a proposal.
+func (hm *HiveMindManager) GetProposalResult(proposalID string) (*ProposalResult, bool) {
+	return hm.internal.GetProposalResult(proposalID)
+}
+
+// GetProposalVotes returns the votes for a proposal.
+func (hm *HiveMindManager) GetProposalVotes(proposalID string) []WeightedVote {
+	return hm.internal.GetProposalVotes(proposalID)
+}
+
+// ListProposals returns all proposals with optional status filter.
+func (hm *HiveMindManager) ListProposals(status ProposalStatus) []*Proposal {
+	return hm.internal.ListProposals(status)
+}
+
+// CancelProposal cancels a pending proposal.
+func (hm *HiveMindManager) CancelProposal(ctx context.Context, proposalID string, reason string) error {
+	return hm.internal.CancelProposal(ctx, proposalID, reason)
+}
+
+// CollectVotesSync synchronously collects votes from all agents.
+func (hm *HiveMindManager) CollectVotesSync(ctx context.Context, proposalID string) (*ProposalResult, error) {
+	return hm.internal.CollectVotesSync(ctx, proposalID)
+}
+
+// GetState returns the current state of the Hive Mind.
+func (hm *HiveMindManager) GetState() HiveMindState {
+	return hm.internal.GetState()
+}
+
+// GetQueen returns the Queen Coordinator.
+func (hm *HiveMindManager) GetQueen() *QueenCoordinator {
+	return &QueenCoordinator{internal: hm.internal.GetQueen()}
+}
+
+// GetLearningStats returns learning statistics.
+func (hm *HiveMindManager) GetLearningStats() hivemind.LearningStats {
+	return hm.internal.GetLearning().GetLearningStats()
+}
+
+// PredictSuccess predicts the success probability for a proposal.
+func (hm *HiveMindManager) PredictSuccess(proposal Proposal) float64 {
+	return hm.internal.GetLearning().PredictSuccess(proposal)
+}
+
+// GetConfig returns the current configuration.
+func (hm *HiveMindManager) GetConfig() HiveMindConfig {
+	return hm.internal.GetConfig()
+}
+
+// GetConsensusTypeInfo returns information about all consensus types.
+func GetConsensusTypeInfo() []hivemind.ConsensusTypeInfo {
+	return hivemind.GetConsensusTypeInfo()
+}
