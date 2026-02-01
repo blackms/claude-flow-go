@@ -741,6 +741,280 @@ type ProposalOutcome struct {
 }
 
 // ============================================================================
+// Distributed Consensus Algorithm Types
+// ============================================================================
+
+// ConsensusAlgorithmType represents the type of distributed consensus algorithm.
+type ConsensusAlgorithmType string
+
+const (
+	AlgorithmRaft      ConsensusAlgorithmType = "raft"
+	AlgorithmByzantine ConsensusAlgorithmType = "byzantine"
+	AlgorithmGossip    ConsensusAlgorithmType = "gossip"
+	AlgorithmPaxos     ConsensusAlgorithmType = "paxos" // Falls back to Raft
+)
+
+// ============================================================================
+// Raft Consensus Types
+// ============================================================================
+
+// RaftState represents the state of a Raft node.
+type RaftState string
+
+const (
+	RaftStateFollower  RaftState = "follower"
+	RaftStateCandidate RaftState = "candidate"
+	RaftStateLeader    RaftState = "leader"
+)
+
+// RaftLogEntry represents an entry in the Raft log.
+type RaftLogEntry struct {
+	Term      int64       `json:"term"`
+	Index     int64       `json:"index"`
+	Command   interface{} `json:"command"`
+	Timestamp int64       `json:"timestamp"`
+}
+
+// RaftNode represents the state of a Raft node.
+type RaftNode struct {
+	ID          string         `json:"id"`
+	State       RaftState      `json:"state"`
+	CurrentTerm int64          `json:"currentTerm"`
+	VotedFor    string         `json:"votedFor,omitempty"`
+	Log         []RaftLogEntry `json:"log"`
+	CommitIndex int64          `json:"commitIndex"`
+	LastApplied int64          `json:"lastApplied"`
+}
+
+// RaftConfig holds configuration for Raft consensus.
+type RaftConfig struct {
+	ElectionTimeoutMin int64   `json:"electionTimeoutMin"` // milliseconds (default: 150)
+	ElectionTimeoutMax int64   `json:"electionTimeoutMax"` // milliseconds (default: 300)
+	HeartbeatInterval  int64   `json:"heartbeatInterval"`  // milliseconds (default: 50)
+	Threshold          float64 `json:"threshold"`          // default: 0.66 (2/3)
+	TimeoutMs          int64   `json:"timeoutMs"`          // proposal timeout
+	MaxRounds          int     `json:"maxRounds"`
+	RequireQuorum      bool    `json:"requireQuorum"`
+}
+
+// DefaultRaftConfig returns the default Raft configuration.
+func DefaultRaftConfig() RaftConfig {
+	return RaftConfig{
+		ElectionTimeoutMin: 150,
+		ElectionTimeoutMax: 300,
+		HeartbeatInterval:  50,
+		Threshold:          0.66,
+		TimeoutMs:          30000,
+		MaxRounds:          10,
+		RequireQuorum:      true,
+	}
+}
+
+// ============================================================================
+// Byzantine Consensus Types (PBFT)
+// ============================================================================
+
+// ByzantinePhase represents a phase in PBFT consensus.
+type ByzantinePhase string
+
+const (
+	ByzantinePhasePrePrepare ByzantinePhase = "pre-prepare"
+	ByzantinePhasePrepare    ByzantinePhase = "prepare"
+	ByzantinePhaseCommit     ByzantinePhase = "commit"
+	ByzantinePhaseReply      ByzantinePhase = "reply"
+)
+
+// ByzantineMessage represents a PBFT protocol message.
+type ByzantineMessage struct {
+	Type           ByzantinePhase `json:"type"`
+	ViewNumber     int64          `json:"viewNumber"`
+	SequenceNumber int64          `json:"sequenceNumber"`
+	Digest         string         `json:"digest"`
+	SenderID       string         `json:"senderId"`
+	Timestamp      int64          `json:"timestamp"`
+	Payload        interface{}    `json:"payload,omitempty"`
+	Signature      string         `json:"signature,omitempty"`
+}
+
+// ByzantineNode represents the state of a Byzantine node.
+type ByzantineNode struct {
+	ID             string `json:"id"`
+	IsPrimary      bool   `json:"isPrimary"`
+	ViewNumber     int64  `json:"viewNumber"`
+	SequenceNumber int64  `json:"sequenceNumber"`
+}
+
+// ByzantineConfig holds configuration for Byzantine consensus.
+type ByzantineConfig struct {
+	MaxFaultyNodes      int     `json:"maxFaultyNodes"`      // f in 3f+1
+	ViewChangeTimeoutMs int64   `json:"viewChangeTimeoutMs"` // default: 5000
+	Threshold           float64 `json:"threshold"`
+	TimeoutMs           int64   `json:"timeoutMs"`
+	MaxRounds           int     `json:"maxRounds"`
+	RequireQuorum       bool    `json:"requireQuorum"`
+}
+
+// DefaultByzantineConfig returns the default Byzantine configuration.
+func DefaultByzantineConfig() ByzantineConfig {
+	return ByzantineConfig{
+		MaxFaultyNodes:      1,
+		ViewChangeTimeoutMs: 5000,
+		Threshold:           0.66,
+		TimeoutMs:           30000,
+		MaxRounds:           10,
+		RequireQuorum:       true,
+	}
+}
+
+// ============================================================================
+// Gossip Protocol Types
+// ============================================================================
+
+// GossipMessageType represents the type of gossip message.
+type GossipMessageType string
+
+const (
+	GossipMessageProposal GossipMessageType = "proposal"
+	GossipMessageVote     GossipMessageType = "vote"
+	GossipMessageState    GossipMessageType = "state"
+	GossipMessageAck      GossipMessageType = "ack"
+)
+
+// GossipMessage represents a message in the gossip protocol.
+type GossipMessage struct {
+	ID        string            `json:"id"`
+	Type      GossipMessageType `json:"type"`
+	SenderID  string            `json:"senderId"`
+	Version   int64             `json:"version"`
+	Payload   interface{}       `json:"payload"`
+	Timestamp int64             `json:"timestamp"`
+	TTL       int               `json:"ttl"`
+	Hops      int               `json:"hops"`
+	Path      []string          `json:"path"`
+}
+
+// GossipNode represents the state of a gossip node.
+type GossipNode struct {
+	ID        string   `json:"id"`
+	Version   int64    `json:"version"`
+	Neighbors []string `json:"neighbors"`
+	LastSync  int64    `json:"lastSync"`
+}
+
+// GossipConfig holds configuration for gossip protocol.
+type GossipConfig struct {
+	Fanout               int     `json:"fanout"`               // default: 3
+	GossipIntervalMs     int64   `json:"gossipIntervalMs"`     // default: 100
+	MaxHops              int     `json:"maxHops"`              // default: 10
+	ConvergenceThreshold float64 `json:"convergenceThreshold"` // default: 0.9
+	Threshold            float64 `json:"threshold"`            // approval threshold
+	TimeoutMs            int64   `json:"timeoutMs"`
+	MaxRounds            int     `json:"maxRounds"`
+	RequireQuorum        bool    `json:"requireQuorum"` // false for eventual consistency
+}
+
+// DefaultGossipConfig returns the default gossip configuration.
+func DefaultGossipConfig() GossipConfig {
+	return GossipConfig{
+		Fanout:               3,
+		GossipIntervalMs:     100,
+		MaxHops:              10,
+		ConvergenceThreshold: 0.9,
+		Threshold:            0.66,
+		TimeoutMs:            30000,
+		MaxRounds:            10,
+		RequireQuorum:        false, // Gossip is eventually consistent
+	}
+}
+
+// ============================================================================
+// Algorithm Selection Types
+// ============================================================================
+
+// FaultToleranceMode represents the fault tolerance requirement.
+type FaultToleranceMode string
+
+const (
+	FaultToleranceCrash     FaultToleranceMode = "crash"
+	FaultToleranceByzantine FaultToleranceMode = "byzantine"
+)
+
+// ConsistencyMode represents the consistency requirement.
+type ConsistencyMode string
+
+const (
+	ConsistencyStrong   ConsistencyMode = "strong"
+	ConsistencyEventual ConsistencyMode = "eventual"
+)
+
+// NetworkScale represents the network scale.
+type NetworkScale string
+
+const (
+	NetworkScaleSmall  NetworkScale = "small"  // < 10 nodes
+	NetworkScaleMedium NetworkScale = "medium" // 10-50 nodes
+	NetworkScaleLarge  NetworkScale = "large"  // 50+ nodes
+)
+
+// LatencyPriority represents the latency priority.
+type LatencyPriority string
+
+const (
+	LatencyPriorityLow    LatencyPriority = "low"
+	LatencyPriorityMedium LatencyPriority = "medium"
+	LatencyPriorityHigh   LatencyPriority = "high"
+)
+
+// AlgorithmSelectionOptions holds options for algorithm selection.
+type AlgorithmSelectionOptions struct {
+	FaultTolerance  FaultToleranceMode `json:"faultTolerance"`
+	Consistency     ConsistencyMode    `json:"consistency"`
+	NetworkScale    NetworkScale       `json:"networkScale"`
+	LatencyPriority LatencyPriority    `json:"latencyPriority"`
+}
+
+// ConsensusProposal represents a proposal in the distributed consensus.
+type ConsensusProposal struct {
+	ID         string                 `json:"id"`
+	ProposerID string                 `json:"proposerId"`
+	Value      interface{}            `json:"value"`
+	Term       int64                  `json:"term"`
+	Timestamp  int64                  `json:"timestamp"`
+	Status     string                 `json:"status"` // pending, accepted, rejected, expired
+	Votes      map[string]interface{} `json:"votes"`
+}
+
+// ConsensusVote represents a vote in the distributed consensus.
+type ConsensusVote struct {
+	VoterID    string  `json:"voterId"`
+	Approve    bool    `json:"approve"`
+	Confidence float64 `json:"confidence"`
+	Timestamp  int64   `json:"timestamp"`
+}
+
+// DistributedConsensusResult represents the result of a distributed consensus.
+type DistributedConsensusResult struct {
+	ProposalID        string      `json:"proposalId"`
+	Approved          bool        `json:"approved"`
+	ApprovalRate      float64     `json:"approvalRate"`
+	ParticipationRate float64     `json:"participationRate"`
+	FinalValue        interface{} `json:"finalValue"`
+	Rounds            int         `json:"rounds"`
+	DurationMs        int64       `json:"durationMs"`
+}
+
+// AlgorithmStats represents statistics for a consensus algorithm.
+type AlgorithmStats struct {
+	Algorithm         ConsensusAlgorithmType `json:"algorithm"`
+	TotalProposals    int                    `json:"totalProposals"`
+	PendingProposals  int                    `json:"pendingProposals"`
+	AcceptedProposals int                    `json:"acceptedProposals"`
+	RejectedProposals int                    `json:"rejectedProposals"`
+	ExpiredProposals  int                    `json:"expiredProposals"`
+	AverageDurationMs float64                `json:"averageDurationMs"`
+}
+
+// ============================================================================
 // Plugin Types
 // ============================================================================
 

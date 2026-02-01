@@ -22,6 +22,7 @@ package claudeflow
 import (
 	"context"
 
+	"github.com/anthropics/claude-flow-go/internal/application/consensus"
 	"github.com/anthropics/claude-flow-go/internal/application/coordinator"
 	"github.com/anthropics/claude-flow-go/internal/application/hivemind"
 	"github.com/anthropics/claude-flow-go/internal/application/workflow"
@@ -65,6 +66,30 @@ type (
 	HiveMindConfig   = shared.HiveMindConfig
 	HiveMindState    = shared.HiveMindState
 	ProposalOutcome  = shared.ProposalOutcome
+
+	// Distributed Consensus Algorithm types
+	ConsensusAlgorithmType     = shared.ConsensusAlgorithmType
+	RaftState                  = shared.RaftState
+	RaftLogEntry               = shared.RaftLogEntry
+	RaftNode                   = shared.RaftNode
+	RaftConfig                 = shared.RaftConfig
+	ByzantinePhase             = shared.ByzantinePhase
+	ByzantineMessage           = shared.ByzantineMessage
+	ByzantineNode              = shared.ByzantineNode
+	ByzantineConfig            = shared.ByzantineConfig
+	GossipMessageType          = shared.GossipMessageType
+	GossipMessage              = shared.GossipMessage
+	GossipNode                 = shared.GossipNode
+	GossipConfig               = shared.GossipConfig
+	FaultToleranceMode         = shared.FaultToleranceMode
+	ConsistencyMode            = shared.ConsistencyMode
+	NetworkScale               = shared.NetworkScale
+	LatencyPriority            = shared.LatencyPriority
+	AlgorithmSelectionOptions  = shared.AlgorithmSelectionOptions
+	ConsensusProposal          = shared.ConsensusProposal
+	ConsensusVote              = shared.ConsensusVote
+	DistributedConsensusResult = shared.DistributedConsensusResult
+	AlgorithmStats             = shared.AlgorithmStats
 
 	// Task types
 	TaskPriority = shared.TaskPriority
@@ -746,4 +771,166 @@ func (hm *HiveMindManager) GetConfig() HiveMindConfig {
 // GetConsensusTypeInfo returns information about all consensus types.
 func GetConsensusTypeInfo() []hivemind.ConsensusTypeInfo {
 	return hivemind.GetConsensusTypeInfo()
+}
+
+// ============================================================================
+// Distributed Consensus Algorithms
+// ============================================================================
+
+// Algorithm type constants
+const (
+	AlgorithmRaft      = shared.AlgorithmRaft
+	AlgorithmByzantine = shared.AlgorithmByzantine
+	AlgorithmGossip    = shared.AlgorithmGossip
+	AlgorithmPaxos     = shared.AlgorithmPaxos
+)
+
+// Raft state constants
+const (
+	RaftStateFollower  = shared.RaftStateFollower
+	RaftStateCandidate = shared.RaftStateCandidate
+	RaftStateLeader    = shared.RaftStateLeader
+)
+
+// Byzantine phase constants
+const (
+	ByzantinePhasePrePrepare = shared.ByzantinePhasePrePrepare
+	ByzantinePhasePrepare    = shared.ByzantinePhasePrepare
+	ByzantinePhaseCommit     = shared.ByzantinePhaseCommit
+	ByzantinePhaseReply      = shared.ByzantinePhaseReply
+)
+
+// Gossip message type constants
+const (
+	GossipMessageProposal = shared.GossipMessageProposal
+	GossipMessageVote     = shared.GossipMessageVote
+	GossipMessageState    = shared.GossipMessageState
+	GossipMessageAck      = shared.GossipMessageAck
+)
+
+// Algorithm selection constants
+const (
+	FaultToleranceCrash     = shared.FaultToleranceCrash
+	FaultToleranceByzantine = shared.FaultToleranceByzantine
+	ConsistencyStrong       = shared.ConsistencyStrong
+	ConsistencyEventual     = shared.ConsistencyEventual
+	NetworkScaleSmall       = shared.NetworkScaleSmall
+	NetworkScaleMedium      = shared.NetworkScaleMedium
+	NetworkScaleLarge       = shared.NetworkScaleLarge
+	LatencyPriorityLow      = shared.LatencyPriorityLow
+	LatencyPriorityMedium   = shared.LatencyPriorityMedium
+	LatencyPriorityHigh     = shared.LatencyPriorityHigh
+)
+
+// ConsensusEngine wraps the internal consensus engine for public use.
+type ConsensusEngine struct {
+	internal *consensus.Engine
+}
+
+// NewConsensusEngine creates a new consensus engine with the specified algorithm.
+func NewConsensusEngine(nodeID string, algorithmType ConsensusAlgorithmType) (*ConsensusEngine, error) {
+	engine, err := consensus.NewEngine(nodeID, algorithmType)
+	if err != nil {
+		return nil, err
+	}
+	return &ConsensusEngine{internal: engine}, nil
+}
+
+// NewConsensusEngineWithConfig creates a new consensus engine with custom configuration.
+func NewConsensusEngineWithConfig(nodeID string, algorithmType ConsensusAlgorithmType, config interface{}) (*ConsensusEngine, error) {
+	engine, err := consensus.NewEngineWithConfig(nodeID, algorithmType, config)
+	if err != nil {
+		return nil, err
+	}
+	return &ConsensusEngine{internal: engine}, nil
+}
+
+// Initialize initializes the consensus engine.
+func (ce *ConsensusEngine) Initialize(ctx context.Context) error {
+	return ce.internal.Initialize(ctx)
+}
+
+// Shutdown shuts down the consensus engine.
+func (ce *ConsensusEngine) Shutdown() error {
+	return ce.internal.Shutdown()
+}
+
+// AddNode adds a node to the consensus cluster.
+func (ce *ConsensusEngine) AddNode(nodeID string) error {
+	return ce.internal.AddNode(nodeID)
+}
+
+// RemoveNode removes a node from the consensus cluster.
+func (ce *ConsensusEngine) RemoveNode(nodeID string) error {
+	return ce.internal.RemoveNode(nodeID)
+}
+
+// Propose proposes a value for consensus.
+func (ce *ConsensusEngine) Propose(ctx context.Context, value interface{}) (*ConsensusProposal, error) {
+	return ce.internal.Propose(ctx, value)
+}
+
+// Vote submits a vote for a proposal.
+func (ce *ConsensusEngine) Vote(ctx context.Context, proposalID string, vote ConsensusVote) error {
+	return ce.internal.Vote(ctx, proposalID, vote)
+}
+
+// AwaitConsensus waits for consensus on a proposal.
+func (ce *ConsensusEngine) AwaitConsensus(ctx context.Context, proposalID string) (*DistributedConsensusResult, error) {
+	return ce.internal.AwaitConsensus(ctx, proposalID)
+}
+
+// GetProposal returns a proposal by ID.
+func (ce *ConsensusEngine) GetProposal(proposalID string) (*ConsensusProposal, bool) {
+	return ce.internal.GetProposal(proposalID)
+}
+
+// GetActiveProposals returns all active proposals.
+func (ce *ConsensusEngine) GetActiveProposals() []*ConsensusProposal {
+	return ce.internal.GetActiveProposals()
+}
+
+// GetStats returns algorithm statistics.
+func (ce *ConsensusEngine) GetStats() AlgorithmStats {
+	return ce.internal.GetStats()
+}
+
+// GetAlgorithmType returns the algorithm type.
+func (ce *ConsensusEngine) GetAlgorithmType() ConsensusAlgorithmType {
+	return ce.internal.GetAlgorithmType()
+}
+
+// IsLeader returns true if this node is the leader (for Raft/BFT).
+func (ce *ConsensusEngine) IsLeader() bool {
+	return ce.internal.IsLeader()
+}
+
+// GetLeaderID returns the leader ID (for Raft).
+func (ce *ConsensusEngine) GetLeaderID() string {
+	return ce.internal.GetLeaderID()
+}
+
+// SelectOptimalAlgorithm selects the optimal consensus algorithm based on requirements.
+func SelectOptimalAlgorithm(opts AlgorithmSelectionOptions) ConsensusAlgorithmType {
+	return consensus.SelectOptimalAlgorithm(opts)
+}
+
+// GetAlgorithmInfo returns information about all available algorithms.
+func GetAlgorithmInfo() []consensus.AlgorithmInfo {
+	return consensus.GetAlgorithmInfo()
+}
+
+// DefaultRaftConfig returns the default Raft configuration.
+func DefaultRaftConfig() RaftConfig {
+	return shared.DefaultRaftConfig()
+}
+
+// DefaultByzantineConfig returns the default Byzantine configuration.
+func DefaultByzantineConfig() ByzantineConfig {
+	return shared.DefaultByzantineConfig()
+}
+
+// DefaultGossipConfig returns the default Gossip configuration.
+func DefaultGossipConfig() GossipConfig {
+	return shared.DefaultGossipConfig()
 }
