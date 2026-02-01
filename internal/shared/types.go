@@ -2248,6 +2248,189 @@ type SamplingStats struct {
 }
 
 // ============================================================================
+// Task Management Types (MCP Task Tools)
+// ============================================================================
+
+// ManagedTaskStatus represents the status of a managed task.
+type ManagedTaskStatus string
+
+const (
+	ManagedTaskStatusPending   ManagedTaskStatus = "pending"
+	ManagedTaskStatusQueued    ManagedTaskStatus = "queued"
+	ManagedTaskStatusRunning   ManagedTaskStatus = "running"
+	ManagedTaskStatusCompleted ManagedTaskStatus = "completed"
+	ManagedTaskStatusFailed    ManagedTaskStatus = "failed"
+	ManagedTaskStatusCancelled ManagedTaskStatus = "cancelled"
+)
+
+// ManagedTask represents a task managed by the TaskManager.
+type ManagedTask struct {
+	ID           string                 `json:"id"`
+	Type         TaskType               `json:"type"`
+	Description  string                 `json:"description"`
+	Priority     int                    `json:"priority"` // 1-10, higher is more important
+	Status       ManagedTaskStatus      `json:"status"`
+	AssignedTo   string                 `json:"assignedTo,omitempty"`
+	Dependencies []string               `json:"dependencies,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	Input        interface{}            `json:"input,omitempty"`
+	Output       interface{}            `json:"output,omitempty"`
+	Error        string                 `json:"error,omitempty"`
+	Progress     float64                `json:"progress"` // 0.0-1.0
+	CreatedAt    int64                  `json:"createdAt"`
+	StartedAt    int64                  `json:"startedAt,omitempty"`
+	CompletedAt  int64                  `json:"completedAt,omitempty"`
+	TimeoutMs    int64                  `json:"timeoutMs,omitempty"`
+	QueuePosition int                   `json:"queuePosition,omitempty"`
+	Artifacts    []TaskArtifact         `json:"artifacts,omitempty"`
+	History      []TaskHistoryEntry     `json:"history,omitempty"`
+	Metrics      *TaskMetrics           `json:"metrics,omitempty"`
+}
+
+// TaskArtifact represents an artifact produced by a task.
+type TaskArtifact struct {
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Path     string `json:"path,omitempty"`
+	Data     string `json:"data,omitempty"`
+	Size     int64  `json:"size,omitempty"`
+	MimeType string `json:"mimeType,omitempty"`
+}
+
+// TaskHistoryEntry represents a historical event for a task.
+type TaskHistoryEntry struct {
+	Timestamp int64       `json:"timestamp"`
+	Event     string      `json:"event"`
+	Details   interface{} `json:"details,omitempty"`
+}
+
+// TaskMetrics represents execution metrics for a task.
+type TaskMetrics struct {
+	ExecutionTimeMs int64   `json:"executionTimeMs"`
+	WaitTimeMs      int64   `json:"waitTimeMs"`
+	RetryCount      int     `json:"retryCount"`
+	MemoryUsedBytes int64   `json:"memoryUsedBytes,omitempty"`
+	CPUTimeMs       int64   `json:"cpuTimeMs,omitempty"`
+}
+
+// TaskFilter represents filters for listing tasks.
+type TaskFilter struct {
+	Status    ManagedTaskStatus `json:"status,omitempty"`
+	AgentID   string            `json:"agentId,omitempty"`
+	Type      TaskType          `json:"type,omitempty"`
+	Priority  int               `json:"priority,omitempty"`
+	Limit     int               `json:"limit,omitempty"`
+	Offset    int               `json:"offset,omitempty"`
+	SortBy    string            `json:"sortBy,omitempty"`    // created, priority, status, updated
+	SortOrder string            `json:"sortOrder,omitempty"` // asc, desc
+}
+
+// TaskUpdate represents updates to apply to a task.
+type TaskUpdate struct {
+	Priority    *int                    `json:"priority,omitempty"`
+	Description *string                 `json:"description,omitempty"`
+	TimeoutMs   *int64                  `json:"timeoutMs,omitempty"`
+	Metadata    map[string]interface{}  `json:"metadata,omitempty"`
+}
+
+// TaskResult represents the result of a completed task.
+type TaskResult struct {
+	TaskID        string         `json:"taskId"`
+	Status        ManagedTaskStatus `json:"status"`
+	Output        interface{}    `json:"output,omitempty"`
+	Error         string         `json:"error,omitempty"`
+	Artifacts     []TaskArtifact `json:"artifacts,omitempty"`
+	ExecutionTime int64          `json:"executionTimeMs"`
+	CompletedAt   int64          `json:"completedAt"`
+}
+
+// TaskManagerConfig holds configuration for the TaskManager.
+type TaskManagerConfig struct {
+	MaxConcurrent     int   `json:"maxConcurrent"`     // Default: 10
+	DefaultTimeoutMs  int64 `json:"defaultTimeoutMs"`  // Default: 300000 (5 minutes)
+	RetentionPeriodMs int64 `json:"retentionPeriodMs"` // Default: 3600000 (1 hour)
+	QueueSize         int   `json:"queueSize"`         // Default: 1000
+}
+
+// DefaultTaskManagerConfig returns the default TaskManager configuration.
+func DefaultTaskManagerConfig() TaskManagerConfig {
+	return TaskManagerConfig{
+		MaxConcurrent:     10,
+		DefaultTimeoutMs:  300000,  // 5 minutes
+		RetentionPeriodMs: 3600000, // 1 hour
+		QueueSize:         1000,
+	}
+}
+
+// TaskManagerStats holds statistics for the TaskManager.
+type TaskManagerStats struct {
+	TotalTasks     int64 `json:"totalTasks"`
+	PendingTasks   int64 `json:"pendingTasks"`
+	QueuedTasks    int64 `json:"queuedTasks"`
+	RunningTasks   int64 `json:"runningTasks"`
+	CompletedTasks int64 `json:"completedTasks"`
+	FailedTasks    int64 `json:"failedTasks"`
+	CancelledTasks int64 `json:"cancelledTasks"`
+	AvgWaitTimeMs  float64 `json:"avgWaitTimeMs"`
+	AvgExecTimeMs  float64 `json:"avgExecTimeMs"`
+}
+
+// TaskCreateRequest represents a request to create a task.
+type TaskCreateRequest struct {
+	Type          TaskType               `json:"type"`
+	Description   string                 `json:"description"`
+	Priority      int                    `json:"priority,omitempty"` // 1-10
+	Dependencies  []string               `json:"dependencies,omitempty"`
+	AssignToAgent string                 `json:"assignToAgent,omitempty"`
+	Input         interface{}            `json:"input,omitempty"`
+	TimeoutMs     int64                  `json:"timeoutMs,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// TaskListResult represents the result of listing tasks.
+type TaskListResult struct {
+	Tasks  []*ManagedTask `json:"tasks"`
+	Total  int            `json:"total"`
+	Limit  int            `json:"limit"`
+	Offset int            `json:"offset"`
+}
+
+// TaskDependencyAction represents an action on task dependencies.
+type TaskDependencyAction string
+
+const (
+	TaskDependencyActionAdd    TaskDependencyAction = "add"
+	TaskDependencyActionRemove TaskDependencyAction = "remove"
+	TaskDependencyActionList   TaskDependencyAction = "list"
+	TaskDependencyActionClear  TaskDependencyAction = "clear"
+)
+
+// TaskResultFormat represents the format for task results.
+type TaskResultFormat string
+
+const (
+	TaskResultFormatSummary  TaskResultFormat = "summary"
+	TaskResultFormatDetailed TaskResultFormat = "detailed"
+	TaskResultFormatRaw      TaskResultFormat = "raw"
+)
+
+// Task-related errors
+var (
+	// ErrTaskNotFound is returned when a task is not found.
+	ErrTaskNotFound = errors.New("task not found")
+	// ErrTaskAlreadyAssigned is returned when trying to assign an already assigned task.
+	ErrTaskAlreadyAssigned = errors.New("task already assigned")
+	// ErrTaskNotCancellable is returned when a task cannot be cancelled.
+	ErrTaskNotCancellable = errors.New("task cannot be cancelled in current state")
+	// ErrTaskQueueFull is returned when the task queue is full.
+	ErrTaskQueueFull = errors.New("task queue is full")
+	// ErrInvalidTaskPriority is returned for invalid priority values.
+	ErrInvalidTaskPriority = errors.New("priority must be between 1 and 10")
+	// ErrCircularDependency is returned when a circular dependency is detected.
+	ErrCircularDependency = errors.New("circular dependency detected")
+)
+
+// ============================================================================
 // Utility Functions
 // ============================================================================
 

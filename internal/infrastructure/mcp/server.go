@@ -14,6 +14,7 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/prompts"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/resources"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sampling"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tasks"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
@@ -34,15 +35,19 @@ type Server struct {
 	completion  *completion.CompletionHandler
 	logging     *logging.LogManager
 	capabilities *shared.MCPCapabilities
+
+	// Task management
+	tasks       *tasks.TaskManager
 }
 
 // Options holds configuration options for the MCP server.
 type Options struct {
-	Tools              []shared.MCPToolProvider
-	Port               int
-	Host               string
+	Tools               []shared.MCPToolProvider
+	Port                int
+	Host                string
 	ResourceCacheConfig *shared.ResourceCacheConfig
-	SamplingConfig     *shared.SamplingConfig
+	SamplingConfig      *shared.SamplingConfig
+	TaskManagerConfig   *shared.TaskManagerConfig
 }
 
 // NewServer creates a new MCP server.
@@ -81,6 +86,14 @@ func NewServer(opts Options) *Server {
 	// Create log manager
 	logManager := logging.NewLogManagerWithDefaults()
 
+	// Create task manager
+	var taskManager *tasks.TaskManager
+	if opts.TaskManagerConfig != nil {
+		taskManager = tasks.NewTaskManager(*opts.TaskManagerConfig, nil)
+	} else {
+		taskManager = tasks.NewTaskManagerWithDefaults(nil)
+	}
+
 	// Build capabilities
 	capabilities := &shared.MCPCapabilities{
 		Resources: &shared.ResourcesCapability{
@@ -110,6 +123,7 @@ func NewServer(opts Options) *Server {
 		completion:   completionHandler,
 		logging:      logManager,
 		capabilities: capabilities,
+		tasks:        taskManager,
 	}
 }
 
@@ -120,6 +134,13 @@ func (s *Server) Start() error {
 
 	if s.running {
 		return nil
+	}
+
+	// Initialize task manager
+	if s.tasks != nil {
+		if err := s.tasks.Initialize(); err != nil {
+			return err
+		}
 	}
 
 	// Build tool registry
@@ -166,6 +187,11 @@ func (s *Server) Stop() error {
 
 	s.running = false
 	s.toolRegistry = make(map[string]shared.MCPTool)
+
+	// Shutdown task manager
+	if s.tasks != nil {
+		s.tasks.Shutdown()
+	}
 
 	if s.httpServer != nil {
 		return s.httpServer.Shutdown(context.Background())
@@ -711,4 +737,9 @@ func (s *Server) GetCapabilities() *shared.MCPCapabilities {
 func (s *Server) RegisterMockProvider() {
 	mockProvider := sampling.NewMockProviderWithDefaults()
 	s.sampling.RegisterProvider(mockProvider, true)
+}
+
+// GetTasks returns the task manager.
+func (s *Server) GetTasks() *tasks.TaskManager {
+	return s.tasks
 }

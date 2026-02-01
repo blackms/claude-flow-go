@@ -36,6 +36,7 @@ import (
 	mcpprompts "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/prompts"
 	mcpresources "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/resources"
 	mcpsampling "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sampling"
+	mcptasks "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tasks"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tools"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/memory"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/messaging"
@@ -239,6 +240,22 @@ type (
 	ResourcesCapability = shared.ResourcesCapability
 	ToolsCapability     = shared.ToolsCapability
 	SamplingCapability  = shared.SamplingCapability
+
+	// Task Management Types
+	ManagedTask          = shared.ManagedTask
+	ManagedTaskStatus    = shared.ManagedTaskStatus
+	TaskArtifact         = shared.TaskArtifact
+	TaskHistoryEntry     = shared.TaskHistoryEntry
+	TaskMetrics          = shared.TaskMetrics
+	TaskFilter           = shared.TaskFilter
+	TaskUpdate           = shared.TaskUpdate
+	TaskResult           = shared.TaskResult
+	TaskManagerConfig    = shared.TaskManagerConfig
+	TaskManagerStats     = shared.TaskManagerStats
+	TaskCreateRequest    = shared.TaskCreateRequest
+	TaskListResult       = shared.TaskListResult
+	TaskDependencyAction = shared.TaskDependencyAction
+	TaskResultFormat     = shared.TaskResultFormat
 
 	// Backend types
 	MemoryBackend = shared.MemoryBackend
@@ -2484,4 +2501,134 @@ func (lm *LogManager) GetEntries(limit int) []LogEntry {
 // AddHandler adds a log handler.
 func (lm *LogManager) AddHandler(handler LogHandler) {
 	lm.internal.AddHandler(handler)
+}
+
+// ============================================================================
+// Task Management
+// ============================================================================
+
+// Managed task status constants
+const (
+	ManagedTaskStatusPending   = shared.ManagedTaskStatusPending
+	ManagedTaskStatusQueued    = shared.ManagedTaskStatusQueued
+	ManagedTaskStatusRunning   = shared.ManagedTaskStatusRunning
+	ManagedTaskStatusCompleted = shared.ManagedTaskStatusCompleted
+	ManagedTaskStatusFailed    = shared.ManagedTaskStatusFailed
+	ManagedTaskStatusCancelled = shared.ManagedTaskStatusCancelled
+)
+
+// Task dependency action constants
+const (
+	TaskDependencyActionAdd    = shared.TaskDependencyActionAdd
+	TaskDependencyActionRemove = shared.TaskDependencyActionRemove
+	TaskDependencyActionList   = shared.TaskDependencyActionList
+	TaskDependencyActionClear  = shared.TaskDependencyActionClear
+)
+
+// Task result format constants
+const (
+	TaskResultFormatSummary  = shared.TaskResultFormatSummary
+	TaskResultFormatDetailed = shared.TaskResultFormatDetailed
+	TaskResultFormatRaw      = shared.TaskResultFormatRaw
+)
+
+// ProgressCallback is called when task progress is updated.
+type ProgressCallback = mcptasks.ProgressCallback
+
+// TaskManager manages tasks with async execution, queuing, and progress tracking.
+type TaskManager struct {
+	internal *mcptasks.TaskManager
+}
+
+// NewTaskManager creates a new TaskManager.
+func NewTaskManager(config TaskManagerConfig, coord *SwarmCoordinator) *TaskManager {
+	var internalCoord *coordinator.SwarmCoordinator
+	if coord != nil {
+		internalCoord = coord.internal
+	}
+	return &TaskManager{internal: mcptasks.NewTaskManager(config, internalCoord)}
+}
+
+// NewTaskManagerWithDefaults creates a TaskManager with default configuration.
+func NewTaskManagerWithDefaults(coord *SwarmCoordinator) *TaskManager {
+	var internalCoord *coordinator.SwarmCoordinator
+	if coord != nil {
+		internalCoord = coord.internal
+	}
+	return &TaskManager{internal: mcptasks.NewTaskManagerWithDefaults(internalCoord)}
+}
+
+// Initialize starts the TaskManager.
+func (tm *TaskManager) Initialize() error {
+	return tm.internal.Initialize()
+}
+
+// Shutdown stops the TaskManager.
+func (tm *TaskManager) Shutdown() error {
+	return tm.internal.Shutdown()
+}
+
+// CreateTask creates a new task.
+func (tm *TaskManager) CreateTask(req *TaskCreateRequest) (*ManagedTask, error) {
+	return tm.internal.CreateTask(req)
+}
+
+// GetTask retrieves a task by ID.
+func (tm *TaskManager) GetTask(id string) (*ManagedTask, error) {
+	return tm.internal.GetTask(id)
+}
+
+// ListTasks lists tasks with optional filtering.
+func (tm *TaskManager) ListTasks(filter *TaskFilter) *TaskListResult {
+	return tm.internal.ListTasks(filter)
+}
+
+// CancelTask cancels a task.
+func (tm *TaskManager) CancelTask(id string, reason string, force bool) error {
+	return tm.internal.CancelTask(id, reason, force)
+}
+
+// AssignTask assigns a task to an agent.
+func (tm *TaskManager) AssignTask(id, agentID string, reassign bool) error {
+	return tm.internal.AssignTask(id, agentID, reassign)
+}
+
+// UpdateTask updates task properties.
+func (tm *TaskManager) UpdateTask(id string, update *TaskUpdate) error {
+	return tm.internal.UpdateTask(id, update)
+}
+
+// UpdateDependencies manages task dependencies.
+func (tm *TaskManager) UpdateDependencies(id string, action TaskDependencyAction, deps []string) ([]string, error) {
+	return tm.internal.UpdateDependencies(id, action, deps)
+}
+
+// GetResults retrieves task results.
+func (tm *TaskManager) GetResults(id string, format TaskResultFormat, includeArtifacts bool) (*TaskResult, error) {
+	return tm.internal.GetResults(id, format, includeArtifacts)
+}
+
+// ReportProgress updates task progress.
+func (tm *TaskManager) ReportProgress(id string, progress float64) error {
+	return tm.internal.ReportProgress(id, progress)
+}
+
+// SetProgressCallback sets the progress callback.
+func (tm *TaskManager) SetProgressCallback(callback ProgressCallback) {
+	tm.internal.SetProgressCallback(callback)
+}
+
+// GetStats returns TaskManager statistics.
+func (tm *TaskManager) GetStats() *TaskManagerStats {
+	return tm.internal.GetStats()
+}
+
+// GetConfig returns the TaskManager configuration.
+func (tm *TaskManager) GetConfig() TaskManagerConfig {
+	return tm.internal.GetConfig()
+}
+
+// DefaultTaskManagerConfig returns the default TaskManager configuration.
+func DefaultTaskManagerConfig() TaskManagerConfig {
+	return shared.DefaultTaskManagerConfig()
 }
