@@ -31,6 +31,11 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/events"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp"
+	mcpcompletion "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/completion"
+	mcplogging "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/logging"
+	mcpprompts "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/prompts"
+	mcpresources "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/resources"
+	mcpsampling "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sampling"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tools"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/memory"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/messaging"
@@ -189,6 +194,51 @@ type (
 	MCPToolResult   = shared.MCPToolResult
 	MCPRequest      = shared.MCPRequest
 	MCPResponse     = shared.MCPResponse
+
+	// MCP 2025-11-25 Compliance Types
+	// Resource types
+	MCPResource        = shared.MCPResource
+	ResourceContent    = shared.ResourceContent
+	ResourceTemplate   = shared.ResourceTemplate
+	ResourceListResult = shared.ResourceListResult
+	ResourceReadResult = shared.ResourceReadResult
+	ResourceCacheConfig = shared.ResourceCacheConfig
+
+	// Prompt types
+	MCPPrompt         = shared.MCPPrompt
+	PromptArgument    = shared.PromptArgument
+	PromptContent     = shared.PromptContent
+	PromptContentType = shared.PromptContentType
+	PromptMessage     = shared.PromptMessage
+	PromptListResult  = shared.PromptListResult
+	PromptGetResult   = shared.PromptGetResult
+
+	// Sampling types
+	SamplingMessage      = shared.SamplingMessage
+	ModelPreferences     = shared.ModelPreferences
+	ModelHint            = shared.ModelHint
+	CreateMessageRequest = shared.CreateMessageRequest
+	CreateMessageResult  = shared.CreateMessageResult
+	SamplingConfig       = shared.SamplingConfig
+	SamplingStats        = shared.SamplingStats
+
+	// Completion types
+	CompletionReference     = shared.CompletionReference
+	CompletionReferenceType = shared.CompletionReferenceType
+	CompletionArgument      = shared.CompletionArgument
+	CompletionResult        = shared.CompletionResult
+
+	// Logging types
+	MCPLogLevel    = shared.MCPLogLevel
+	LoggingMessage = shared.LoggingMessage
+
+	// Capabilities
+	MCPCapabilities     = shared.MCPCapabilities
+	LoggingCapability   = shared.LoggingCapability
+	PromptsCapability   = shared.PromptsCapability
+	ResourcesCapability = shared.ResourcesCapability
+	ToolsCapability     = shared.ToolsCapability
+	SamplingCapability  = shared.SamplingCapability
 
 	// Backend types
 	MemoryBackend = shared.MemoryBackend
@@ -2136,3 +2186,302 @@ func DefaultHealthConfig() HealthConfig {
 
 // AllowedAgentTypes returns all valid agent types (33 types total).
 var AllowedAgentTypes = tools.AllowedAgentTypes
+
+// ============================================================================
+// MCP 2025-11-25 Compliance Components
+// ============================================================================
+
+// Prompt content type constants
+const (
+	PromptContentTypeText     = shared.PromptContentTypeText
+	PromptContentTypeImage    = shared.PromptContentTypeImage
+	PromptContentTypeResource = shared.PromptContentTypeResource
+)
+
+// Completion reference type constants
+const (
+	CompletionRefPrompt   = shared.CompletionRefPrompt
+	CompletionRefResource = shared.CompletionRefResource
+)
+
+// Log level constants
+const (
+	MCPLogLevelDebug     = shared.MCPLogLevelDebug
+	MCPLogLevelInfo      = shared.MCPLogLevelInfo
+	MCPLogLevelNotice    = shared.MCPLogLevelNotice
+	MCPLogLevelWarning   = shared.MCPLogLevelWarning
+	MCPLogLevelError     = shared.MCPLogLevelError
+	MCPLogLevelCritical  = shared.MCPLogLevelCritical
+	MCPLogLevelAlert     = shared.MCPLogLevelAlert
+	MCPLogLevelEmergency = shared.MCPLogLevelEmergency
+)
+
+// ResourceRegistry manages MCP resources.
+type ResourceRegistry struct {
+	internal *mcpresources.ResourceRegistry
+}
+
+// ResourceHandler is a function that reads a resource.
+type ResourceHandler = mcpresources.ResourceHandler
+
+// NewResourceRegistry creates a new ResourceRegistry.
+func NewResourceRegistry(config ResourceCacheConfig) *ResourceRegistry {
+	return &ResourceRegistry{internal: mcpresources.NewResourceRegistry(config)}
+}
+
+// NewResourceRegistryWithDefaults creates a ResourceRegistry with default configuration.
+func NewResourceRegistryWithDefaults() *ResourceRegistry {
+	return &ResourceRegistry{internal: mcpresources.NewResourceRegistryWithDefaults()}
+}
+
+// RegisterResource registers a static resource with its handler.
+func (rr *ResourceRegistry) RegisterResource(resource *MCPResource, handler ResourceHandler) error {
+	return rr.internal.RegisterResource(resource, handler)
+}
+
+// RegisterTemplate registers a resource template with its handler.
+func (rr *ResourceRegistry) RegisterTemplate(template *ResourceTemplate, handler ResourceHandler) error {
+	return rr.internal.RegisterTemplate(template, handler)
+}
+
+// List returns a paginated list of resources.
+func (rr *ResourceRegistry) List(cursor string, pageSize int) *ResourceListResult {
+	return rr.internal.List(cursor, pageSize)
+}
+
+// Read reads a resource by URI.
+func (rr *ResourceRegistry) Read(uri string) (*ResourceReadResult, error) {
+	return rr.internal.Read(uri)
+}
+
+// Subscribe subscribes to updates for a resource URI.
+func (rr *ResourceRegistry) Subscribe(uri string, callback func(string, *ResourceContent)) string {
+	return rr.internal.Subscribe(uri, callback)
+}
+
+// Unsubscribe removes a subscription.
+func (rr *ResourceRegistry) Unsubscribe(subscriptionID string) bool {
+	return rr.internal.Unsubscribe(subscriptionID)
+}
+
+// NotifyUpdate notifies subscribers of a resource update.
+func (rr *ResourceRegistry) NotifyUpdate(uri string) {
+	rr.internal.NotifyUpdate(uri)
+}
+
+// Count returns the number of registered resources.
+func (rr *ResourceRegistry) Count() int {
+	return rr.internal.Count()
+}
+
+// DefaultResourceCacheConfig returns the default resource cache configuration.
+func DefaultResourceCacheConfig() ResourceCacheConfig {
+	return shared.DefaultResourceCacheConfig()
+}
+
+// CreateTextResource creates a text resource handler.
+func CreateTextResource(text, mimeType string) ResourceHandler {
+	return mcpresources.CreateTextResource(text, mimeType)
+}
+
+// PromptRegistry manages MCP prompts.
+type PromptRegistry struct {
+	internal *mcpprompts.PromptRegistry
+}
+
+// PromptHandler is a function that generates prompt messages.
+type PromptHandler = mcpprompts.PromptHandler
+
+// NewPromptRegistry creates a new PromptRegistry.
+func NewPromptRegistry(maxPrompts int) *PromptRegistry {
+	return &PromptRegistry{internal: mcpprompts.NewPromptRegistry(maxPrompts)}
+}
+
+// NewPromptRegistryWithDefaults creates a PromptRegistry with default configuration.
+func NewPromptRegistryWithDefaults() *PromptRegistry {
+	return &PromptRegistry{internal: mcpprompts.NewPromptRegistryWithDefaults()}
+}
+
+// Register registers a prompt with its handler.
+func (pr *PromptRegistry) Register(prompt *MCPPrompt, handler PromptHandler) error {
+	return pr.internal.Register(prompt, handler)
+}
+
+// List returns a paginated list of prompts.
+func (pr *PromptRegistry) List(cursor string, pageSize int) *PromptListResult {
+	return pr.internal.List(cursor, pageSize)
+}
+
+// Get retrieves a prompt and generates its messages with the given arguments.
+func (pr *PromptRegistry) Get(name string, args map[string]string) (*PromptGetResult, error) {
+	return pr.internal.Get(name, args)
+}
+
+// HasPrompt checks if a prompt exists.
+func (pr *PromptRegistry) HasPrompt(name string) bool {
+	return pr.internal.HasPrompt(name)
+}
+
+// Count returns the number of registered prompts.
+func (pr *PromptRegistry) Count() int {
+	return pr.internal.Count()
+}
+
+// Interpolate replaces {{arg}} placeholders with argument values.
+func Interpolate(template string, args map[string]string) string {
+	return mcpprompts.Interpolate(template, args)
+}
+
+// TextMessage creates a text content message.
+func TextMessage(role, text string) PromptMessage {
+	return mcpprompts.TextMessage(role, text)
+}
+
+// ResourceMessage creates a message with embedded resource.
+func ResourceMessage(role, uri, mimeType string) PromptMessage {
+	return mcpprompts.ResourceMessage(role, uri, mimeType)
+}
+
+// LLMProvider represents an LLM provider that can create messages.
+type LLMProvider = mcpsampling.LLMProvider
+
+// SamplingManager manages LLM providers and sampling requests.
+type SamplingManager struct {
+	internal *mcpsampling.SamplingManager
+}
+
+// NewSamplingManager creates a new SamplingManager.
+func NewSamplingManager(config SamplingConfig) *SamplingManager {
+	return &SamplingManager{internal: mcpsampling.NewSamplingManager(config)}
+}
+
+// NewSamplingManagerWithDefaults creates a SamplingManager with default configuration.
+func NewSamplingManagerWithDefaults() *SamplingManager {
+	return &SamplingManager{internal: mcpsampling.NewSamplingManagerWithDefaults()}
+}
+
+// RegisterProvider registers an LLM provider.
+func (sm *SamplingManager) RegisterProvider(provider LLMProvider, isDefault bool) {
+	sm.internal.RegisterProvider(provider, isDefault)
+}
+
+// CreateMessage creates a message using an LLM provider.
+func (sm *SamplingManager) CreateMessage(request *CreateMessageRequest) (*CreateMessageResult, error) {
+	return sm.internal.CreateMessage(request)
+}
+
+// CreateMessageWithContext creates a message with context.
+func (sm *SamplingManager) CreateMessageWithContext(ctx context.Context, request *CreateMessageRequest) (*CreateMessageResult, error) {
+	return sm.internal.CreateMessageWithContext(ctx, request)
+}
+
+// IsAvailable checks if any provider is available.
+func (sm *SamplingManager) IsAvailable() bool {
+	return sm.internal.IsAvailable()
+}
+
+// GetProviders returns all registered providers.
+func (sm *SamplingManager) GetProviders() []string {
+	return sm.internal.GetProviders()
+}
+
+// GetStats returns sampling statistics.
+func (sm *SamplingManager) GetStats() SamplingStats {
+	return sm.internal.GetStats()
+}
+
+// DefaultSamplingConfig returns the default sampling configuration.
+func DefaultSamplingConfig() SamplingConfig {
+	return shared.DefaultSamplingConfig()
+}
+
+// NewMockProvider creates a mock LLM provider for testing.
+func NewMockProvider(name string) LLMProvider {
+	return mcpsampling.NewMockProvider(name)
+}
+
+// NewMockProviderWithDefaults creates a mock provider with default responses.
+func NewMockProviderWithDefaults() LLMProvider {
+	return mcpsampling.NewMockProviderWithDefaults()
+}
+
+// CompletionHandler handles completion requests.
+type CompletionHandler struct {
+	internal *mcpcompletion.CompletionHandler
+}
+
+// NewCompletionHandler creates a new CompletionHandler.
+func NewCompletionHandler(res *ResourceRegistry, pr *PromptRegistry) *CompletionHandler {
+	return &CompletionHandler{internal: mcpcompletion.NewCompletionHandler(res.internal, pr.internal)}
+}
+
+// Complete handles a completion request.
+func (ch *CompletionHandler) Complete(ref *CompletionReference, arg *CompletionArgument) *CompletionResult {
+	return ch.internal.Complete(ref, arg)
+}
+
+// LogEntry represents a log entry.
+type LogEntry = mcplogging.LogEntry
+
+// LogHandler is a callback for log messages.
+type LogHandler = mcplogging.LogHandler
+
+// LogManager manages logging configuration and output.
+type LogManager struct {
+	internal *mcplogging.LogManager
+}
+
+// NewLogManager creates a new LogManager.
+func NewLogManager(level MCPLogLevel, maxEntries int) *LogManager {
+	return &LogManager{internal: mcplogging.NewLogManager(level, maxEntries)}
+}
+
+// NewLogManagerWithDefaults creates a LogManager with default settings.
+func NewLogManagerWithDefaults() *LogManager {
+	return &LogManager{internal: mcplogging.NewLogManagerWithDefaults()}
+}
+
+// SetLevel sets the log level.
+func (lm *LogManager) SetLevel(level string) error {
+	return lm.internal.SetLevel(level)
+}
+
+// GetLevel returns the current log level.
+func (lm *LogManager) GetLevel() MCPLogLevel {
+	return lm.internal.GetLevel()
+}
+
+// Log logs a message at the specified level.
+func (lm *LogManager) Log(level MCPLogLevel, message string, data interface{}) {
+	lm.internal.Log(level, message, data)
+}
+
+// Debug logs a debug message.
+func (lm *LogManager) Debug(message string, data interface{}) {
+	lm.internal.Debug(message, data)
+}
+
+// Info logs an info message.
+func (lm *LogManager) Info(message string, data interface{}) {
+	lm.internal.Info(message, data)
+}
+
+// Warning logs a warning message.
+func (lm *LogManager) Warning(message string, data interface{}) {
+	lm.internal.Warning(message, data)
+}
+
+// Error logs an error message.
+func (lm *LogManager) Error(message string, data interface{}) {
+	lm.internal.Error(message, data)
+}
+
+// GetEntries returns recent log entries.
+func (lm *LogManager) GetEntries(limit int) []LogEntry {
+	return lm.internal.GetEntries(limit)
+}
+
+// AddHandler adds a log handler.
+func (lm *LogManager) AddHandler(handler LogHandler) {
+	lm.internal.AddHandler(handler)
+}

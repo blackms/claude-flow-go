@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -21,7 +22,34 @@ var (
 	ErrPoolNotFound = errors.New("pool not found")
 	// ErrInvalidAgentType is returned when an invalid agent type is provided.
 	ErrInvalidAgentType = errors.New("invalid agent type")
+	// ErrResourceNotFound is returned when a resource is not found.
+	ErrResourceNotFound = errors.New("resource not found")
+	// ErrPromptNotFound is returned when a prompt is not found.
+	ErrPromptNotFound = errors.New("prompt not found")
+	// ErrProviderNotFound is returned when an LLM provider is not found.
+	ErrProviderNotFound = errors.New("provider not found")
+	// ErrNoProvidersAvailable is returned when no LLM providers are available.
+	ErrNoProvidersAvailable = errors.New("no providers available")
+	// ErrSamplingTimeout is returned when a sampling request times out.
+	ErrSamplingTimeout = errors.New("sampling request timed out")
+	// ErrMissingRequiredArgument is returned when a required argument is missing.
+	ErrMissingRequiredArgument = errors.New("missing required argument")
+	// ErrMaxPromptsReached is returned when the maximum number of prompts is reached.
+	ErrMaxPromptsReached = errors.New("maximum number of prompts reached")
 )
+
+// idCounter is used for generating unique IDs.
+var idCounter int64
+var idMu sync.Mutex
+
+// GenerateID generates a unique ID with a given prefix.
+func GenerateID(prefix string) string {
+	idMu.Lock()
+	idCounter++
+	id := idCounter
+	idMu.Unlock()
+	return fmt.Sprintf("%s-%d-%d", prefix, Now(), id)
+}
 
 // ============================================================================
 // Agent Types
@@ -1955,6 +1983,268 @@ func NewMemoryError(message string, details map[string]interface{}) *MemoryError
 			Details: details,
 		},
 	}
+}
+
+// ============================================================================
+// MCP 2025-11-25 Compliance Types
+// ============================================================================
+
+// MCPResource represents a resource in the MCP protocol.
+type MCPResource struct {
+	URI         string                 `json:"uri"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	MimeType    string                 `json:"mimeType,omitempty"`
+	Annotations map[string]interface{} `json:"annotations,omitempty"`
+}
+
+// ResourceContent represents the content of a resource.
+type ResourceContent struct {
+	URI      string `json:"uri"`
+	MimeType string `json:"mimeType,omitempty"`
+	Text     string `json:"text,omitempty"`
+	Blob     []byte `json:"blob,omitempty"`
+}
+
+// ResourceTemplate represents a resource URI template.
+type ResourceTemplate struct {
+	URITemplate string `json:"uriTemplate"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	MimeType    string `json:"mimeType,omitempty"`
+}
+
+// ResourceListResult represents the result of listing resources.
+type ResourceListResult struct {
+	Resources  []MCPResource `json:"resources"`
+	NextCursor string        `json:"nextCursor,omitempty"`
+}
+
+// ResourceReadResult represents the result of reading a resource.
+type ResourceReadResult struct {
+	Contents []ResourceContent `json:"contents"`
+}
+
+// ResourceSubscription represents a subscription to resource updates.
+type ResourceSubscription struct {
+	ID       string `json:"id"`
+	URI      string `json:"uri"`
+	Callback func(uri string, content *ResourceContent)
+}
+
+// MCPPrompt represents a prompt in the MCP protocol.
+type MCPPrompt struct {
+	Name        string           `json:"name"`
+	Title       string           `json:"title,omitempty"`
+	Description string           `json:"description,omitempty"`
+	Arguments   []PromptArgument `json:"arguments,omitempty"`
+}
+
+// PromptArgument represents an argument for a prompt.
+type PromptArgument struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+}
+
+// PromptContentType represents the type of prompt content.
+type PromptContentType string
+
+const (
+	PromptContentTypeText     PromptContentType = "text"
+	PromptContentTypeImage    PromptContentType = "image"
+	PromptContentTypeResource PromptContentType = "resource"
+)
+
+// PromptContent represents content in a prompt message.
+type PromptContent struct {
+	Type        PromptContentType `json:"type"`
+	Text        string            `json:"text,omitempty"`
+	ResourceURI string            `json:"uri,omitempty"`
+	MimeType    string            `json:"mimeType,omitempty"`
+	Data        string            `json:"data,omitempty"` // Base64 for images
+}
+
+// PromptMessage represents a message in a prompt.
+type PromptMessage struct {
+	Role    string          `json:"role"` // "user" or "assistant"
+	Content []PromptContent `json:"content"`
+}
+
+// PromptListResult represents the result of listing prompts.
+type PromptListResult struct {
+	Prompts    []MCPPrompt `json:"prompts"`
+	NextCursor string      `json:"nextCursor,omitempty"`
+}
+
+// PromptGetResult represents the result of getting a prompt.
+type PromptGetResult struct {
+	Description string          `json:"description,omitempty"`
+	Messages    []PromptMessage `json:"messages"`
+}
+
+// SamplingMessage represents a message in a sampling request.
+type SamplingMessage struct {
+	Role    string          `json:"role"` // "user" or "assistant"
+	Content []PromptContent `json:"content"`
+}
+
+// ModelPreferences represents preferences for model selection.
+type ModelPreferences struct {
+	Hints                  []ModelHint `json:"hints,omitempty"`
+	CostPriority           float64     `json:"costPriority,omitempty"`           // 0.0-1.0
+	SpeedPriority          float64     `json:"speedPriority,omitempty"`          // 0.0-1.0
+	IntelligencePriority   float64     `json:"intelligencePriority,omitempty"`   // 0.0-1.0
+}
+
+// ModelHint represents a hint for model selection.
+type ModelHint struct {
+	Name string `json:"name,omitempty"`
+}
+
+// CreateMessageRequest represents a request to create a message via sampling.
+type CreateMessageRequest struct {
+	Messages         []SamplingMessage `json:"messages"`
+	MaxTokens        int               `json:"maxTokens"`
+	SystemPrompt     string            `json:"systemPrompt,omitempty"`
+	ModelPreferences *ModelPreferences `json:"modelPreferences,omitempty"`
+	IncludeContext   string            `json:"includeContext,omitempty"` // "none", "thisServer", "allServers"
+	Temperature      float64           `json:"temperature,omitempty"`
+	StopSequences    []string          `json:"stopSequences,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// CreateMessageResult represents the result of creating a message.
+type CreateMessageResult struct {
+	Role       string `json:"role"`
+	Content    string `json:"content"`
+	Model      string `json:"model"`
+	StopReason string `json:"stopReason,omitempty"`
+}
+
+// CompletionReferenceType represents the type of completion reference.
+type CompletionReferenceType string
+
+const (
+	CompletionRefPrompt   CompletionReferenceType = "ref/prompt"
+	CompletionRefResource CompletionReferenceType = "ref/resource"
+)
+
+// CompletionReference represents a reference for completion.
+type CompletionReference struct {
+	Type CompletionReferenceType `json:"type"`
+	Name string                  `json:"name,omitempty"` // For prompts
+	URI  string                  `json:"uri,omitempty"`  // For resources
+}
+
+// CompletionArgument represents an argument for completion.
+type CompletionArgument struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// CompletionResult represents the result of a completion request.
+type CompletionResult struct {
+	Values  []string `json:"values"`
+	Total   int      `json:"total,omitempty"`
+	HasMore bool     `json:"hasMore,omitempty"`
+}
+
+// MCPLogLevel represents a log level.
+type MCPLogLevel string
+
+const (
+	MCPLogLevelDebug     MCPLogLevel = "debug"
+	MCPLogLevelInfo      MCPLogLevel = "info"
+	MCPLogLevelNotice    MCPLogLevel = "notice"
+	MCPLogLevelWarning   MCPLogLevel = "warning"
+	MCPLogLevelError     MCPLogLevel = "error"
+	MCPLogLevelCritical  MCPLogLevel = "critical"
+	MCPLogLevelAlert     MCPLogLevel = "alert"
+	MCPLogLevelEmergency MCPLogLevel = "emergency"
+)
+
+// LoggingMessage represents a log message.
+type LoggingMessage struct {
+	Level  MCPLogLevel `json:"level"`
+	Logger string      `json:"logger,omitempty"`
+	Data   interface{} `json:"data,omitempty"`
+}
+
+// MCPCapabilities represents server capabilities.
+type MCPCapabilities struct {
+	Experimental map[string]interface{} `json:"experimental,omitempty"`
+	Logging      *LoggingCapability     `json:"logging,omitempty"`
+	Prompts      *PromptsCapability     `json:"prompts,omitempty"`
+	Resources    *ResourcesCapability   `json:"resources,omitempty"`
+	Tools        *ToolsCapability       `json:"tools,omitempty"`
+	Sampling     *SamplingCapability    `json:"sampling,omitempty"`
+}
+
+// LoggingCapability represents logging capability.
+type LoggingCapability struct {
+	Level MCPLogLevel `json:"level,omitempty"`
+}
+
+// PromptsCapability represents prompts capability.
+type PromptsCapability struct {
+	ListChanged bool `json:"listChanged,omitempty"`
+}
+
+// ResourcesCapability represents resources capability.
+type ResourcesCapability struct {
+	Subscribe   bool `json:"subscribe,omitempty"`
+	ListChanged bool `json:"listChanged,omitempty"`
+}
+
+// ToolsCapability represents tools capability.
+type ToolsCapability struct {
+	ListChanged bool `json:"listChanged,omitempty"`
+}
+
+// SamplingCapability represents sampling capability.
+type SamplingCapability struct{}
+
+// ResourceCacheConfig holds configuration for resource caching.
+type ResourceCacheConfig struct {
+	MaxEntries int   `json:"maxEntries"` // Default: 1000
+	TTLSeconds int64 `json:"ttlSeconds"` // Default: 300 (5 minutes)
+}
+
+// DefaultResourceCacheConfig returns the default resource cache configuration.
+func DefaultResourceCacheConfig() ResourceCacheConfig {
+	return ResourceCacheConfig{
+		MaxEntries: 1000,
+		TTLSeconds: 300,
+	}
+}
+
+// SamplingConfig holds configuration for the sampling manager.
+type SamplingConfig struct {
+	DefaultMaxTokens int     `json:"defaultMaxTokens"` // Default: 4096
+	DefaultTemperature float64 `json:"defaultTemperature"` // Default: 0.7
+	TimeoutMs        int64   `json:"timeoutMs"`        // Default: 30000
+	EnableLogging    bool    `json:"enableLogging"`    // Default: true
+}
+
+// DefaultSamplingConfig returns the default sampling configuration.
+func DefaultSamplingConfig() SamplingConfig {
+	return SamplingConfig{
+		DefaultMaxTokens:   4096,
+		DefaultTemperature: 0.7,
+		TimeoutMs:          30000,
+		EnableLogging:      true,
+	}
+}
+
+// SamplingStats holds statistics for sampling operations.
+type SamplingStats struct {
+	TotalRequests    int64   `json:"totalRequests"`
+	SuccessfulRequests int64 `json:"successfulRequests"`
+	FailedRequests   int64   `json:"failedRequests"`
+	TotalInputTokens int64   `json:"totalInputTokens"`
+	TotalOutputTokens int64  `json:"totalOutputTokens"`
+	AvgLatencyMs     float64 `json:"avgLatencyMs"`
 }
 
 // ============================================================================

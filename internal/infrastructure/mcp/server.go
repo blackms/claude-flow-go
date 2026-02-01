@@ -9,6 +9,11 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/completion"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/logging"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/prompts"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/resources"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sampling"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
@@ -21,13 +26,23 @@ type Server struct {
 	running      bool
 	toolRegistry map[string]shared.MCPTool
 	httpServer   *http.Server
+
+	// MCP 2025-11-25 compliance components
+	resources   *resources.ResourceRegistry
+	prompts     *prompts.PromptRegistry
+	sampling    *sampling.SamplingManager
+	completion  *completion.CompletionHandler
+	logging     *logging.LogManager
+	capabilities *shared.MCPCapabilities
 }
 
 // Options holds configuration options for the MCP server.
 type Options struct {
-	Tools []shared.MCPToolProvider
-	Port  int
-	Host  string
+	Tools              []shared.MCPToolProvider
+	Port               int
+	Host               string
+	ResourceCacheConfig *shared.ResourceCacheConfig
+	SamplingConfig     *shared.SamplingConfig
 }
 
 // NewServer creates a new MCP server.
@@ -41,11 +56,60 @@ func NewServer(opts Options) *Server {
 		host = "localhost"
 	}
 
+	// Create resource registry
+	var resourceRegistry *resources.ResourceRegistry
+	if opts.ResourceCacheConfig != nil {
+		resourceRegistry = resources.NewResourceRegistry(*opts.ResourceCacheConfig)
+	} else {
+		resourceRegistry = resources.NewResourceRegistryWithDefaults()
+	}
+
+	// Create prompt registry
+	promptRegistry := prompts.NewPromptRegistryWithDefaults()
+
+	// Create sampling manager
+	var samplingManager *sampling.SamplingManager
+	if opts.SamplingConfig != nil {
+		samplingManager = sampling.NewSamplingManager(*opts.SamplingConfig)
+	} else {
+		samplingManager = sampling.NewSamplingManagerWithDefaults()
+	}
+
+	// Create completion handler
+	completionHandler := completion.NewCompletionHandler(resourceRegistry, promptRegistry)
+
+	// Create log manager
+	logManager := logging.NewLogManagerWithDefaults()
+
+	// Build capabilities
+	capabilities := &shared.MCPCapabilities{
+		Resources: &shared.ResourcesCapability{
+			Subscribe:   true,
+			ListChanged: true,
+		},
+		Prompts: &shared.PromptsCapability{
+			ListChanged: true,
+		},
+		Tools: &shared.ToolsCapability{
+			ListChanged: true,
+		},
+		Sampling: &shared.SamplingCapability{},
+		Logging: &shared.LoggingCapability{
+			Level: shared.MCPLogLevelInfo,
+		},
+	}
+
 	return &Server{
 		tools:        opts.Tools,
 		port:         port,
 		host:         host,
 		toolRegistry: make(map[string]shared.MCPTool),
+		resources:    resourceRegistry,
+		prompts:      promptRegistry,
+		sampling:     samplingManager,
+		completion:   completionHandler,
+		logging:      logManager,
+		capabilities: capabilities,
 	}
 }
 
@@ -132,6 +196,28 @@ func (s *Server) ListTools() []shared.MCPTool {
 
 // HandleRequest handles an MCP request.
 func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) shared.MCPResponse {
+	// Handle MCP protocol methods first
+	switch request.Method {
+	case "resources/list":
+		return s.handleResourcesList(request)
+	case "resources/read":
+		return s.handleResourcesRead(request)
+	case "resources/subscribe":
+		return s.handleResourcesSubscribe(request)
+	case "resources/unsubscribe":
+		return s.handleResourcesUnsubscribe(request)
+	case "prompts/list":
+		return s.handlePromptsList(request)
+	case "prompts/get":
+		return s.handlePromptsGet(request)
+	case "sampling/createMessage":
+		return s.handleSamplingCreateMessage(ctx, request)
+	case "completion/complete":
+		return s.handleCompletionComplete(request)
+	case "logging/setLevel":
+		return s.handleLoggingSetLevel(request)
+	}
+
 	s.mu.RLock()
 	providers := s.tools
 	s.mu.RUnlock()
@@ -154,6 +240,298 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 		Error: &shared.MCPError{
 			Code:    -32601,
 			Message: fmt.Sprintf("Method not found: %s", request.Method),
+		},
+	}
+}
+
+// ============================================================================
+// MCP Protocol Method Handlers
+// ============================================================================
+
+func (s *Server) handleResourcesList(request shared.MCPRequest) shared.MCPResponse {
+	cursor := ""
+	pageSize := 100
+
+	if request.Params != nil {
+		if c, ok := request.Params["cursor"].(string); ok {
+			cursor = c
+		}
+		if ps, ok := request.Params["pageSize"].(float64); ok {
+			pageSize = int(ps)
+		}
+	}
+
+	result := s.resources.List(cursor, pageSize)
+
+	return shared.MCPResponse{
+		ID:     request.ID,
+		Result: result,
+	}
+}
+
+func (s *Server) handleResourcesRead(request shared.MCPRequest) shared.MCPResponse {
+	uri, ok := request.Params["uri"].(string)
+	if !ok || uri == "" {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: "Invalid params: uri is required",
+			},
+		}
+	}
+
+	result, err := s.resources.Read(uri)
+	if err != nil {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: err.Error(),
+			},
+		}
+	}
+
+	return shared.MCPResponse{
+		ID:     request.ID,
+		Result: result,
+	}
+}
+
+func (s *Server) handleResourcesSubscribe(request shared.MCPRequest) shared.MCPResponse {
+	uri, ok := request.Params["uri"].(string)
+	if !ok || uri == "" {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: "Invalid params: uri is required",
+			},
+		}
+	}
+
+	// Subscribe with a no-op callback (real implementation would send notifications)
+	subID := s.resources.Subscribe(uri, func(uri string, content *shared.ResourceContent) {
+		// In a real implementation, this would send a notification to the client
+		s.logging.Debug("Resource updated", map[string]interface{}{"uri": uri})
+	})
+
+	return shared.MCPResponse{
+		ID: request.ID,
+		Result: map[string]interface{}{
+			"subscriptionId": subID,
+		},
+	}
+}
+
+func (s *Server) handleResourcesUnsubscribe(request shared.MCPRequest) shared.MCPResponse {
+	subID, ok := request.Params["subscriptionId"].(string)
+	if !ok || subID == "" {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: "Invalid params: subscriptionId is required",
+			},
+		}
+	}
+
+	success := s.resources.Unsubscribe(subID)
+
+	return shared.MCPResponse{
+		ID: request.ID,
+		Result: map[string]interface{}{
+			"success": success,
+		},
+	}
+}
+
+func (s *Server) handlePromptsList(request shared.MCPRequest) shared.MCPResponse {
+	cursor := ""
+	pageSize := 100
+
+	if request.Params != nil {
+		if c, ok := request.Params["cursor"].(string); ok {
+			cursor = c
+		}
+		if ps, ok := request.Params["pageSize"].(float64); ok {
+			pageSize = int(ps)
+		}
+	}
+
+	result := s.prompts.List(cursor, pageSize)
+
+	return shared.MCPResponse{
+		ID:     request.ID,
+		Result: result,
+	}
+}
+
+func (s *Server) handlePromptsGet(request shared.MCPRequest) shared.MCPResponse {
+	name, ok := request.Params["name"].(string)
+	if !ok || name == "" {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: "Invalid params: name is required",
+			},
+		}
+	}
+
+	// Extract arguments
+	args := make(map[string]string)
+	if argsParam, ok := request.Params["arguments"].(map[string]interface{}); ok {
+		for k, v := range argsParam {
+			if str, ok := v.(string); ok {
+				args[k] = str
+			}
+		}
+	}
+
+	result, err := s.prompts.Get(name, args)
+	if err != nil {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: err.Error(),
+			},
+		}
+	}
+
+	return shared.MCPResponse{
+		ID:     request.ID,
+		Result: result,
+	}
+}
+
+func (s *Server) handleSamplingCreateMessage(ctx context.Context, request shared.MCPRequest) shared.MCPResponse {
+	// Parse request
+	reqBytes, err := json.Marshal(request.Params)
+	if err != nil {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: "Invalid params",
+			},
+		}
+	}
+
+	var createReq shared.CreateMessageRequest
+	if err := json.Unmarshal(reqBytes, &createReq); err != nil {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: "Invalid params: " + err.Error(),
+			},
+		}
+	}
+
+	result, err := s.sampling.CreateMessageWithContext(ctx, &createReq)
+	if err != nil {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32603,
+				Message: err.Error(),
+			},
+		}
+	}
+
+	return shared.MCPResponse{
+		ID:     request.ID,
+		Result: result,
+	}
+}
+
+func (s *Server) handleCompletionComplete(request shared.MCPRequest) shared.MCPResponse {
+	// Parse reference
+	refParam, ok := request.Params["ref"].(map[string]interface{})
+	if !ok {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: "Invalid params: ref is required",
+			},
+		}
+	}
+
+	ref := &shared.CompletionReference{}
+	if t, ok := refParam["type"].(string); ok {
+		ref.Type = shared.CompletionReferenceType(t)
+	}
+	if n, ok := refParam["name"].(string); ok {
+		ref.Name = n
+	}
+	if u, ok := refParam["uri"].(string); ok {
+		ref.URI = u
+	}
+
+	// Parse argument
+	argParam, ok := request.Params["argument"].(map[string]interface{})
+	if !ok {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: "Invalid params: argument is required",
+			},
+		}
+	}
+
+	arg := &shared.CompletionArgument{}
+	if n, ok := argParam["name"].(string); ok {
+		arg.Name = n
+	}
+	if v, ok := argParam["value"].(string); ok {
+		arg.Value = v
+	}
+
+	result := s.completion.Complete(ref, arg)
+
+	return shared.MCPResponse{
+		ID: request.ID,
+		Result: map[string]interface{}{
+			"completion": result,
+		},
+	}
+}
+
+func (s *Server) handleLoggingSetLevel(request shared.MCPRequest) shared.MCPResponse {
+	level, ok := request.Params["level"].(string)
+	if !ok || level == "" {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: "Invalid params: level is required",
+			},
+		}
+	}
+
+	if err := s.logging.SetLevel(level); err != nil {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: err.Error(),
+			},
+		}
+	}
+
+	// Update capabilities
+	s.mu.Lock()
+	s.capabilities.Logging.Level = shared.MCPLogLevel(level)
+	s.mu.Unlock()
+
+	return shared.MCPResponse{
+		ID: request.ID,
+		Result: map[string]interface{}{
+			"success": true,
 		},
 	}
 }
@@ -291,4 +669,46 @@ func (t *StdioTransport) Run(ctx context.Context) error {
 			continue
 		}
 	}
+}
+
+// ============================================================================
+// Component Accessors
+// ============================================================================
+
+// GetResources returns the resource registry.
+func (s *Server) GetResources() *resources.ResourceRegistry {
+	return s.resources
+}
+
+// GetPrompts returns the prompt registry.
+func (s *Server) GetPrompts() *prompts.PromptRegistry {
+	return s.prompts
+}
+
+// GetSampling returns the sampling manager.
+func (s *Server) GetSampling() *sampling.SamplingManager {
+	return s.sampling
+}
+
+// GetCompletion returns the completion handler.
+func (s *Server) GetCompletion() *completion.CompletionHandler {
+	return s.completion
+}
+
+// GetLogging returns the log manager.
+func (s *Server) GetLogging() *logging.LogManager {
+	return s.logging
+}
+
+// GetCapabilities returns the server capabilities.
+func (s *Server) GetCapabilities() *shared.MCPCapabilities {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.capabilities
+}
+
+// RegisterMockProvider registers a mock LLM provider for testing.
+func (s *Server) RegisterMockProvider() {
+	mockProvider := sampling.NewMockProviderWithDefaults()
+	s.sampling.RegisterProvider(mockProvider, true)
 }
