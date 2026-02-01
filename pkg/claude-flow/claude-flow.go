@@ -31,6 +31,7 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tools"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/memory"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/messaging"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/plugins"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
@@ -90,6 +91,15 @@ type (
 	ConsensusVote              = shared.ConsensusVote
 	DistributedConsensusResult = shared.DistributedConsensusResult
 	AlgorithmStats             = shared.AlgorithmStats
+
+	// Message Bus types
+	MessagePriority   = shared.MessagePriority
+	BusMessageType    = shared.BusMessageType
+	BusMessage        = shared.BusMessage
+	MessageAck        = shared.MessageAck
+	MessageBusConfig  = shared.MessageBusConfig
+	MessageBusStats   = shared.MessageBusStats
+	MessageEntry      = shared.MessageEntry
 
 	// Task types
 	TaskPriority = shared.TaskPriority
@@ -933,4 +943,151 @@ func DefaultByzantineConfig() ByzantineConfig {
 // DefaultGossipConfig returns the default Gossip configuration.
 func DefaultGossipConfig() GossipConfig {
 	return shared.DefaultGossipConfig()
+}
+
+// ============================================================================
+// Message Bus (Priority Queues)
+// ============================================================================
+
+// Message priority constants
+const (
+	MessagePriorityUrgent = shared.MessagePriorityUrgent
+	MessagePriorityHigh   = shared.MessagePriorityHigh
+	MessagePriorityNormal = shared.MessagePriorityNormal
+	MessagePriorityLow    = shared.MessagePriorityLow
+)
+
+// Bus message type constants
+const (
+	BusMessageTaskAssign       = shared.BusMessageTaskAssign
+	BusMessageTaskComplete     = shared.BusMessageTaskComplete
+	BusMessageTaskFail         = shared.BusMessageTaskFail
+	BusMessageHeartbeat        = shared.BusMessageHeartbeat
+	BusMessageStatusUpdate     = shared.BusMessageStatusUpdate
+	BusMessageAgentJoin        = shared.BusMessageAgentJoin
+	BusMessageAgentLeave       = shared.BusMessageAgentLeave
+	BusMessageConsensusPropose = shared.BusMessageConsensusPropose
+	BusMessageConsensusVote    = shared.BusMessageConsensusVote
+	BusMessageConsensusCommit  = shared.BusMessageConsensusCommit
+	BusMessageTopologyUpdate   = shared.BusMessageTopologyUpdate
+	BusMessageBroadcast        = shared.BusMessageBroadcast
+	BusMessageDirect           = shared.BusMessageDirect
+)
+
+// MessageBus wraps the internal message bus for public use.
+type MessageBus struct {
+	internal *messaging.MessageBus
+}
+
+// MessageHandler is a callback function for handling messages.
+type MessageHandler = messaging.MessageHandler
+
+// NewMessageBus creates a new MessageBus with the given configuration.
+func NewMessageBus(config MessageBusConfig) *MessageBus {
+	return &MessageBus{internal: messaging.NewMessageBus(config)}
+}
+
+// NewMessageBusWithDefaults creates a new MessageBus with default configuration.
+func NewMessageBusWithDefaults() *MessageBus {
+	return &MessageBus{internal: messaging.NewMessageBusWithDefaults()}
+}
+
+// Initialize starts the message bus processing loops.
+func (mb *MessageBus) Initialize() error {
+	return mb.internal.Initialize()
+}
+
+// Shutdown stops the message bus and cleans up resources.
+func (mb *MessageBus) Shutdown() error {
+	return mb.internal.Shutdown()
+}
+
+// Send sends a message to a specific agent.
+func (mb *MessageBus) Send(msg BusMessage) (string, error) {
+	return mb.internal.Send(msg)
+}
+
+// Broadcast sends a message to all subscribed agents except the sender.
+func (mb *MessageBus) Broadcast(msg BusMessage) (string, error) {
+	return mb.internal.Broadcast(msg)
+}
+
+// Subscribe registers an agent to receive messages.
+func (mb *MessageBus) Subscribe(agentID string, callback MessageHandler, filter []BusMessageType) {
+	mb.internal.Subscribe(agentID, callback, filter)
+}
+
+// Unsubscribe removes an agent's subscription.
+func (mb *MessageBus) Unsubscribe(agentID string) {
+	mb.internal.Unsubscribe(agentID)
+}
+
+// Acknowledge processes an acknowledgment for a message.
+func (mb *MessageBus) Acknowledge(ack MessageAck) error {
+	return mb.internal.Acknowledge(ack)
+}
+
+// GetMessages retrieves and removes all pending messages for an agent (pull mode).
+func (mb *MessageBus) GetMessages(agentID string) []*BusMessage {
+	return mb.internal.GetMessages(agentID)
+}
+
+// HasPendingMessages checks if an agent has pending messages.
+func (mb *MessageBus) HasPendingMessages(agentID string) bool {
+	return mb.internal.HasPendingMessages(agentID)
+}
+
+// GetMessage retrieves a specific message by ID without removing it.
+func (mb *MessageBus) GetMessage(messageID string) (*BusMessage, bool) {
+	return mb.internal.GetMessage(messageID)
+}
+
+// GetStats returns the current message bus statistics.
+func (mb *MessageBus) GetStats() MessageBusStats {
+	return mb.internal.GetStats()
+}
+
+// GetQueueDepth returns the total number of queued messages.
+func (mb *MessageBus) GetQueueDepth() int {
+	return mb.internal.GetQueueDepth()
+}
+
+// GetConfig returns the current configuration.
+func (mb *MessageBus) GetConfig() MessageBusConfig {
+	return mb.internal.GetConfig()
+}
+
+// GetSubscriptionCount returns the number of subscriptions.
+func (mb *MessageBus) GetSubscriptionCount() int {
+	return mb.internal.GetSubscriptionCount()
+}
+
+// IsSubscribed checks if an agent is subscribed.
+func (mb *MessageBus) IsSubscribed(agentID string) bool {
+	return mb.internal.IsSubscribed(agentID)
+}
+
+// SetOnEnqueued sets the callback for when a message is enqueued.
+func (mb *MessageBus) SetOnEnqueued(callback func(messageID, to string)) {
+	mb.internal.SetOnEnqueued(callback)
+}
+
+// SetOnDelivered sets the callback for when a message is delivered.
+func (mb *MessageBus) SetOnDelivered(callback func(messageID, to string)) {
+	mb.internal.SetOnDelivered(callback)
+}
+
+// SetOnExpired sets the callback for when a message expires.
+func (mb *MessageBus) SetOnExpired(callback func(messageID string)) {
+	mb.internal.SetOnExpired(callback)
+}
+
+// SetOnFailed sets the callback for when a message delivery fails.
+func (mb *MessageBus) SetOnFailed(callback func(messageID string, err error)) {
+	mb.internal.SetOnFailed(callback)
+}
+
+// DefaultMessageBusConfig returns the default message bus configuration.
+func DefaultMessageBusConfig() MessageBusConfig {
+	return shared.DefaultMessageBusConfig()
 }

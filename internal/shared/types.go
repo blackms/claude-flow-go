@@ -1015,6 +1015,132 @@ type AlgorithmStats struct {
 }
 
 // ============================================================================
+// Message Bus Types
+// ============================================================================
+
+// MessagePriority represents the priority level of a message.
+type MessagePriority int
+
+const (
+	MessagePriorityUrgent MessagePriority = 0 // Critical system messages
+	MessagePriorityHigh   MessagePriority = 1 // Task assignments, consensus
+	MessagePriorityNormal MessagePriority = 2 // Regular communication
+	MessagePriorityLow    MessagePriority = 3 // Background operations
+)
+
+// MessagePriorityCount is the number of priority levels.
+const MessagePriorityCount = 4
+
+// String returns the string representation of the priority.
+func (p MessagePriority) String() string {
+	switch p {
+	case MessagePriorityUrgent:
+		return "urgent"
+	case MessagePriorityHigh:
+		return "high"
+	case MessagePriorityNormal:
+		return "normal"
+	case MessagePriorityLow:
+		return "low"
+	default:
+		return "unknown"
+	}
+}
+
+// BusMessageType represents the type of message in the message bus.
+type BusMessageType string
+
+const (
+	// Task-related messages
+	BusMessageTaskAssign   BusMessageType = "task_assign"
+	BusMessageTaskComplete BusMessageType = "task_complete"
+	BusMessageTaskFail     BusMessageType = "task_fail"
+
+	// Agent lifecycle messages
+	BusMessageHeartbeat    BusMessageType = "heartbeat"
+	BusMessageStatusUpdate BusMessageType = "status_update"
+	BusMessageAgentJoin    BusMessageType = "agent_join"
+	BusMessageAgentLeave   BusMessageType = "agent_leave"
+
+	// Consensus messages
+	BusMessageConsensusPropose BusMessageType = "consensus_propose"
+	BusMessageConsensusVote    BusMessageType = "consensus_vote"
+	BusMessageConsensusCommit  BusMessageType = "consensus_commit"
+
+	// Topology messages
+	BusMessageTopologyUpdate BusMessageType = "topology_update"
+
+	// Communication messages
+	BusMessageBroadcast BusMessageType = "broadcast"
+	BusMessageDirect    BusMessageType = "direct"
+)
+
+// BusMessage represents a message in the message bus.
+type BusMessage struct {
+	ID          string                 `json:"id"`
+	Type        BusMessageType         `json:"type"`
+	From        string                 `json:"from"`
+	To          string                 `json:"to"` // "broadcast" for broadcast messages
+	Priority    MessagePriority        `json:"priority"`
+	Payload     map[string]interface{} `json:"payload,omitempty"`
+	Timestamp   int64                  `json:"timestamp"`
+	TTLMs       int64                  `json:"ttlMs"`       // Time-to-live in milliseconds
+	RequiresAck bool                   `json:"requiresAck"` // Whether acknowledgment is required
+}
+
+// MessageAck represents an acknowledgment for a message.
+type MessageAck struct {
+	MessageID string `json:"messageId"`
+	AgentID   string `json:"agentId"`
+	Received  bool   `json:"received"`
+	Error     string `json:"error,omitempty"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+// MessageBusConfig holds configuration for the message bus.
+type MessageBusConfig struct {
+	MaxQueueSize         int   `json:"maxQueueSize"`         // Max messages per agent queue
+	ProcessingIntervalMs int64 `json:"processingIntervalMs"` // Processing loop interval
+	AckTimeoutMs         int64 `json:"ackTimeoutMs"`         // Timeout for acknowledgments
+	RetryAttempts        int   `json:"retryAttempts"`        // Max retry attempts
+	DefaultTTLMs         int64 `json:"defaultTtlMs"`         // Default TTL for messages
+	EnablePersistence    bool  `json:"enablePersistence"`    // Persist messages to disk
+	BatchSize            int   `json:"batchSize"`            // Messages per batch delivery
+}
+
+// DefaultMessageBusConfig returns the default message bus configuration.
+func DefaultMessageBusConfig() MessageBusConfig {
+	return MessageBusConfig{
+		MaxQueueSize:         1000,
+		ProcessingIntervalMs: 10,
+		AckTimeoutMs:         5000,
+		RetryAttempts:        3,
+		DefaultTTLMs:         30000, // 30 seconds
+		EnablePersistence:    false,
+		BatchSize:            10,
+	}
+}
+
+// MessageBusStats represents statistics for the message bus.
+type MessageBusStats struct {
+	TotalMessages     int64   `json:"totalMessages"`
+	MessagesPerSecond float64 `json:"messagesPerSecond"`
+	AvgLatencyMs      float64 `json:"avgLatencyMs"`
+	QueueDepth        int     `json:"queueDepth"`
+	AckRate           float64 `json:"ackRate"`   // 0.0 - 1.0
+	ErrorRate         float64 `json:"errorRate"` // 0.0 - 1.0
+	DroppedMessages   int64   `json:"droppedMessages"`
+}
+
+// MessageEntry represents an entry in the message queue.
+type MessageEntry struct {
+	Message      *BusMessage `json:"message"`
+	Attempts     int         `json:"attempts"`
+	EnqueuedAt   int64       `json:"enqueuedAt"`
+	LastAttemptAt int64      `json:"lastAttemptAt,omitempty"`
+}
+
+// ============================================================================
 // Plugin Types
 // ============================================================================
 
