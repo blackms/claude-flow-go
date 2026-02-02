@@ -722,4 +722,7 @@ func init() {
 
 	// RuVector commands
 	rootCmd.AddCommand(commands.RuVectorCmd)
+
+	// Store commands
+	rootCmd.AddCommand(commands.StoreCmd)
 }
