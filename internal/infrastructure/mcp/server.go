@@ -17,6 +17,7 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sampling"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sessions"
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tasks"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tools"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
@@ -138,8 +139,16 @@ func NewServer(opts Options) *Server {
 		},
 	}
 
+	// Create HooksTools provider
+	hooksTools := tools.NewHooksTools(hooksManager)
+
+	// Combine user-provided tools with built-in tools
+	allTools := make([]shared.MCPToolProvider, 0, len(opts.Tools)+1)
+	allTools = append(allTools, opts.Tools...)
+	allTools = append(allTools, hooksTools)
+
 	return &Server{
-		tools:        opts.Tools,
+		tools:        allTools,
 		port:         port,
 		host:         host,
 		toolRegistry: make(map[string]shared.MCPTool),

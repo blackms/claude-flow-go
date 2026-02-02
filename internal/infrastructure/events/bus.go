@@ -336,3 +336,76 @@ func isSameChannel(a chan shared.Event, b <-chan shared.Event) bool {
 	// that we're storing and comparing the same channel references
 	return true // Simplified - in production, use a map with IDs
 }
+
+// ============================================================================
+// Hook Event Helpers
+// ============================================================================
+
+// EmitHookRegistered emits a hook registered event.
+func (eb *EventBus) EmitHookRegistered(hookID, hookName string, event string, priority int) {
+	eb.Emit(shared.Event{
+		Type:      shared.EventType("hooks.registered"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"hookId":   hookID,
+			"hookName": hookName,
+			"event":    event,
+			"priority": priority,
+		},
+	})
+}
+
+// EmitHookUnregistered emits a hook unregistered event.
+func (eb *EventBus) EmitHookUnregistered(hookID, hookName string, event string) {
+	eb.Emit(shared.Event{
+		Type:      shared.EventType("hooks.unregistered"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"hookId":   hookID,
+			"hookName": hookName,
+			"event":    event,
+		},
+	})
+}
+
+// EmitHookExecuted emits a hook execution event.
+func (eb *EventBus) EmitHookExecuted(event string, hooksRun, successful, failed int, totalTimeMs int64) {
+	eb.Emit(shared.Event{
+		Type:      shared.EventType("hooks.executed"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"event":       event,
+			"hooksRun":    hooksRun,
+			"successful":  successful,
+			"failed":      failed,
+			"totalTimeMs": totalTimeMs,
+		},
+	})
+}
+
+// EmitPatternLearned emits a pattern learned event.
+func (eb *EventBus) EmitPatternLearned(patternID string, patternType string, success bool) {
+	eb.Emit(shared.Event{
+		Type:      shared.EventType("hooks.pattern_learned"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"patternId":   patternID,
+			"patternType": patternType,
+			"success":     success,
+		},
+	})
+}
+
+// EmitRoutingDecision emits a routing decision event.
+func (eb *EventBus) EmitRoutingDecision(routingID, task, recommendedAgent string, confidence float64) {
+	eb.Emit(shared.Event{
+		Type:      shared.EventType("hooks.routing_decision"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"routingId":        routingID,
+			"task":             task,
+			"recommendedAgent": recommendedAgent,
+			"confidence":       confidence,
+		},
+	})
+}

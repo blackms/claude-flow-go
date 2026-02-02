@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/anthropics/claude-flow-go/cmd/claude-flow/commands"
 	claudeflow "github.com/anthropics/claude-flow-go/pkg/claude-flow"
 )
 
@@ -715,4 +716,10 @@ func init() {
 	hiveMindCmd.AddCommand(hiveMindConsensusCmd)
 
 	rootCmd.AddCommand(hiveMindCmd)
+
+	// Neural commands
+	rootCmd.AddCommand(commands.NeuralCmd)
+
+	// RuVector commands
+	rootCmd.AddCommand(commands.RuVectorCmd)
 }

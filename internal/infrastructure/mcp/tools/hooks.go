@@ -269,29 +269,44 @@ func (t *HooksTools) GetTools() []shared.MCPTool {
 }
 
 // Execute executes a hooks tool.
-func (t *HooksTools) Execute(ctx context.Context, method string, params map[string]interface{}) (interface{}, error) {
+func (t *HooksTools) Execute(ctx context.Context, method string, params map[string]interface{}) (*shared.MCPToolResult, error) {
+	var result interface{}
+	var err error
+
 	switch method {
 	case "hooks/pre-edit":
-		return t.preEdit(ctx, params)
+		result, err = t.preEdit(ctx, params)
 	case "hooks/post-edit":
-		return t.postEdit(ctx, params)
+		result, err = t.postEdit(ctx, params)
 	case "hooks/pre-command":
-		return t.preCommand(ctx, params)
+		result, err = t.preCommand(ctx, params)
 	case "hooks/post-command":
-		return t.postCommand(ctx, params)
+		result, err = t.postCommand(ctx, params)
 	case "hooks/route":
-		return t.route(ctx, params)
+		result, err = t.route(ctx, params)
 	case "hooks/explain":
-		return t.explain(ctx, params)
+		result, err = t.explain(ctx, params)
 	case "hooks/pretrain":
-		return t.pretrain(ctx, params)
+		result, err = t.pretrain(ctx, params)
 	case "hooks/metrics":
-		return t.metrics(ctx, params)
+		result, err = t.metrics(ctx, params)
 	case "hooks/list":
-		return t.list(ctx, params)
+		result, err = t.list(ctx, params)
 	default:
 		return nil, fmt.Errorf("unknown method: %s", method)
 	}
+
+	if err != nil {
+		return &shared.MCPToolResult{
+			Success: false,
+			Error:   err.Error(),
+		}, err
+	}
+
+	return &shared.MCPToolResult{
+		Success: true,
+		Data:    result,
+	}, nil
 }
 
 func (t *HooksTools) preEdit(ctx context.Context, params map[string]interface{}) (interface{}, error) {

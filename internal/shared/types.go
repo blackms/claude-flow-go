@@ -1767,6 +1767,7 @@ type MCPToolResult struct {
 	Valid   bool                   `json:"valid,omitempty"`
 	Errors  []string               `json:"errors,omitempty"`
 	Error   string                 `json:"error,omitempty"`
+	Data    interface{}            `json:"data,omitempty"` // Generic data field for arbitrary results
 }
 
 // MCPRequest represents an MCP request.

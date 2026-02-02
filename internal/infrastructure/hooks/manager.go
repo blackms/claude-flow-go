@@ -10,6 +10,19 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
+// EventEmitter defines the interface for emitting events.
+// This allows decoupling from the concrete EventBus implementation.
+type EventEmitter interface {
+	Emit(event shared.Event)
+}
+
+// PluginInvoker defines the interface for invoking plugin extension points.
+// This allows decoupling from the concrete PluginManager implementation.
+type PluginInvoker interface {
+	InvokeExtensionPoint(ctx context.Context, name string, data interface{}) ([]interface{}, error)
+	HasExtensionPoint(name string) bool
+}
+
 // HooksManager manages hook registration, execution, and learning.
 type HooksManager struct {
 	mu            sync.RWMutex
@@ -20,19 +33,38 @@ type HooksManager struct {
 	config        shared.HooksConfig
 	metrics       *shared.HooksMetrics
 	running       bool
+
+	// Integration with other infrastructure components
+	eventBus      EventEmitter
+	pluginManager PluginInvoker
+}
+
+// ManagerOptions holds optional dependencies for the HooksManager.
+type ManagerOptions struct {
+	// EventBus for emitting hook-related events
+	EventBus EventEmitter
+	// PluginManager for invoking extension points
+	PluginManager PluginInvoker
 }
 
 // NewHooksManager creates a new HooksManager.
 func NewHooksManager(config shared.HooksConfig) *HooksManager {
+	return NewHooksManagerWithOptions(config, ManagerOptions{})
+}
+
+// NewHooksManagerWithOptions creates a HooksManager with the given configuration and options.
+func NewHooksManagerWithOptions(config shared.HooksConfig, opts ManagerOptions) *HooksManager {
 	return &HooksManager{
-		hooks:     make(map[shared.HookEvent][]*shared.HookRegistration),
-		hooksByID: make(map[string]*shared.HookRegistration),
-		patterns:  NewPatternStore(config.MaxPatterns),
-		routing:   NewRoutingEngine(config.LearningRate),
-		config:    config,
-		metrics: &shared.HooksMetrics{
+		hooks:         make(map[shared.HookEvent][]*shared.HookRegistration),
+		hooksByID:     make(map[string]*shared.HookRegistration),
+		patterns:      NewPatternStore(config.MaxPatterns),
+		routing:       NewRoutingEngine(config.LearningRate),
+		config:        config,
+		metrics:       &shared.HooksMetrics{
 			HooksByEvent: make(map[shared.HookEvent]int64),
 		},
+		eventBus:      opts.EventBus,
+		pluginManager: opts.PluginManager,
 	}
 }
 
@@ -51,6 +83,18 @@ func (hm *HooksManager) Initialize() error {
 	}
 
 	hm.running = true
+
+	// Emit initialization event
+	hm.emitEvent(shared.Event{
+		Type:      shared.EventType("hooks.initialized"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"maxPatterns":      hm.config.MaxPatterns,
+			"maxHooksPerEvent": hm.config.MaxHooksPerEvent,
+			"learningEnabled":  hm.config.EnableLearning,
+		},
+	})
+
 	return nil
 }
 
@@ -60,7 +104,39 @@ func (hm *HooksManager) Shutdown() error {
 	defer hm.mu.Unlock()
 
 	hm.running = false
+
+	// Emit shutdown event
+	hm.emitEvent(shared.Event{
+		Type:      shared.EventType("hooks.shutdown"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"totalExecutions": hm.metrics.TotalExecutions,
+			"patternCount":    hm.patterns.Count(),
+		},
+	})
+
 	return nil
+}
+
+// SetEventBus sets the event bus for emitting hook events.
+func (hm *HooksManager) SetEventBus(eventBus EventEmitter) {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	hm.eventBus = eventBus
+}
+
+// SetPluginManager sets the plugin manager for extension point integration.
+func (hm *HooksManager) SetPluginManager(pm PluginInvoker) {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	hm.pluginManager = pm
+}
+
+// emitEvent emits an event if the event bus is configured.
+func (hm *HooksManager) emitEvent(event shared.Event) {
+	if hm.eventBus != nil {
+		hm.eventBus.Emit(event)
+	}
 }
 
 // Register registers a hook.
@@ -93,6 +169,18 @@ func (hm *HooksManager) Register(hook *shared.HookRegistration) error {
 		return hm.hooks[hook.Event][i].Priority > hm.hooks[hook.Event][j].Priority
 	})
 
+	// Emit registration event
+	hm.emitEvent(shared.Event{
+		Type:      shared.EventType("hooks.registered"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"hookId":   hook.ID,
+			"hookName": hook.Name,
+			"event":    string(hook.Event),
+			"priority": int(hook.Priority),
+		},
+	})
+
 	return nil
 }
 
@@ -106,6 +194,9 @@ func (hm *HooksManager) Unregister(hookID string) error {
 		return shared.ErrHookNotFound
 	}
 
+	hookEvent := hook.Event
+	hookName := hook.Name
+
 	// Remove from event hooks
 	eventHooks := hm.hooks[hook.Event]
 	for i, h := range eventHooks {
@@ -118,6 +209,17 @@ func (hm *HooksManager) Unregister(hookID string) error {
 	// Remove from ID map
 	delete(hm.hooksByID, hookID)
 
+	// Emit unregistration event
+	hm.emitEvent(shared.Event{
+		Type:      shared.EventType("hooks.unregistered"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"hookId":   hookID,
+			"hookName": hookName,
+			"event":    string(hookEvent),
+		},
+	})
+
 	return nil
 }
 
@@ -129,11 +231,18 @@ func (hm *HooksManager) Execute(ctx context.Context, hookCtx *shared.HookContext
 	hooks := make([]*shared.HookRegistration, len(hm.hooks[hookCtx.Event]))
 	copy(hooks, hm.hooks[hookCtx.Event])
 	timeout := hm.config.DefaultTimeoutMs
+	pluginManager := hm.pluginManager
 	hm.mu.RUnlock()
 
 	result := &shared.HookExecutionResult{
 		Event:   hookCtx.Event,
 		Results: make([]*shared.HookResult, 0),
+	}
+
+	// Invoke plugin extension point for pre-hook execution
+	extensionPoint := "hooks." + string(hookCtx.Event)
+	if pluginManager != nil && pluginManager.HasExtensionPoint(extensionPoint) {
+		pluginManager.InvokeExtensionPoint(ctx, extensionPoint, hookCtx.Data)
 	}
 
 	// Execute each hook
@@ -161,11 +270,24 @@ func (hm *HooksManager) Execute(ctx context.Context, hookCtx *shared.HookContext
 	hm.metrics.SuccessfulExecutions += int64(result.Successful)
 	hm.metrics.FailedExecutions += int64(result.Failed)
 	hm.metrics.HooksByEvent[hookCtx.Event]++
-	
+
 	// Update average execution time
 	n := float64(hm.metrics.TotalExecutions)
 	hm.metrics.AvgExecutionMs = (hm.metrics.AvgExecutionMs*(n-1) + float64(result.TotalTimeMs)) / n
 	hm.mu.Unlock()
+
+	// Emit execution event
+	hm.emitEvent(shared.Event{
+		Type:      shared.EventType("hooks.executed"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"event":       string(hookCtx.Event),
+			"hooksRun":    result.HooksRun,
+			"successful":  result.Successful,
+			"failed":      result.Failed,
+			"totalTimeMs": result.TotalTimeMs,
+		},
+	})
 
 	return result, nil
 }
@@ -335,4 +457,186 @@ func (hm *HooksManager) HookCountByEvent(event shared.HookEvent) int {
 	hm.mu.RLock()
 	defer hm.mu.RUnlock()
 	return len(hm.hooks[event])
+}
+
+// ============================================================================
+// Pattern Recording Methods
+// ============================================================================
+
+// RecordEditPattern records an edit pattern and emits an event.
+func (hm *HooksManager) RecordEditPattern(filePath, operation string, success bool, metadata map[string]interface{}) (*shared.Pattern, error) {
+	pattern := CreateEditPattern(filePath, operation, success, metadata)
+	
+	if err := hm.patterns.Store(pattern); err != nil {
+		return nil, err
+	}
+
+	// Emit pattern learned event
+	hm.emitEvent(shared.Event{
+		Type:      shared.EventType("hooks.pattern_learned"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"patternId":   pattern.ID,
+			"patternType": string(shared.PatternTypeEdit),
+			"filePath":    filePath,
+			"operation":   operation,
+			"success":     success,
+		},
+	})
+
+	return pattern, nil
+}
+
+// RecordCommandPattern records a command pattern and emits an event.
+func (hm *HooksManager) RecordCommandPattern(command string, success bool, exitCode int, executionTimeMs int64) (*shared.Pattern, error) {
+	pattern := CreateCommandPattern(command, success, exitCode, executionTimeMs)
+	
+	if err := hm.patterns.Store(pattern); err != nil {
+		return nil, err
+	}
+
+	// Emit pattern learned event
+	hm.emitEvent(shared.Event{
+		Type:      shared.EventType("hooks.pattern_learned"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"patternId":       pattern.ID,
+			"patternType":     string(shared.PatternTypeCommand),
+			"command":         command,
+			"exitCode":        exitCode,
+			"executionTimeMs": executionTimeMs,
+			"success":         success,
+		},
+	})
+
+	return pattern, nil
+}
+
+// RecordPatternOutcome records the outcome of using a pattern.
+func (hm *HooksManager) RecordPatternOutcome(patternID string, success bool) error {
+	var err error
+	if success {
+		err = hm.patterns.RecordSuccess(patternID)
+	} else {
+		err = hm.patterns.RecordFailure(patternID)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	// Emit outcome event
+	hm.emitEvent(shared.Event{
+		Type:      shared.EventType("hooks.pattern_outcome"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"patternId": patternID,
+			"success":   success,
+		},
+	})
+
+	return nil
+}
+
+// ============================================================================
+// Routing Methods
+// ============================================================================
+
+// RouteTask routes a task to the optimal agent and emits an event.
+func (hm *HooksManager) RouteTask(task string, context map[string]interface{}, preferredAgents []string, constraints map[string]interface{}) *shared.RoutingResult {
+	result := hm.routing.Route(task, context, preferredAgents, constraints)
+
+	// Emit routing decision event
+	hm.emitEvent(shared.Event{
+		Type:      shared.EventType("hooks.routing_decision"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"routingId":        result.ID,
+			"task":             task,
+			"recommendedAgent": result.RecommendedAgent,
+			"confidence":       result.Confidence,
+			"alternatives":     len(result.Alternatives),
+		},
+	})
+
+	return result
+}
+
+// RecordRoutingOutcome records the outcome of a routing decision.
+func (hm *HooksManager) RecordRoutingOutcome(routingID string, success bool, executionTimeMs int64) error {
+	err := hm.routing.RecordOutcome(routingID, success, executionTimeMs)
+	if err != nil {
+		return err
+	}
+
+	// Emit outcome event
+	hm.emitEvent(shared.Event{
+		Type:      shared.EventType("hooks.routing_outcome"),
+		Timestamp: shared.Now(),
+		Payload: map[string]interface{}{
+			"routingId":       routingID,
+			"success":         success,
+			"executionTimeMs": executionTimeMs,
+		},
+	})
+
+	return nil
+}
+
+// ExplainRouting explains routing decisions for a task.
+func (hm *HooksManager) ExplainRouting(task string, context map[string]interface{}, verbose bool) *shared.RoutingExplanation {
+	return hm.routing.Explain(task, context, verbose)
+}
+
+// ============================================================================
+// Integration Methods
+// ============================================================================
+
+// ExecuteWithPluginContext executes hooks and invokes plugin extension points.
+func (hm *HooksManager) ExecuteWithPluginContext(ctx context.Context, hookCtx *shared.HookContext) (*shared.HookExecutionResult, error) {
+	hm.mu.RLock()
+	pluginManager := hm.pluginManager
+	hm.mu.RUnlock()
+
+	// Invoke pre-execution extension point
+	preExtPoint := "hooks.before." + string(hookCtx.Event)
+	if pluginManager != nil && pluginManager.HasExtensionPoint(preExtPoint) {
+		pluginManager.InvokeExtensionPoint(ctx, preExtPoint, hookCtx.Data)
+	}
+
+	// Execute the hooks
+	result, err := hm.Execute(ctx, hookCtx)
+
+	// Invoke post-execution extension point
+	postExtPoint := "hooks.after." + string(hookCtx.Event)
+	if pluginManager != nil && pluginManager.HasExtensionPoint(postExtPoint) {
+		pluginManager.InvokeExtensionPoint(ctx, postExtPoint, map[string]interface{}{
+			"event":  hookCtx.Event,
+			"result": result,
+			"data":   hookCtx.Data,
+		})
+	}
+
+	return result, err
+}
+
+// IsRunning returns whether the HooksManager is currently running.
+func (hm *HooksManager) IsRunning() bool {
+	hm.mu.RLock()
+	defer hm.mu.RUnlock()
+	return hm.running
+}
+
+// HasEventBus returns whether an event bus is configured.
+func (hm *HooksManager) HasEventBus() bool {
+	hm.mu.RLock()
+	defer hm.mu.RUnlock()
+	return hm.eventBus != nil
+}
+
+// HasPluginManager returns whether a plugin manager is configured.
+func (hm *HooksManager) HasPluginManager() bool {
+	hm.mu.RLock()
+	defer hm.mu.RUnlock()
+	return hm.pluginManager != nil
 }

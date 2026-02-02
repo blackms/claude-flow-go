@@ -71,6 +71,20 @@ type (
 	AlertLevel        = shared.AlertLevel
 	DomainMetrics     = shared.DomainMetrics
 
+	// Queen Coordinator types
+	QueenMetrics   = coordinator.QueenMetrics
+	BottleneckInfo = coordinator.BottleneckInfo
+	BottleneckType = coordinator.BottleneckType
+	Severity       = coordinator.Severity
+
+	// Health Monitor types
+	HealthMonitorConfig = coordinator.HealthMonitorConfig
+
+	// Queen Coordinator service interfaces
+	NeuralLearningSystem = shared.NeuralLearningSystem
+	MemoryService        = shared.MemoryService
+	TrajectoryStep       = shared.TrajectoryStep
+
 	// Hive Mind Consensus types
 	ConsensusType    = shared.ConsensusType
 	ProposalStatus   = shared.ProposalStatus
@@ -394,6 +408,21 @@ const (
 	AlertLevelInfo     = shared.AlertLevelInfo
 	AlertLevelWarning  = shared.AlertLevelWarning
 	AlertLevelCritical = shared.AlertLevelCritical
+)
+
+// Bottleneck type constants
+const (
+	BottleneckTypeAgent  = coordinator.BottleneckTypeAgent
+	BottleneckTypeDomain = coordinator.BottleneckTypeDomain
+	BottleneckTypeQueue  = coordinator.BottleneckTypeQueue
+)
+
+// Severity constants
+const (
+	SeverityLow      = coordinator.SeverityLow
+	SeverityMedium   = coordinator.SeverityMedium
+	SeverityHigh     = coordinator.SeverityHigh
+	SeverityCritical = coordinator.SeverityCritical
 )
 
 // Task priority constants
@@ -817,18 +846,232 @@ func (qc *QueenCoordinator) GetAlerts(limit int) []HealthAlert {
 }
 
 // DetectBottlenecks detects bottlenecks in the system.
-func (qc *QueenCoordinator) DetectBottlenecks() []coordinator.BottleneckInfo {
+func (qc *QueenCoordinator) DetectBottlenecks() []BottleneckInfo {
 	return qc.internal.DetectBottlenecks()
 }
 
 // GetMetrics returns metrics about the Queen Coordinator.
-func (qc *QueenCoordinator) GetMetrics() coordinator.QueenMetrics {
+func (qc *QueenCoordinator) GetMetrics() QueenMetrics {
 	return qc.internal.GetMetrics()
 }
 
 // GetSwarm returns the underlying swarm coordinator.
 func (qc *QueenCoordinator) GetSwarm() *SwarmCoordinator {
 	return &SwarmCoordinator{internal: qc.internal.GetSwarm()}
+}
+
+// SetNeuralLearning sets the neural learning system for the Queen Coordinator.
+func (qc *QueenCoordinator) SetNeuralLearning(nl shared.NeuralLearningSystem) {
+	qc.internal.SetNeuralLearning(nl)
+}
+
+// SetMemoryService sets the memory service for the Queen Coordinator.
+func (qc *QueenCoordinator) SetMemoryService(ms shared.MemoryService) {
+	qc.internal.SetMemoryService(ms)
+}
+
+// GetQueen returns the Queen agent.
+func (qc *QueenCoordinator) GetQueen() *Agent {
+	queen := qc.internal.GetQueen()
+	if queen == nil {
+		return nil
+	}
+	agentData := queen.ToShared()
+	return &agentData
+}
+
+// GetHealthMonitor returns the health monitor.
+func (qc *QueenCoordinator) GetHealthMonitor() *HealthMonitor {
+	return &HealthMonitor{internal: qc.internal.GetHealthMonitor()}
+}
+
+// HealthMonitor wraps the internal HealthMonitor for public use.
+type HealthMonitor struct {
+	internal *coordinator.HealthMonitor
+}
+
+// Start begins background health monitoring.
+func (hm *HealthMonitor) Start() {
+	hm.internal.Start()
+}
+
+// Stop stops the health monitor.
+func (hm *HealthMonitor) Stop() {
+	hm.internal.Stop()
+}
+
+// RegisterAgent registers an agent for health monitoring.
+func (hm *HealthMonitor) RegisterAgent(agentID string, domain AgentDomain) {
+	hm.internal.RegisterAgent(agentID, domain)
+}
+
+// UnregisterAgent removes an agent from health monitoring.
+func (hm *HealthMonitor) UnregisterAgent(agentID string) {
+	hm.internal.UnregisterAgent(agentID)
+}
+
+// RecordHeartbeat records a heartbeat from an agent.
+func (hm *HealthMonitor) RecordHeartbeat(agentID string) {
+	hm.internal.RecordHeartbeat(agentID)
+}
+
+// UpdateAgentLoad updates the current load for an agent.
+func (hm *HealthMonitor) UpdateAgentLoad(agentID string, load float64, tasksInQueue int) {
+	hm.internal.UpdateAgentLoad(agentID, load, tasksInQueue)
+}
+
+// RecordTaskCompletion records a task completion for health tracking.
+func (hm *HealthMonitor) RecordTaskCompletion(agentID string, duration int64, success bool) {
+	hm.internal.RecordTaskCompletion(agentID, duration, success)
+}
+
+// GetAgentHealth returns the health status of an agent.
+func (hm *HealthMonitor) GetAgentHealth(agentID string) (*AgentHealth, bool) {
+	return hm.internal.GetAgentHealth(agentID)
+}
+
+// GetAllAgentHealth returns health status for all agents.
+func (hm *HealthMonitor) GetAllAgentHealth() map[string]*AgentHealth {
+	return hm.internal.GetAllAgentHealth()
+}
+
+// GetDomainHealth returns the health status of a domain.
+func (hm *HealthMonitor) GetDomainHealth(domain AgentDomain) (*DomainHealth, bool) {
+	return hm.internal.GetDomainHealth(domain)
+}
+
+// GetAllDomainHealth returns health status for all domains.
+func (hm *HealthMonitor) GetAllDomainHealth() map[AgentDomain]*DomainHealth {
+	return hm.internal.GetAllDomainHealth()
+}
+
+// GetAlerts returns recent alerts.
+func (hm *HealthMonitor) GetAlerts(limit int) []HealthAlert {
+	return hm.internal.GetAlerts(limit)
+}
+
+// GetAlertsByLevel returns alerts filtered by level.
+func (hm *HealthMonitor) GetAlertsByLevel(level AlertLevel) []HealthAlert {
+	return hm.internal.GetAlertsByLevel(level)
+}
+
+// ClearAlerts clears all alerts.
+func (hm *HealthMonitor) ClearAlerts() {
+	hm.internal.ClearAlerts()
+}
+
+// DetectBottlenecks analyzes the system and returns detected bottlenecks.
+func (hm *HealthMonitor) DetectBottlenecks() []BottleneckInfo {
+	return hm.internal.DetectBottlenecks()
+}
+
+// DefaultHealthMonitorConfig returns the default health monitor configuration.
+func DefaultHealthMonitorConfig() HealthMonitorConfig {
+	return coordinator.DefaultHealthMonitorConfig()
+}
+
+// ============================================================================
+// Domain Pool (Agent Pool Management)
+// ============================================================================
+
+// DomainPool wraps the internal DomainPool for public use.
+type DomainPool struct {
+	internal *coordinator.DomainPool
+}
+
+// GetDomainPool returns the domain pool for a specific domain.
+func (qc *QueenCoordinator) GetDomainPool(domain AgentDomain) (*DomainPool, bool) {
+	pool, ok := qc.internal.GetDomainPool(domain)
+	if !ok {
+		return nil, false
+	}
+	return &DomainPool{internal: pool}, true
+}
+
+// GetConfig returns the domain configuration.
+func (dp *DomainPool) GetConfig() DomainConfig {
+	return dp.internal.Config
+}
+
+// AddAgent adds an agent to the domain pool.
+func (dp *DomainPool) AddAgent(config AgentConfig) error {
+	a := agent.FromConfig(config)
+	return dp.internal.AddAgent(a)
+}
+
+// RemoveAgent removes an agent from the domain pool.
+func (dp *DomainPool) RemoveAgent(agentID string) error {
+	return dp.internal.RemoveAgent(agentID)
+}
+
+// GetAgent retrieves an agent from the domain pool.
+func (dp *DomainPool) GetAgent(agentID string) (*Agent, bool) {
+	a, ok := dp.internal.GetAgent(agentID)
+	if !ok {
+		return nil, false
+	}
+	agentData := a.ToShared()
+	return &agentData, true
+}
+
+// ListAgents returns all agents in the domain pool.
+func (dp *DomainPool) ListAgents() []Agent {
+	agents := dp.internal.ListAgents()
+	result := make([]Agent, len(agents))
+	for i, a := range agents {
+		result[i] = a.ToShared()
+	}
+	return result
+}
+
+// GetAvailableAgents returns agents that are available for task assignment.
+func (dp *DomainPool) GetAvailableAgents() []Agent {
+	agents := dp.internal.GetAvailableAgents()
+	result := make([]Agent, len(agents))
+	for i, a := range agents {
+		result[i] = a.ToShared()
+	}
+	return result
+}
+
+// GetAgentCount returns the number of agents in the domain.
+func (dp *DomainPool) GetAgentCount() int {
+	return dp.internal.GetAgentCount()
+}
+
+// GetActiveAgentCount returns the number of active/idle agents.
+func (dp *DomainPool) GetActiveAgentCount() int {
+	return dp.internal.GetActiveAgentCount()
+}
+
+// SubmitTask submits a task to the domain's task queue.
+func (dp *DomainPool) SubmitTask(task Task) error {
+	return dp.internal.SubmitTask(task)
+}
+
+// HasCapability checks if the domain has the given capability.
+func (dp *DomainPool) HasCapability(capability string) bool {
+	return dp.internal.HasCapability(capability)
+}
+
+// MatchCapabilities returns a score (0-1) for how well the domain matches the required capabilities.
+func (dp *DomainPool) MatchCapabilities(required []string) float64 {
+	return dp.internal.MatchCapabilities(required)
+}
+
+// RecordTaskCompletion records that a task was completed.
+func (dp *DomainPool) RecordTaskCompletion(duration int64, success bool) {
+	dp.internal.RecordTaskCompletion(duration, success)
+}
+
+// GetMetrics returns the current domain metrics.
+func (dp *DomainPool) GetMetrics() DomainMetrics {
+	return dp.internal.GetMetrics()
+}
+
+// GetHealth returns the current health status of the domain.
+func (dp *DomainPool) GetHealth() DomainHealth {
+	return dp.internal.GetHealth()
 }
 
 // Consensus type constants
@@ -2728,6 +2971,22 @@ const (
 	RiskLevelCritical = shared.RiskLevelCritical
 )
 
+// Hook-related errors
+var (
+	// ErrHookNotFound is returned when a hook is not found.
+	ErrHookNotFound = shared.ErrHookNotFound
+	// ErrHookAlreadyExists is returned when a hook already exists.
+	ErrHookAlreadyExists = shared.ErrHookAlreadyExists
+	// ErrMaxHooksReached is returned when the maximum number of hooks is reached.
+	ErrMaxHooksReached = shared.ErrMaxHooksReached
+	// ErrPatternNotFound is returned when a pattern is not found.
+	ErrPatternNotFound = shared.ErrPatternNotFound
+	// ErrMaxPatternsReached is returned when the maximum number of patterns is reached.
+	ErrMaxPatternsReached = shared.ErrMaxPatternsReached
+	// ErrHookExecutionTimeout is returned when hook execution times out.
+	ErrHookExecutionTimeout = shared.ErrHookExecutionTimeout
+)
+
 // HookHandler is a function that handles a hook event.
 type HookHandler = shared.HookHandler
 
@@ -2806,9 +3065,162 @@ func (hm *HooksManager) HookCount() int {
 	return hm.internal.HookCount()
 }
 
+// HookCountByEvent returns the number of hooks for a specific event.
+func (hm *HooksManager) HookCountByEvent(event HookEvent) int {
+	return hm.internal.HookCountByEvent(event)
+}
+
 // DefaultHooksConfig returns the default hooks configuration.
 func DefaultHooksConfig() HooksConfig {
 	return shared.DefaultHooksConfig()
+}
+
+// GetPatternStore returns the pattern store for direct access to learned patterns.
+func (hm *HooksManager) GetPatternStore() *PatternStore {
+	return &PatternStore{internal: hm.internal.GetPatternStore()}
+}
+
+// GetRoutingEngine returns the routing engine for direct access to routing logic.
+func (hm *HooksManager) GetRoutingEngine() *RoutingEngine {
+	return &RoutingEngine{internal: hm.internal.GetRoutingEngine()}
+}
+
+// PatternStore stores and retrieves learned patterns from hook execution.
+type PatternStore struct {
+	internal *hooks.PatternStore
+}
+
+// Store stores a pattern in the pattern store.
+func (ps *PatternStore) Store(pattern *Pattern) error {
+	return ps.internal.Store(pattern)
+}
+
+// Get retrieves a pattern by ID.
+func (ps *PatternStore) Get(id string) *Pattern {
+	return ps.internal.Get(id)
+}
+
+// FindSimilar finds patterns similar to the query.
+func (ps *PatternStore) FindSimilar(query string, patternType PatternType, limit int) []*Pattern {
+	return ps.internal.FindSimilar(query, patternType, limit)
+}
+
+// RecordSuccess records a successful use of a pattern.
+func (ps *PatternStore) RecordSuccess(id string) error {
+	return ps.internal.RecordSuccess(id)
+}
+
+// RecordFailure records a failed use of a pattern.
+func (ps *PatternStore) RecordFailure(id string) error {
+	return ps.internal.RecordFailure(id)
+}
+
+// GetSuccessRate returns the success rate for a pattern.
+func (ps *PatternStore) GetSuccessRate(id string) float64 {
+	return ps.internal.GetSuccessRate(id)
+}
+
+// Delete removes a pattern from the store.
+func (ps *PatternStore) Delete(id string) error {
+	return ps.internal.Delete(id)
+}
+
+// Count returns the total number of patterns.
+func (ps *PatternStore) Count() int {
+	return ps.internal.Count()
+}
+
+// CountByType returns the number of patterns of a specific type.
+func (ps *PatternStore) CountByType(patternType PatternType) int {
+	return ps.internal.CountByType(patternType)
+}
+
+// ListByType returns all patterns of a specific type.
+func (ps *PatternStore) ListByType(patternType PatternType, limit int) []*Pattern {
+	return ps.internal.ListByType(patternType, limit)
+}
+
+// Clear removes all patterns from the store.
+func (ps *PatternStore) Clear() {
+	ps.internal.Clear()
+}
+
+// CreateEditPattern creates a pattern from an edit operation.
+func CreateEditPattern(filePath, operation string, success bool, metadata map[string]interface{}) *Pattern {
+	return hooks.CreateEditPattern(filePath, operation, success, metadata)
+}
+
+// CreateCommandPattern creates a pattern from a command execution.
+func CreateCommandPattern(command string, success bool, exitCode int, executionTime int64) *Pattern {
+	return hooks.CreateCommandPattern(command, success, exitCode, executionTime)
+}
+
+// RoutingEngine provides intelligent routing of tasks to agents.
+type RoutingEngine struct {
+	internal *hooks.RoutingEngine
+}
+
+// Route routes a task to the optimal agent.
+func (re *RoutingEngine) Route(task string, context map[string]interface{}, preferredAgents []string, constraints map[string]interface{}) *RoutingResult {
+	return re.internal.Route(task, context, preferredAgents, constraints)
+}
+
+// RecordOutcome records the outcome of a routing decision for learning.
+func (re *RoutingEngine) RecordOutcome(routingID string, success bool, executionTimeMs int64) error {
+	return re.internal.RecordOutcome(routingID, success, executionTimeMs)
+}
+
+// Explain provides a detailed explanation for routing a task.
+func (re *RoutingEngine) Explain(task string, context map[string]interface{}, verbose bool) *RoutingExplanation {
+	return re.internal.Explain(task, context, verbose)
+}
+
+// GetRoutingCount returns the total number of routing decisions.
+func (re *RoutingEngine) GetRoutingCount() int64 {
+	return re.internal.GetRoutingCount()
+}
+
+// GetSuccessRate returns the overall routing success rate.
+func (re *RoutingEngine) GetSuccessRate() float64 {
+	return re.internal.GetSuccessRate()
+}
+
+// GetAgentStats returns routing statistics for all agents.
+func (re *RoutingEngine) GetAgentStats() map[string]*AgentRoutingStats {
+	return re.internal.GetAgentStats()
+}
+
+// GetHistory returns recent routing decisions for analysis.
+func (re *RoutingEngine) GetHistory(limit int) []*RoutingDecision {
+	internalHistory := re.internal.GetHistory(limit)
+	result := make([]*RoutingDecision, len(internalHistory))
+	for i, d := range internalHistory {
+		result[i] = &RoutingDecision{
+			ID:              d.ID,
+			Task:            d.Task,
+			TaskType:        d.TaskType,
+			SelectedAgent:   d.SelectedAgent,
+			AgentType:       d.AgentType,
+			Confidence:      d.Confidence,
+			Success:         d.Success,
+			Timestamp:       d.Timestamp,
+			ExecutionTimeMs: d.ExecutionTimeMs,
+		}
+	}
+	return result
+}
+
+// RoutingDecision represents a historical routing decision for learning analysis.
+type RoutingDecision struct {
+	ID              string  `json:"id"`
+	Task            string  `json:"task"`
+	TaskType        string  `json:"taskType"`
+	SelectedAgent   string  `json:"selectedAgent"`
+	AgentType       string  `json:"agentType"`
+	Confidence      float64 `json:"confidence"`
+	Success         bool    `json:"success"`
+	Timestamp       int64   `json:"timestamp"`
+	ExecutionTimeMs int64   `json:"executionTimeMs,omitempty"`
 }
 
 // ============================================================================
