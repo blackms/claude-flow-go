@@ -725,4 +725,7 @@ func init() {
 
 	// Store commands
 	rootCmd.AddCommand(commands.StoreCmd)
+
+	// Hooks commands
+	rootCmd.AddCommand(commands.HooksCmd)
 }
