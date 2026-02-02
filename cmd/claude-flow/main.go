@@ -728,4 +728,9 @@ func init() {
 
 	// Hooks commands
 	rootCmd.AddCommand(commands.HooksCmd)
+
+	// Utility commands
+	rootCmd.AddCommand(commands.DoctorCmd)
+	rootCmd.AddCommand(commands.DaemonCmd)
+	rootCmd.AddCommand(commands.BenchmarkCmd)
 }
