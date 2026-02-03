@@ -25,6 +25,7 @@ type NeuralService struct {
 	basePath          string
 	adaptationSvc     *AdaptationService
 	continualSvc      *ContinualLearningService
+	trajectorySvc     *TrajectoryService
 }
 
 // NewNeuralService creates a new neural service.
@@ -149,6 +150,87 @@ func (s *NeuralService) IsLoRAEnabled() bool {
 // IsEWCEnabled returns whether EWC is enabled.
 func (s *NeuralService) IsEWCEnabled() bool {
 	return s.engine.IsEWCEnabled()
+}
+
+// GetTrajectoryService returns the trajectory service.
+func (s *NeuralService) GetTrajectoryService() *TrajectoryService {
+	return s.trajectorySvc
+}
+
+// InitializeTrajectoryService initializes the trajectory service.
+func (s *NeuralService) InitializeTrajectoryService(config *TrajectoryServiceConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if config == nil {
+		defaultConfig := DefaultTrajectoryServiceConfig()
+		defaultConfig.BasePath = filepath.Join(s.basePath, "trajectories")
+		config = &defaultConfig
+	}
+
+	svc, err := NewTrajectoryService(*config)
+	if err != nil {
+		return err
+	}
+
+	s.trajectorySvc = svc
+	return nil
+}
+
+// StartTrajectoryRecording starts recording a new trajectory.
+func (s *NeuralService) StartTrajectoryRecording(context string, domain neural.TrajectoryDomain, agentID string) (string, error) {
+	if s.trajectorySvc == nil {
+		if err := s.InitializeTrajectoryService(nil); err != nil {
+			return "", err
+		}
+	}
+
+	return s.trajectorySvc.StartRecording(nil, context, domain, agentID)
+}
+
+// RecordTrajectoryStep records a step in a trajectory.
+func (s *NeuralService) RecordTrajectoryStep(trajectoryID, action string, contextData map[string]interface{}, outcome string) error {
+	if s.trajectorySvc == nil {
+		return fmt.Errorf("trajectory service not initialized")
+	}
+
+	return s.trajectorySvc.RecordStep(nil, trajectoryID, action, contextData, outcome)
+}
+
+// EndTrajectoryRecording ends a trajectory recording.
+func (s *NeuralService) EndTrajectoryRecording(trajectoryID string, success bool, qualityScore float64) (*neural.ExtendedTrajectory, error) {
+	if s.trajectorySvc == nil {
+		return nil, fmt.Errorf("trajectory service not initialized")
+	}
+
+	return s.trajectorySvc.EndRecording(nil, trajectoryID, success, qualityScore)
+}
+
+// GetTrajectory retrieves a trajectory by ID.
+func (s *NeuralService) GetTrajectory(trajectoryID string) (*neural.ExtendedTrajectory, error) {
+	if s.trajectorySvc == nil {
+		return nil, fmt.Errorf("trajectory service not initialized")
+	}
+
+	return s.trajectorySvc.GetTrajectory(nil, trajectoryID)
+}
+
+// TriggerTrajectoryLearning triggers a learning cycle on accumulated trajectories.
+func (s *NeuralService) TriggerTrajectoryLearning() (*neural.TrainingResult, error) {
+	if s.trajectorySvc == nil {
+		return nil, fmt.Errorf("trajectory service not initialized")
+	}
+
+	return s.trajectorySvc.TriggerLearning(nil)
+}
+
+// GetTrajectoryStats returns trajectory statistics.
+func (s *NeuralService) GetTrajectoryStats() *neural.TrajectoryStats {
+	if s.trajectorySvc == nil {
+		return nil
+	}
+
+	return s.trajectorySvc.GetStats()
 }
 
 // Train trains neural patterns with the given configuration.
