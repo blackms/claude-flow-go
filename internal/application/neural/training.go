@@ -19,6 +19,14 @@ type TrainingEngine struct {
 	trajectories []*neural.Trajectory
 	config       neural.TrainingConfig
 	rng          *rand.Rand
+
+	// LoRA and EWC integration
+	loraEngine   *infraNeural.LoRAEngine
+	ewcEngine    *infraNeural.EWCEngine
+	loraConfig   *neural.LoRAConfig
+	ewcConfig    *neural.EWCConfig
+	enableLoRA   bool
+	enableEWC    bool
 }
 
 // NewTrainingEngine creates a new training engine.
@@ -28,7 +36,100 @@ func NewTrainingEngine(dimension int) *TrainingEngine {
 		trajectories: make([]*neural.Trajectory, 0),
 		config:       neural.DefaultTrainingConfig(),
 		rng:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		enableLoRA:   false,
+		enableEWC:    false,
 	}
+}
+
+// NewTrainingEngineWithLoRAEWC creates a training engine with LoRA and EWC support.
+func NewTrainingEngineWithLoRAEWC(dimension int, loraConfig *neural.LoRAConfig, ewcConfig *neural.EWCConfig) *TrainingEngine {
+	engine := NewTrainingEngine(dimension)
+
+	if loraConfig != nil {
+		engine.loraConfig = loraConfig
+		engine.enableLoRA = true
+		engine.loraEngine = infraNeural.NewLoRAEngine(infraNeural.LoRAEngineConfig{
+			DefaultConfig: *loraConfig,
+			MaxAdapters:   100,
+			EnableCaching: true,
+			BatchSize:     32,
+		})
+	}
+
+	if ewcConfig != nil {
+		engine.ewcConfig = ewcConfig
+		engine.enableEWC = true
+		engine.ewcEngine = infraNeural.NewEWCEngine(*ewcConfig)
+	}
+
+	return engine
+}
+
+// EnableLoRA enables LoRA adaptation with the given configuration.
+func (e *TrainingEngine) EnableLoRA(config neural.LoRAConfig) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.loraConfig = &config
+	e.enableLoRA = true
+	e.loraEngine = infraNeural.NewLoRAEngine(infraNeural.LoRAEngineConfig{
+		DefaultConfig: config,
+		MaxAdapters:   100,
+		EnableCaching: true,
+		BatchSize:     32,
+	})
+}
+
+// DisableLoRA disables LoRA adaptation.
+func (e *TrainingEngine) DisableLoRA() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.enableLoRA = false
+}
+
+// EnableEWC enables EWC regularization with the given configuration.
+func (e *TrainingEngine) EnableEWC(config neural.EWCConfig) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.ewcConfig = &config
+	e.enableEWC = true
+	e.ewcEngine = infraNeural.NewEWCEngine(config)
+}
+
+// DisableEWC disables EWC regularization.
+func (e *TrainingEngine) DisableEWC() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.enableEWC = false
+}
+
+// IsLoRAEnabled returns whether LoRA is enabled.
+func (e *TrainingEngine) IsLoRAEnabled() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.enableLoRA
+}
+
+// IsEWCEnabled returns whether EWC is enabled.
+func (e *TrainingEngine) IsEWCEnabled() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.enableEWC
+}
+
+// GetLoRAEngine returns the LoRA engine.
+func (e *TrainingEngine) GetLoRAEngine() *infraNeural.LoRAEngine {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.loraEngine
+}
+
+// GetEWCEngine returns the EWC engine.
+func (e *TrainingEngine) GetEWCEngine() *infraNeural.EWCEngine {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.ewcEngine
 }
 
 // SetConfig sets the training configuration.
@@ -72,6 +173,13 @@ func (e *TrainingEngine) Train(data TrainingData, progressFn func(epoch int, los
 	}
 
 	var totalAdaptations int
+	var ewcRegLoss float64
+
+	// Collect gradients for EWC if enabled
+	var gradientBatch [][]float64
+	if e.enableEWC {
+		gradientBatch = make([][]float64, 0)
+	}
 
 	// Training loop
 	for epoch := 0; epoch < config.Epochs; epoch++ {
@@ -94,6 +202,23 @@ func (e *TrainingEngine) Train(data TrainingData, progressFn func(epoch int, los
 			// Apply gradient update (simulated MicroLoRA adaptation)
 			for i := range batchEmbeddings {
 				gradient := e.computeGradient(batchEmbeddings[i], loss)
+
+				// Apply EWC regularization if enabled
+				if e.enableEWC && e.ewcEngine != nil {
+					currentParams := float32ToFloat64(embeddings[batchStart+i])
+					ewcLoss := e.ewcEngine.ComputeRegularizationLoss(currentParams)
+					ewcRegLoss += ewcLoss.RegularizationLoss
+
+					// Apply EWC gradient
+					regularizedGrad := e.ewcEngine.ApplyRegularization(float32ToFloat64(gradient), currentParams)
+					gradient = float64ToFloat32(regularizedGrad)
+
+					// Collect gradients for Fisher estimation
+					if len(gradientBatch) < 100 {
+						gradientBatch = append(gradientBatch, float32ToFloat64(gradient))
+					}
+				}
+
 				embeddings[batchStart+i] = e.applyGradient(embeddings[batchStart+i], gradient, config.LearningRate)
 				totalAdaptations++
 			}
@@ -101,7 +226,23 @@ func (e *TrainingEngine) Train(data TrainingData, progressFn func(epoch int, los
 			// Create patterns from the updated embeddings on last epoch
 			if epoch == config.Epochs-1 {
 				for i, emb := range batchEmbeddings {
-					pattern := neural.NewPattern(config.PatternType, batchTexts[i], emb)
+					// Apply LoRA adaptation if enabled
+					adaptedEmb := emb
+					if e.enableLoRA && e.loraEngine != nil {
+						adapterIDs := e.loraEngine.ListAdapters()
+						if len(adapterIDs) > 0 {
+							delta, err := e.loraEngine.Forward(adapterIDs[0], float32ToFloat64(emb))
+							if err == nil {
+								for j := range adaptedEmb {
+									if j < len(delta) {
+										adaptedEmb[j] += float32(delta[j])
+									}
+								}
+							}
+						}
+					}
+
+					pattern := neural.NewPattern(config.PatternType, batchTexts[i], adaptedEmb)
 					pattern.Confidence = 1.0 - (loss / 10.0) // Convert loss to confidence
 					if pattern.Confidence < 0 {
 						pattern.Confidence = 0.1
@@ -122,7 +263,14 @@ func (e *TrainingEngine) Train(data TrainingData, progressFn func(epoch int, los
 	// Record training trajectory
 	trajectory := neural.NewTrajectory()
 	trajectory.AddStep(*neural.NewTrajectoryStep(neural.StepTypeObservation, fmt.Sprintf("Training %d samples", len(data.Texts))))
-	trajectory.AddStep(*neural.NewTrajectoryStep(neural.StepTypeAction, fmt.Sprintf("Ran %d epochs with batch size %d", config.Epochs, config.BatchSize)))
+	trajAction := fmt.Sprintf("Ran %d epochs with batch size %d", config.Epochs, config.BatchSize)
+	if e.enableLoRA {
+		trajAction += " [LoRA enabled]"
+	}
+	if e.enableEWC {
+		trajAction += " [EWC enabled]"
+	}
+	trajectory.AddStep(*neural.NewTrajectoryStep(neural.StepTypeAction, trajAction))
 	trajectory.AddStep(*neural.NewTrajectoryStep(neural.StepTypeResult, fmt.Sprintf("Generated %d patterns", len(patterns))))
 	trajectory.SetVerdict("success")
 	e.trajectories = append(e.trajectories, trajectory)
@@ -144,6 +292,24 @@ func (e *TrainingEngine) Train(data TrainingData, progressFn func(epoch int, los
 	}
 
 	return metrics, patterns, nil
+}
+
+// float32ToFloat64 converts a float32 slice to float64.
+func float32ToFloat64(input []float32) []float64 {
+	output := make([]float64, len(input))
+	for i, v := range input {
+		output[i] = float64(v)
+	}
+	return output
+}
+
+// float64ToFloat32 converts a float64 slice to float32.
+func float64ToFloat32(input []float64) []float32 {
+	output := make([]float32, len(input))
+	for i, v := range input {
+		output[i] = float32(v)
+	}
+	return output
 }
 
 // computeInfoNCELoss computes InfoNCE (Noise Contrastive Estimation) loss.

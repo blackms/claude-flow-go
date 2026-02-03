@@ -19,10 +19,12 @@ import (
 
 // NeuralService provides the main orchestration for neural operations.
 type NeuralService struct {
-	mu       sync.RWMutex
-	store    *PatternStore
-	engine   *TrainingEngine
-	basePath string
+	mu                sync.RWMutex
+	store             *PatternStore
+	engine            *TrainingEngine
+	basePath          string
+	adaptationSvc     *AdaptationService
+	continualSvc      *ContinualLearningService
 }
 
 // NewNeuralService creates a new neural service.
@@ -53,6 +55,100 @@ func NewNeuralService(basePath string) (*NeuralService, error) {
 		engine:   engine,
 		basePath: basePath,
 	}, nil
+}
+
+// NewNeuralServiceWithAdaptation creates a neural service with LoRA and EWC support.
+func NewNeuralServiceWithAdaptation(basePath string, continualConfig *ContinualLearningServiceConfig) (*NeuralService, error) {
+	svc, err := NewNeuralService(basePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize adaptation service
+	adaptConfig := DefaultAdaptationServiceConfig()
+	svc.adaptationSvc = NewAdaptationService(adaptConfig)
+
+	// Initialize continual learning service
+	if continualConfig == nil {
+		defaultConfig := DefaultContinualLearningServiceConfig()
+		continualConfig = &defaultConfig
+	}
+	svc.continualSvc = NewContinualLearningService(*continualConfig)
+
+	// Enable LoRA/EWC in training engine
+	if continualConfig.EnableLoRA {
+		svc.engine.EnableLoRA(continualConfig.LoRA)
+	}
+	if continualConfig.EnableEWC {
+		svc.engine.EnableEWC(continualConfig.EWC)
+	}
+
+	return svc, nil
+}
+
+// GetAdaptationService returns the adaptation service.
+func (s *NeuralService) GetAdaptationService() *AdaptationService {
+	return s.adaptationSvc
+}
+
+// GetContinualLearningService returns the continual learning service.
+func (s *NeuralService) GetContinualLearningService() *ContinualLearningService {
+	return s.continualSvc
+}
+
+// EnableLoRA enables LoRA adaptation for training.
+func (s *NeuralService) EnableLoRA(config neural.LoRAConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.engine.EnableLoRA(config)
+
+	// Also enable in adaptation service if available
+	if s.adaptationSvc == nil {
+		s.adaptationSvc = NewAdaptationService(AdaptationServiceConfig{
+			DefaultLoRAConfig: config,
+		})
+	}
+}
+
+// EnableEWC enables EWC regularization for continual learning.
+func (s *NeuralService) EnableEWC(config neural.EWCConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.engine.EnableEWC(config)
+
+	// Also enable in continual learning service if available
+	if s.continualSvc == nil {
+		continualConfig := DefaultContinualLearningServiceConfig()
+		continualConfig.EWC = config
+		continualConfig.EnableEWC = true
+		s.continualSvc = NewContinualLearningService(continualConfig)
+	}
+}
+
+// DisableLoRA disables LoRA adaptation.
+func (s *NeuralService) DisableLoRA() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.engine.DisableLoRA()
+}
+
+// DisableEWC disables EWC regularization.
+func (s *NeuralService) DisableEWC() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.engine.DisableEWC()
+}
+
+// IsLoRAEnabled returns whether LoRA is enabled.
+func (s *NeuralService) IsLoRAEnabled() bool {
+	return s.engine.IsLoRAEnabled()
+}
+
+// IsEWCEnabled returns whether EWC is enabled.
+func (s *NeuralService) IsEWCEnabled() bool {
+	return s.engine.IsEWCEnabled()
 }
 
 // Train trains neural patterns with the given configuration.
@@ -192,6 +288,105 @@ func (s *NeuralService) Optimize(method neural.OptimizationMethod, verbose bool)
 	metrics.DurationMs = time.Since(startTime).Milliseconds()
 
 	return metrics, nil
+}
+
+// AdaptEmbedding adapts an embedding using LoRA for a specific agent.
+func (s *NeuralService) AdaptEmbedding(agentID string, embedding []float64) ([]float64, error) {
+	if s.adaptationSvc == nil {
+		return embedding, nil
+	}
+
+	return s.adaptationSvc.Adapt(nil, agentID, embedding)
+}
+
+// CreateLoRAAdapter creates a new LoRA adapter for an agent.
+func (s *NeuralService) CreateLoRAAdapter(agentID, name string, config *neural.LoRAConfig) (*neural.LoRAAdapter, error) {
+	if s.adaptationSvc == nil {
+		return nil, fmt.Errorf("adaptation service not initialized")
+	}
+
+	return s.adaptationSvc.CreateAdapterForAgent(nil, agentID, name, config)
+}
+
+// GetAgentAdapters returns all LoRA adapters for an agent.
+func (s *NeuralService) GetAgentAdapters(agentID string) ([]*neural.LoRAAdapter, error) {
+	if s.adaptationSvc == nil {
+		return nil, fmt.Errorf("adaptation service not initialized")
+	}
+
+	return s.adaptationSvc.GetAgentAdapters(nil, agentID)
+}
+
+// MergeAgentAdapters merges all adapters for an agent.
+func (s *NeuralService) MergeAgentAdapters(agentID string) (*neural.LoRAAdapter, error) {
+	if s.adaptationSvc == nil {
+		return nil, fmt.Errorf("adaptation service not initialized")
+	}
+
+	return s.adaptationSvc.MergeAgentAdapters(nil, agentID)
+}
+
+// StartContinualLearningTask starts a new continual learning task.
+func (s *NeuralService) StartContinualLearningTask(name, description string) (*neural.EWCTask, error) {
+	if s.continualSvc == nil {
+		return nil, fmt.Errorf("continual learning service not initialized")
+	}
+
+	return s.continualSvc.StartTask(nil, name, description)
+}
+
+// CompleteContinualLearningTask completes the current continual learning task.
+func (s *NeuralService) CompleteContinualLearningTask(parameters []float64, performance float64) error {
+	if s.continualSvc == nil {
+		return fmt.Errorf("continual learning service not initialized")
+	}
+
+	return s.continualSvc.CompleteTask(nil, parameters, performance)
+}
+
+// GetContinualLearningStats returns continual learning statistics.
+func (s *NeuralService) GetContinualLearningStats() *ContinualLearningStats {
+	if s.continualSvc == nil {
+		return nil
+	}
+
+	return s.continualSvc.GetStats()
+}
+
+// GetAdaptationStats returns adaptation statistics.
+func (s *NeuralService) GetAdaptationStats() *AdaptationServiceStats {
+	if s.adaptationSvc == nil {
+		return nil
+	}
+
+	return s.adaptationSvc.GetStats()
+}
+
+// EvaluateForgetting evaluates forgetting across all continual learning tasks.
+func (s *NeuralService) EvaluateForgetting(currentParams []float64) (map[string]float64, error) {
+	if s.continualSvc == nil {
+		return nil, fmt.Errorf("continual learning service not initialized")
+	}
+
+	return s.continualSvc.EvaluateForgetting(nil, currentParams)
+}
+
+// GetEWCState returns the current EWC state.
+func (s *NeuralService) GetEWCState() *neural.EWCState {
+	if s.continualSvc == nil {
+		return nil
+	}
+
+	return s.continualSvc.GetEWCState()
+}
+
+// GetImportanceWeights returns EWC importance weights.
+func (s *NeuralService) GetImportanceWeights() []neural.ImportanceWeight {
+	if s.continualSvc == nil {
+		return nil
+	}
+
+	return s.continualSvc.GetImportanceWeights()
 }
 
 // ExportPackage represents an exported pattern package.
