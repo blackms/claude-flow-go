@@ -126,6 +126,12 @@ const (
 	AgentTypeMCPSpecialist      AgentType = "mcp-specialist"
 	AgentTypeDocumentationLead  AgentType = "documentation-lead"
 	AgentTypeDevOpsEngineer     AgentType = "devops-engineer"
+
+	// Adversarial Review Agent Types
+	AgentTypeRedTeam        AgentType = "red-team"        // Actively tries to break/exploit work
+	AgentTypeCritic         AgentType = "critic"          // Finds flaws, weaknesses, edge cases
+	AgentTypeDevilsAdvocate AgentType = "devils-advocate" // Argues against decisions
+	AgentTypeQualityGate    AgentType = "quality-gate"    // Blocks work that doesn't meet standards
 )
 
 // AgentDomain represents a domain in the 15-agent architecture.
