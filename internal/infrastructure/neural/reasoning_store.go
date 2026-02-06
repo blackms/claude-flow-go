@@ -8,7 +8,6 @@ import (
 	"math"
 	"sort"
 	"sync"
-	"time"
 
 	domainNeural "github.com/anthropics/claude-flow-go/internal/domain/neural"
 	_ "modernc.org/sqlite"

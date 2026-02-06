@@ -384,7 +384,7 @@ func (tm *TaskManager) UpdateDependencies(id string, action shared.TaskDependenc
 }
 
 // GetResults retrieves task results.
-func (tm *TaskManager) GetResults(id string, format shared.TaskResultFormat, includeArtifacts bool) (*shared.TaskResult, error) {
+func (tm *TaskManager) GetResults(id string, format shared.TaskResultFormat, includeArtifacts bool) (*shared.ManagedTaskResult, error) {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 
@@ -393,7 +393,7 @@ func (tm *TaskManager) GetResults(id string, format shared.TaskResultFormat, inc
 		return nil, shared.ErrTaskNotFound
 	}
 
-	result := &shared.TaskResult{
+	result := &shared.ManagedTaskResult{
 		TaskID:      task.ID,
 		Status:      task.Status,
 		CompletedAt: task.CompletedAt,
@@ -609,7 +609,7 @@ func (tm *TaskManager) executeTask(task *shared.ManagedTask) {
 		result, execErr := tm.coordinator.ExecuteTask(ctx, task.AssignedTo, sharedTask)
 		if execErr != nil {
 			err = execErr
-		} else if result != nil {
+		} else {
 			output = result
 		}
 	} else {

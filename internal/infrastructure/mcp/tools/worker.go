@@ -4,6 +4,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"time"
 
 	domainWorker "github.com/anthropics/claude-flow-go/internal/domain/worker"
 	infraWorker "github.com/anthropics/claude-flow-go/internal/infrastructure/worker"
@@ -262,7 +263,7 @@ func (t *WorkerTools) handleDispatch(ctx context.Context, params map[string]inte
 	}
 
 	if timeoutMs, ok := params["timeout"].(float64); ok {
-		options.Timeout = domainWorker.WorkerPriority(timeoutMs).Weight() // Will be interpreted differently
+		options.Timeout = time.Duration(timeoutMs) * time.Millisecond
 	}
 
 	workerID, err := t.dispatcher.Dispatch(ctx, trigger, workerContext, sessionID, options)

@@ -571,7 +571,10 @@ func (qc *QueenCoordinator) ExecuteTask(ctx context.Context, task shared.Task) (
 	}
 
 	// Execute through swarm coordinator
-	result := qc.swarm.ExecuteTask(delegation.PrimaryAgent.AgentID, task)
+	result, err := qc.swarm.ExecuteTask(ctx, delegation.PrimaryAgent.AgentID, task)
+	if err != nil {
+		return nil, err
+	}
 
 	// Record completion in health monitor
 	qc.healthMonitor.RecordTaskCompletion(
@@ -583,11 +586,11 @@ func (qc *QueenCoordinator) ExecuteTask(ctx context.Context, task shared.Task) (
 	// Learn from outcome (if neural learning is available)
 	if qc.neuralLearning != nil {
 		go func() {
-			_ = qc.neuralLearning.LearnFromOutcome(context.Background(), task.ID, *result)
+			_ = qc.neuralLearning.LearnFromOutcome(context.Background(), task.ID, result)
 		}()
 	}
 
-	return result, nil
+	return &result, nil
 }
 
 // ExecuteTasksParallel executes multiple tasks in parallel across domains.

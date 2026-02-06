@@ -3,7 +3,6 @@ package resources
 
 import (
 	"sync"
-	"time"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )

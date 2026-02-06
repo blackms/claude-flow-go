@@ -21,6 +21,7 @@ package claudeflow
 
 import (
 	"context"
+	"io"
 
 	"github.com/anthropics/claude-flow-go/internal/application/consensus"
 	"github.com/anthropics/claude-flow-go/internal/application/coordinator"
@@ -265,7 +266,7 @@ type (
 	TaskMetrics          = shared.TaskMetrics
 	TaskFilter           = shared.TaskFilter
 	TaskUpdate           = shared.TaskUpdate
-	TaskResult           = shared.TaskResult
+	ManagedTaskResult    = shared.ManagedTaskResult
 	TaskManagerConfig    = shared.TaskManagerConfig
 	TaskManagerStats     = shared.TaskManagerStats
 	TaskCreateRequest    = shared.TaskCreateRequest
@@ -665,6 +666,12 @@ func (ms *MCPServer) ListTools() []MCPTool {
 // GetStatus returns server status.
 func (ms *MCPServer) GetStatus() map[string]interface{} {
 	return ms.internal.GetStatus()
+}
+
+// RunStdio runs the MCP server using stdio transport (stdin/stdout).
+func (ms *MCPServer) RunStdio(ctx context.Context, reader io.Reader, writer io.Writer) error {
+	transport := mcp.NewStdioTransport(ms.internal, reader, writer)
+	return transport.Run(ctx)
 }
 
 // MemoryBackendConfig holds configuration for memory backends.
@@ -2223,11 +2230,6 @@ func (r *AgentTypeRegistry) GetAllSpecs() []*AgentTypeSpec {
 	return r.internal.GetAllSpecs()
 }
 
-// GetDefaultCapabilities returns default capabilities for an agent type.
-func GetDefaultCapabilities(agentType AgentType) []string {
-	return agent.GetDefaultCapabilities(agentType)
-}
-
 // GetNeuralPatternsForType returns the neural pattern configuration for an agent type.
 func GetNeuralPatternsForType(t AgentType) *NeuralPatternConfig {
 	return agent.GetNeuralPatternsForType(t)
@@ -2284,12 +2286,15 @@ func (pm *AgentPoolManager) Acquire(agentType AgentType) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Agent{internal: a}, nil
+	sa := a.ToShared()
+	return &sa, nil
 }
 
 // Release releases an agent back to the pool.
 func (pm *AgentPoolManager) Release(a *Agent) {
-	pm.internal.Release(a.internal)
+	if da := pm.internal.GetAgent(a.ID); da != nil {
+		pm.internal.Release(da)
+	}
 }
 
 // GetPoolStats returns statistics for a specific agent type pool.
@@ -2331,8 +2336,8 @@ func DefaultTypePoolConfig() TypePoolConfig {
 // Type Router
 // ============================================================================
 
-// RoutingResult holds the result of a routing decision.
-type RoutingResult = routing.RoutingResult
+// TypeRoutingResult holds the result of a type routing decision.
+type TypeRoutingResult = routing.RoutingResult
 
 // RoutingStats holds routing statistics.
 type RoutingStats = routing.RoutingStats
@@ -2352,7 +2357,7 @@ func NewTypeRouter(registry *AgentTypeRegistry, pools *AgentPoolManager) *TypeRo
 }
 
 // RouteTask routes a task to the best agent type.
-func (tr *TypeRouter) RouteTask(task Task) (*RoutingResult, error) {
+func (tr *TypeRouter) RouteTask(task Task) (*TypeRoutingResult, error) {
 	return tr.internal.RouteTask(task)
 }
 
@@ -2414,8 +2419,8 @@ const (
 	HealthStatusUnknown   = pool.HealthStatusUnknown
 )
 
-// HealthAlert represents a health alert for an agent type.
-type HealthAlert = pool.HealthAlert
+// TypeHealthAlert represents a health alert for an agent type.
+type TypeHealthAlert = pool.HealthAlert
 
 // HealthConfig holds configuration for health monitoring.
 type HealthConfig = pool.HealthConfig
@@ -2474,12 +2479,12 @@ func (thm *TypeHealthMonitor) GetHealthStatus(agentType AgentType) HealthStatus 
 }
 
 // GetAlerts returns recent alerts.
-func (thm *TypeHealthMonitor) GetAlerts(limit int) []HealthAlert {
+func (thm *TypeHealthMonitor) GetAlerts(limit int) []TypeHealthAlert {
 	return thm.internal.GetAlerts(limit)
 }
 
 // GetUnresolvedAlerts returns unresolved alerts.
-func (thm *TypeHealthMonitor) GetUnresolvedAlerts() []HealthAlert {
+func (thm *TypeHealthMonitor) GetUnresolvedAlerts() []TypeHealthAlert {
 	return thm.internal.GetUnresolvedAlerts()
 }
 
@@ -2896,7 +2901,7 @@ func (tm *TaskManager) UpdateDependencies(id string, action TaskDependencyAction
 }
 
 // GetResults retrieves task results.
-func (tm *TaskManager) GetResults(id string, format TaskResultFormat, includeArtifacts bool) (*TaskResult, error) {
+func (tm *TaskManager) GetResults(id string, format TaskResultFormat, includeArtifacts bool) (*ManagedTaskResult, error) {
 	return tm.internal.GetResults(id, format, includeArtifacts)
 }
 

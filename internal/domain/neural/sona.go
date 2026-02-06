@@ -208,8 +208,8 @@ func DefaultModeConfig(mode SONAMode) ModeConfig {
 	}
 }
 
-// TrajectoryStats contains trajectory-related statistics.
-type TrajectoryStats struct {
+// SONATrajectoryStats contains SONA trajectory-related statistics.
+type SONATrajectoryStats struct {
 	// Total is the total number of trajectories.
 	Total int `json:"total"`
 
@@ -283,7 +283,7 @@ type SONAStats struct {
 	Config ModeConfig `json:"config"`
 
 	// Trajectories contains trajectory statistics.
-	Trajectories TrajectoryStats `json:"trajectories"`
+	Trajectories SONATrajectoryStats `json:"trajectories"`
 
 	// Performance contains performance statistics.
 	Performance PerformanceStats `json:"performance"`

@@ -320,7 +320,7 @@ func (m *SONAManager) GetStats() domainNeural.SONAStats {
 	return domainNeural.SONAStats{
 		Mode:   m.currentMode,
 		Config: m.config,
-		Trajectories: domainNeural.TrajectoryStats{
+		Trajectories: domainNeural.SONATrajectoryStats{
 			Total:       len(m.trajectories),
 			Active:      len(m.trajectories),
 			Completed:   0, // Would need separate tracking

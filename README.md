@@ -30,170 +30,30 @@ Instead of relying on a single AI to do everything, Claude Flow Go lets you:
 
 ---
 
-## Architecture Overview
-
-```mermaid
-flowchart TB
-    subgraph CLI["Command Line Interface"]
-        serve[claude-flow serve]
-        agent[claude-flow agent]
-        hivemind[claude-flow hive-mind]
-        neural[claude-flow neural]
-        ruvector[claude-flow ruvector]
-    end
-
-    subgraph MCP["MCP Server Layer"]
-        tools[Tool Registry]
-        resources[Resource Registry]
-        prompts[Prompt Registry]
-        sampling[Sampling Manager]
-        sessions[Session Manager]
-    end
-
-    subgraph Coordination["Swarm Coordination"]
-        queen[Queen Coordinator]
-        swarm[Swarm Coordinator]
-        consensus[Consensus Engine]
-        topology[Topology Manager]
-    end
-
-    subgraph Agents["Agent Domains"]
-        domain_queen["Queen Domain<br/>(Agent 1)"]
-        domain_security["Security Domain<br/>(Agents 2-4)"]
-        domain_core["Core Domain<br/>(Agents 5-9)"]
-        domain_integration["Integration Domain<br/>(Agents 10-12)"]
-        domain_support["Support Domain<br/>(Agents 13-15)"]
-    end
-
-    subgraph Infrastructure["Infrastructure Layer"]
-        memory[(Memory Store<br/>SQLite/PostgreSQL)]
-        neural_store[(Neural Patterns<br/>Vector Search)]
-        hooks[Hooks System]
-        events[Event Bus]
-    end
-
-    CLI --> MCP
-    MCP --> Coordination
-    Coordination --> Agents
-    Agents --> Infrastructure
-    consensus --> memory
-    neural_store --> consensus
-
-    style CLI fill:#2d3748,stroke:#4a5568,color:#fff
-    style MCP fill:#1a365d,stroke:#2b6cb0,color:#fff
-    style Coordination fill:#234e52,stroke:#319795,color:#fff
-    style Agents fill:#44337a,stroke:#805ad5,color:#fff
-    style Infrastructure fill:#742a2a,stroke:#c53030,color:#fff
-```
-
----
-
-## Key Features
-
-### 15-Agent Domain Architecture
-
-The framework organizes agents into specialized domains for optimal task delegation:
-
-```mermaid
-graph TD
-    subgraph Queen["Queen Domain"]
-        A1[Agent 1: Queen<br/>Orchestration & Oversight]
-    end
-
-    subgraph Security["Security Domain"]
-        A2[Agent 2: Security Architect]
-        A3[Agent 3: CVE Remediation]
-        A4[Agent 4: Threat Modeler]
-    end
-
-    subgraph Core["Core Domain"]
-        A5[Agent 5: DDD Designer]
-        A6[Agent 6: Memory Specialist]
-        A7[Agent 7: Type Modernizer]
-        A8[Agent 8: Swarm Specialist]
-        A9[Agent 9: MCP Optimizer]
-    end
-
-    subgraph Integration["Integration Domain"]
-        A10[Agent 10: Agentic Flow]
-        A11[Agent 11: CLI Developer]
-        A12[Agent 12: Neural Integrator]
-    end
-
-    subgraph Support["Support Domain"]
-        A13[Agent 13: TDD Tester]
-        A14[Agent 14: Performance Engineer]
-        A15[Agent 15: Release Manager]
-    end
-
-    A1 --> Security
-    A1 --> Core
-    A1 --> Integration
-    A1 --> Support
-
-    style Queen fill:#ffd700,stroke:#b8860b,color:#000
-    style Security fill:#dc143c,stroke:#8b0000,color:#fff
-    style Core fill:#4169e1,stroke:#00008b,color:#fff
-    style Integration fill:#32cd32,stroke:#228b22,color:#fff
-    style Support fill:#9932cc,stroke:#4b0082,color:#fff
-```
-
-### Distributed Consensus Algorithms
-
-Choose the right consensus mechanism for your use case:
-
-| Algorithm | Use Case | Fault Tolerance |
-|-----------|----------|-----------------|
-| **Raft** | Strong consistency, leader election | N/2 - 1 failures |
-| **Byzantine (PBFT)** | Hostile environments | N/3 - 1 failures |
-| **Gossip** | Large-scale, eventually consistent | Highly resilient |
-| **CRDT** | Conflict-free concurrent updates | Partition tolerant |
-| **Quorum** | Simple majority voting | N/2 - 1 failures |
-
-### Swarm Topologies
-
-```mermaid
-graph LR
-    subgraph Hierarchical["Hierarchical Topology"]
-        H_Q[Queen] --> H_W1[Worker 1]
-        H_Q --> H_W2[Worker 2]
-        H_Q --> H_W3[Worker 3]
-    end
-
-    subgraph Mesh["Mesh Topology"]
-        M_A[Agent A] <--> M_B[Agent B]
-        M_B <--> M_C[Agent C]
-        M_C <--> M_A
-    end
-
-    subgraph Ring["Ring Topology"]
-        R_1[Agent 1] --> R_2[Agent 2]
-        R_2 --> R_3[Agent 3]
-        R_3 --> R_1
-    end
-
-    subgraph Star["Star Topology"]
-        S_C[Central] --> S_1[Agent 1]
-        S_C --> S_2[Agent 2]
-        S_C --> S_3[Agent 3]
-        S_C --> S_4[Agent 4]
-    end
-```
-
----
-
 ## Quick Start
 
 ### Installation
 
 ```bash
-# Install from source
-go install github.com/anthropics/claude-flow-go/cmd/claude-flow@latest
-
-# Or clone and build
+# Clone the repository
 git clone https://github.com/anthropics/claude-flow-go.git
 cd claude-flow-go
+
+# Build the binary
 go build -o claude-flow ./cmd/claude-flow
+
+# (Optional) Install globally
+go install ./cmd/claude-flow
+
+# Or move to a directory in your PATH
+sudo mv claude-flow /usr/local/bin/
+```
+
+**Verify installation:**
+
+```bash
+claude-flow --version
+# Output: claude-flow version 3.0.0-alpha.1
 ```
 
 ### Your First Swarm (5 minutes)
@@ -212,10 +72,76 @@ claude-flow hive-mind task "Implement user authentication API" --priority high -
 claude-flow hive-mind status --verbose
 ```
 
-### Start the MCP Server
+---
+
+## Claude Code Integration
+
+Claude Flow Go implements the **MCP 2025-11-25** specification for seamless integration with Claude Code. It exposes 50+ tools for agent coordination, memory management, neural learning, and more.
+
+### Prerequisites
+
+Before configuring Claude Code, ensure `claude-flow` is accessible:
 
 ```bash
-# Start the server for Claude Code integration
+# Option A: Install globally (recommended)
+cd /path/to/claude-flow-go
+go install ./cmd/claude-flow
+
+# Option B: Build and add to PATH
+go build -o claude-flow ./cmd/claude-flow
+sudo mv claude-flow /usr/local/bin/
+
+# Verify it works
+claude-flow --version
+```
+
+### Configuration
+
+Add Claude Flow Go to your Claude Code MCP configuration file (`~/.claude/claude_desktop_config.json` or your IDE's MCP settings):
+
+**Option 1: Using Global Installation**
+
+```json
+{
+  "mcpServers": {
+    "claude-flow": {
+      "command": "claude-flow",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+**Option 2: Using Absolute Path**
+
+```json
+{
+  "mcpServers": {
+    "claude-flow": {
+      "command": "/path/to/claude-flow-go/claude-flow",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+**Option 3: With Custom Port**
+
+```json
+{
+  "mcpServers": {
+    "claude-flow": {
+      "command": "claude-flow",
+      "args": ["serve", "--host", "localhost", "--port", "3000"]
+    }
+  }
+}
+```
+
+### Starting the MCP Server Manually
+
+```bash
+# Start the server
 claude-flow serve --port 3000 --host localhost
 
 # The server exposes:
@@ -225,65 +151,205 @@ claude-flow serve --port 3000 --host localhost
 # - Session handling
 ```
 
+### Available MCP Tools
+
+Once integrated, Claude Code gains access to these tool categories:
+
+| Category | Tools | Description |
+|----------|-------|-------------|
+| **Agent** | `agent_spawn`, `agent_list`, `agent_terminate`, `agent_metrics`, `agent_types_list`, `agent_pool_scale`, `agent_health` | Spawn and manage AI agents |
+| **Memory** | `memory_store`, `memory_retrieve`, `memory_query`, `memory_search`, `memory_delete`, `memory_drift`, `memory_optimize`, `memory_sync`, `memory_stats` | Persistent knowledge storage with vector search |
+| **Tasks** | `tasks/create`, `tasks/list`, `tasks/status`, `tasks/cancel`, `tasks/assign`, `tasks/update`, `tasks/dependencies`, `tasks/results` | Task lifecycle management |
+| **Hooks** | `hooks/pre-edit`, `hooks/post-edit`, `hooks/pre-command`, `hooks/post-command`, `hooks/route`, `hooks/explain`, `hooks/pretrain`, `hooks/metrics` | Self-learning hooks for intelligent routing |
+| **Reasoning** | `reasoning_store`, `reasoning_retrieve`, `reasoning_learn`, `reasoning_optimize` | Pattern-based reasoning |
+| **SONA** | `sona_mode`, `sona_adapt`, `sona_metrics`, `sona_optimize` | Self-Organizing Neural Adaptation |
+| **Review** | `review_request`, `review_verdict`, `review_challenge`, `review_status`, `review_divergent` | Adversarial review system |
+| **Workers** | `worker_dispatch`, `worker_status`, `worker_cancel`, `worker_triggers`, `worker_results`, `worker_stats`, `worker_pool`, `worker_health` | Background worker management |
+| **Federation** | `federation/status`, `federation/spawn-ephemeral`, `federation/register-swarm`, `federation/broadcast`, `federation/propose`, `federation/vote` | Cross-swarm coordination |
+| **Sessions** | `session/save`, `session/restore`, `session/list`, `session/close`, `session/info` | Session state persistence |
+| **Config** | `config_get`, `config_set`, `config_list`, `config_validate`, `swarm_state`, `swarm_reconfigure` | Runtime configuration |
+
+---
+
+## Key Features
+
+### 15-Agent Domain Architecture
+
+The framework organizes agents into specialized domains for optimal task delegation:
+
+```mermaid
+graph TD
+    subgraph Queen[Queen Domain]
+        A1[Agent 1: Queen - Orchestration]
+    end
+
+    subgraph Security[Security Domain]
+        A2[Agent 2: Security Architect]
+        A3[Agent 3: CVE Remediation]
+        A4[Agent 4: Threat Modeler]
+    end
+
+    subgraph Core[Core Domain]
+        A5[Agent 5: DDD Designer]
+        A6[Agent 6: Memory Specialist]
+        A7[Agent 7: Type Modernizer]
+        A8[Agent 8: Swarm Specialist]
+        A9[Agent 9: MCP Optimizer]
+    end
+
+    subgraph Integration[Integration Domain]
+        A10[Agent 10: Agentic Flow]
+        A11[Agent 11: CLI Developer]
+        A12[Agent 12: Neural Integrator]
+    end
+
+    subgraph Support[Support Domain]
+        A13[Agent 13: TDD Tester]
+        A14[Agent 14: Performance Engineer]
+        A15[Agent 15: Release Manager]
+    end
+
+    A1 --> Security
+    A1 --> Core
+    A1 --> Integration
+    A1 --> Support
+```
+
+### Distributed Consensus Algorithms
+
+Choose the right consensus mechanism for your use case:
+
+| Algorithm | Use Case | Fault Tolerance | Latency |
+|-----------|----------|-----------------|---------|
+| **Raft** | Strong consistency, leader election | f failures with 2f+1 nodes | <100ms |
+| **Byzantine (PBFT)** | Hostile environments, untrusted nodes | f Byzantine failures with 3f+1 nodes | <200ms |
+| **Gossip** | Large-scale (100+ nodes), eventual consistency | Partition tolerant | <500ms |
+
+### Swarm Topologies
+
+```mermaid
+graph LR
+    subgraph Hierarchical[Hierarchical]
+        H_Q[Queen] --> H_W1[Worker 1]
+        H_Q --> H_W2[Worker 2]
+        H_Q --> H_W3[Worker 3]
+    end
+
+    subgraph Mesh[Mesh]
+        M_A[Agent A] <--> M_B[Agent B]
+        M_B <--> M_C[Agent C]
+        M_C <--> M_A
+    end
+
+    subgraph Ring[Ring]
+        R_1[Agent 1] --> R_2[Agent 2]
+        R_2 --> R_3[Agent 3]
+        R_3 --> R_1
+    end
+
+    subgraph Star[Star]
+        S_C[Hub] --> S_1[Agent 1]
+        S_C --> S_2[Agent 2]
+        S_C --> S_3[Agent 3]
+    end
+```
+
+| Topology | Best For | Max Agents | Latency |
+|----------|----------|------------|---------|
+| **Mesh** | Resilient communication, peer-to-peer | 100 | 15-35ms |
+| **Hierarchical** | Clear command structure, queen-worker pattern | Unlimited | 10-25ms |
+| **Ring** | Sequential processing pipelines | 50 | 15-35ms |
+| **Star** | Simple coordination, central hub | 50 | 10-20ms |
+| **Hybrid** | Enterprise deployments, mesh + hierarchical | 200 | 20-50ms |
+
+### Neural Learning
+
+The framework includes advanced neural learning capabilities:
+
+- **LoRA Adaptation**: Efficient fine-tuning with Low-Rank Adaptation for per-agent customization
+- **EWC (Elastic Weight Consolidation)**: Prevents catastrophic forgetting during continual learning
+- **Trajectory Learning**: Learns from agent execution trajectories using Decision Transformers
+- **Pattern Training**: Contrastive learning for coordination, optimization, and prediction patterns
+
 ---
 
 ## CLI Reference
 
-### Core Commands
-
 ```
 claude-flow
-├── serve           Start the MCP server
-├── status          Show system status
-├── agent           Agent management
-│   ├── spawn       Spawn a new agent
-│   └── list        List all agents
-├── workflow        Workflow execution
-│   └── run         Execute a workflow
-├── memory          Memory operations
-│   ├── store       Store a memory entry
-│   └── query       Query memories
-├── hive-mind       Multi-agent coordination
-├── neural          Neural pattern learning
-├── ruvector        PostgreSQL vector storage
-├── hooks           Self-learning hooks
-├── doctor          System diagnostics
-├── daemon          Background service
-└── benchmark       Performance testing
+├── serve              Start the MCP server
+├── status             Show system status
+├── agent              Agent management
+│   ├── spawn          Spawn a new agent
+│   └── list           List all agents
+├── workflow           Workflow execution
+│   └── run            Execute a workflow
+├── memory             Memory operations
+│   ├── store          Store a memory entry
+│   └── query          Query memories
+├── hive-mind          Multi-agent coordination
+│   ├── init           Initialize with consensus algorithm
+│   ├── spawn          Spawn workers in domains
+│   ├── status         Display status
+│   ├── task           Submit a task
+│   ├── join           Add agent dynamically
+│   ├── leave          Remove agent gracefully
+│   ├── consensus      Manage proposals and voting
+│   ├── broadcast      Message all workers
+│   ├── memory         Shared memory operations
+│   ├── optimize-memory Optimize patterns
+│   └── shutdown       Graceful shutdown
+├── neural             Neural pattern learning
+│   ├── train          Train patterns
+│   ├── learn          Learn from outcomes
+│   ├── patterns       List and search patterns
+│   ├── optimize       Optimize patterns
+│   ├── export         Export patterns
+│   ├── import         Import patterns
+│   ├── benchmark      Performance benchmark
+│   └── status         System status
+├── ruvector           PostgreSQL vector storage
+│   ├── init           Initialize in PostgreSQL
+│   ├── setup          Generate setup files
+│   ├── migrate        Run migrations
+│   ├── optimize       Optimize indexes
+│   ├── import         Import embeddings
+│   ├── benchmark      Benchmark performance
+│   ├── backup         Backup/restore
+│   └── status         System status
+├── hooks              Self-learning hooks
+│   ├── list           List registered hooks
+│   ├── enable         Enable a hook
+│   ├── disable        Disable a hook
+│   ├── config         Manage configuration
+│   ├── stats          Show statistics
+│   ├── test           Test hook execution
+│   └── reset          Reset hooks state
+├── store              Pattern store
+│   ├── list           List patterns
+│   ├── search         Search patterns
+│   ├── download       Download pattern
+│   ├── publish        Publish pattern
+│   └── info           Pattern details
+├── doctor             System diagnostics
+├── daemon             Background service
+│   ├── start          Start daemon
+│   ├── stop           Stop daemon
+│   ├── restart        Restart daemon
+│   ├── status         Daemon status
+│   └── logs           View logs
+└── benchmark          Performance testing
+    ├── neural         Neural benchmarks
+    ├── memory         Memory benchmarks
+    ├── cli            CLI benchmarks
+    └── all            All benchmarks
 ```
 
 ---
 
-## Detailed Examples
+## Examples
 
-### Example 1: Spawning Agents
-
-```bash
-# Spawn a coder agent
-claude-flow agent spawn --id coder-1 --type coder
-
-# Spawn with specific capabilities
-claude-flow agent spawn \
-  --id security-expert \
-  --type security-architect \
-  --capabilities "threat-modeling,pen-testing,code-review"
-
-# List all active agents
-claude-flow agent list
-```
-
-**Output:**
-```json
-{
-  "id": "coder-1",
-  "type": "coder",
-  "status": "active",
-  "capabilities": ["code", "refactor", "debug"],
-  "createdAt": "2025-02-03T10:30:00Z"
-}
-```
-
-### Example 2: Hive Mind Coordination
+### Hive Mind Coordination
 
 ```bash
 # Initialize with Byzantine fault tolerance
@@ -341,7 +407,7 @@ integration   3      3       100%    38%
 support       3      3       100%    25%
 ```
 
-### Example 3: Neural Pattern Learning
+### Neural Pattern Learning
 
 ```bash
 # Train patterns on your codebase
@@ -381,7 +447,7 @@ Training Complete!
   Training time:    1523ms
 ```
 
-### Example 4: PostgreSQL Vector Storage (RuVector)
+### PostgreSQL Vector Storage (RuVector)
 
 ```bash
 # Generate setup files
@@ -432,7 +498,7 @@ QPS                       125000
 Recall Estimate           98%
 ```
 
-### Example 5: Self-Learning Hooks
+### Self-Learning Hooks
 
 ```bash
 # List all registered hooks
@@ -475,322 +541,78 @@ Routing:
   Success Rate:        94.2%
 ```
 
----
+### Agent Management
 
-## Go API Usage
+```bash
+# Spawn a coder agent
+claude-flow agent spawn --id coder-1 --type coder
 
-### Basic Swarm Coordination
+# Spawn with specific capabilities
+claude-flow agent spawn \
+  --id security-expert \
+  --type security-architect \
+  --capabilities "threat-modeling,pen-testing,code-review"
 
-```go
-package main
+# List all active agents
+claude-flow agent list
+```
 
-import (
-    "context"
-    "log"
-
-    claudeflow "github.com/anthropics/claude-flow-go/pkg/claude-flow"
-)
-
-func main() {
-    // Create a swarm coordinator with mesh topology
-    coordinator, err := claudeflow.NewSwarmCoordinator(claudeflow.SwarmConfig{
-        Topology: claudeflow.TopologyMesh,
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer coordinator.Shutdown()
-
-    // Spawn specialized agents
-    coder, _ := coordinator.SpawnAgent(claudeflow.AgentConfig{
-        ID:           "coder-1",
-        Type:         claudeflow.AgentTypeCoder,
-        Capabilities: []string{"go", "typescript", "refactoring"},
-    })
-
-    reviewer, _ := coordinator.SpawnAgent(claudeflow.AgentConfig{
-        ID:           "reviewer-1",
-        Type:         claudeflow.AgentTypeReviewer,
-        Capabilities: []string{"code-review", "security-audit"},
-    })
-
-    // Execute a coding task
-    result, err := coordinator.ExecuteTask(coder.ID, claudeflow.Task{
-        ID:          "task-1",
-        Type:        claudeflow.TaskTypeCode,
-        Description: "Implement JWT authentication middleware",
-        Priority:    claudeflow.PriorityHigh,
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    log.Printf("Task completed: %s", result.Status)
-    log.Printf("Output: %s", result.Output)
+**Output:**
+```json
+{
+  "id": "coder-1",
+  "type": "coder",
+  "status": "active",
+  "capabilities": ["code", "refactor", "debug"],
+  "createdAt": "2025-02-03T10:30:00Z"
 }
 ```
 
-### Workflow Execution
+### System Diagnostics
 
-```go
-package main
+```bash
+# Run full diagnostics
+claude-flow doctor
 
-import (
-    "context"
-    "log"
+# Check specific components
+claude-flow doctor --component memory
+claude-flow doctor --component neural
+claude-flow doctor --component daemon
 
-    claudeflow "github.com/anthropics/claude-flow-go/pkg/claude-flow"
-)
-
-func main() {
-    coordinator, _ := claudeflow.NewSwarmCoordinator(claudeflow.SwarmConfig{
-        Topology: claudeflow.TopologyHierarchical,
-    })
-    defer coordinator.Shutdown()
-
-    // Create workflow engine
-    engine, _ := claudeflow.NewWorkflowEngine(claudeflow.WorkflowEngineConfig{
-        Coordinator: coordinator,
-    })
-    defer engine.Shutdown()
-
-    // Define a multi-step workflow
-    workflow := claudeflow.WorkflowDefinition{
-        ID:   "feature-development",
-        Name: "Full-Stack Feature Development",
-        Tasks: []claudeflow.Task{
-            {
-                ID:          "design",
-                Type:        claudeflow.TaskTypeDesign,
-                Description: "Design API schema",
-                Priority:    claudeflow.PriorityHigh,
-            },
-            {
-                ID:           "implement",
-                Type:         claudeflow.TaskTypeCode,
-                Description:  "Implement API endpoints",
-                Priority:     claudeflow.PriorityHigh,
-                Dependencies: []string{"design"},
-            },
-            {
-                ID:           "test",
-                Type:         claudeflow.TaskTypeTest,
-                Description:  "Write integration tests",
-                Priority:     claudeflow.PriorityMedium,
-                Dependencies: []string{"implement"},
-            },
-            {
-                ID:           "review",
-                Type:         claudeflow.TaskTypeReview,
-                Description:  "Security review",
-                Priority:     claudeflow.PriorityMedium,
-                Dependencies: []string{"implement"},
-            },
-            {
-                ID:           "deploy",
-                Type:         claudeflow.TaskTypeDeploy,
-                Description:  "Deploy to staging",
-                Priority:     claudeflow.PriorityLow,
-                Dependencies: []string{"test", "review"},
-            },
-        },
-    }
-
-    // Execute with automatic dependency resolution
-    ctx := context.Background()
-    result, err := engine.ExecuteWorkflow(ctx, workflow)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    log.Printf("Workflow completed: %s", result.Status)
-    log.Printf("Duration: %dms", result.Duration)
-}
+# Get fix suggestions
+claude-flow doctor --fix --verbose
 ```
 
-### Memory and Vector Search
+### Background Daemon
 
-```go
-package main
+```bash
+# Start the daemon in background
+claude-flow daemon start --background
 
-import (
-    "log"
+# Check daemon status
+claude-flow daemon status --verbose
 
-    claudeflow "github.com/anthropics/claude-flow-go/pkg/claude-flow"
-)
+# View logs
+claude-flow daemon logs --follow --lines 100
 
-func main() {
-    // Create hybrid memory backend (SQLite + Vector)
-    backend, err := claudeflow.NewMemoryBackend(claudeflow.MemoryBackendConfig{
-        SQLitePath: "./data/memory.db",
-        Dimensions: 1536,
-        EnableHNSW: true,
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Store a memory with embedding
-    memory := claudeflow.Memory{
-        ID:      "mem-1",
-        AgentID: "coder-1",
-        Content: "Always use prepared statements to prevent SQL injection",
-        Type:    claudeflow.MemoryTypeFact,
-        Tags:    []string{"security", "database", "best-practice"},
-    }
-    
-    stored, _ := backend.Store(memory)
-    log.Printf("Stored memory: %s", stored.ID)
-
-    // Semantic search
-    results, _ := backend.SearchSimilar("how to prevent database attacks", 5)
-    for _, r := range results {
-        log.Printf("Found: %s (score: %.2f)", r.Content, r.Score)
-    }
-
-    // Query with filters
-    memories, _ := backend.Query(claudeflow.MemoryQuery{
-        AgentID: "coder-1",
-        Type:    claudeflow.MemoryTypeFact,
-        Tags:    []string{"security"},
-        Limit:   10,
-    })
-    log.Printf("Found %d memories", len(memories))
-}
+# Stop the daemon
+claude-flow daemon stop
 ```
 
-### Hive Mind with Consensus
+### Performance Benchmarks
 
-```go
-package main
+```bash
+# Run all benchmarks
+claude-flow benchmark all --iterations 1000
 
-import (
-    "context"
-    "log"
+# Neural-specific benchmark
+claude-flow benchmark neural --iterations 5000 --verbose
 
-    claudeflow "github.com/anthropics/claude-flow-go/pkg/claude-flow"
-)
+# Memory benchmark
+claude-flow benchmark memory --iterations 10000
 
-func main() {
-    // Create hive mind manager
-    manager, err := claudeflow.NewHiveMindManager(claudeflow.HiveMindConfig{
-        ConsensusAlgorithm: claudeflow.ConsensusTypeSuperMajority,
-        VoteTimeout:        30000,
-        MaxProposals:       100,
-        EnableLearning:     true,
-        DefaultQuorum:      0.67,
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer manager.Shutdown()
-
-    ctx := context.Background()
-
-    // Initialize with full 15-agent hierarchy
-    if err := manager.InitializeV3(ctx); err != nil {
-        log.Fatal(err)
-    }
-
-    // Create a proposal for architectural change
-    proposal := claudeflow.Proposal{
-        Type:           "architecture",
-        Description:    "Migrate to microservices architecture",
-        RequiredType:   claudeflow.ConsensusTypeSuperMajority,
-        RequiredQuorum: 0.75,
-        Proposer:       "architect-1",
-    }
-
-    created, _ := manager.CreateProposal(ctx, proposal)
-    log.Printf("Created proposal: %s", created.ID)
-
-    // Collect votes from agents
-    result, _ := manager.CollectVotesSync(ctx, created.ID)
-    
-    log.Printf("Consensus reached: %v", result.ConsensusReached)
-    log.Printf("Approval: %.1f%%", result.WeightedApproval*100)
-}
-```
-
----
-
-## Project Structure
-
-```
-claude-flow-go/
-├── cmd/
-│   └── claude-flow/
-│       ├── main.go              # CLI entry point
-│       └── commands/            # CLI command implementations
-│           ├── hivemind.go      # Hive Mind commands
-│           ├── neural.go        # Neural learning commands
-│           ├── ruvector.go      # PostgreSQL vector commands
-│           ├── hooks.go         # Self-learning hooks
-│           ├── daemon.go        # Background service
-│           ├── doctor.go        # System diagnostics
-│           └── benchmark.go     # Performance testing
-│
-├── internal/
-│   ├── domain/                  # Domain entities (DDD)
-│   │   ├── agent/              # Agent domain model
-│   │   ├── claims/             # Task claiming system
-│   │   ├── embeddings/         # Vector embeddings
-│   │   ├── eventsourcing/      # Event sourcing primitives
-│   │   ├── hooks/              # Hooks domain types
-│   │   ├── memory/             # Memory domain model
-│   │   ├── neural/             # Neural pattern types
-│   │   ├── security/           # Security domain
-│   │   ├── task/               # Task domain model
-│   │   └── transfer/           # Data transfer types
-│   │
-│   ├── application/             # Application services
-│   │   ├── claims/             # Load balancing & work stealing
-│   │   ├── consensus/          # Raft, Byzantine, Gossip, CRDT
-│   │   ├── coordinator/        # Queen & Swarm coordination
-│   │   ├── embeddings/         # Embedding generation
-│   │   ├── eventsourcing/      # Event replay & projections
-│   │   ├── hivemind/           # Hive Mind management
-│   │   ├── hooks/              # Hooks service
-│   │   ├── memory/             # Memory operations
-│   │   ├── neural/             # Neural learning service
-│   │   ├── ruvector/           # PostgreSQL bridge
-│   │   ├── security/           # Security validation
-│   │   ├── transfer/           # Data publishing
-│   │   ├── utility/            # Doctor, Daemon, Benchmark
-│   │   └── workflow/           # Workflow execution
-│   │
-│   ├── infrastructure/          # Infrastructure layer
-│   │   ├── attention/          # Flash, Multi-head, MoE attention
-│   │   ├── claims/             # Claim persistence
-│   │   ├── embeddings/         # OpenAI, Local providers
-│   │   ├── events/             # Event bus
-│   │   ├── eventsourcing/      # SQLite event store
-│   │   ├── federation/         # Distributed coordination
-│   │   ├── hooks/              # Hooks persistence & routing
-│   │   ├── mcp/                # MCP server implementation
-│   │   │   ├── completion/     # Auto-completion
-│   │   │   ├── logging/        # Log management
-│   │   │   ├── prompts/        # Prompt registry
-│   │   │   ├── resources/      # Resource caching
-│   │   │   ├── sampling/       # LLM sampling
-│   │   │   ├── sessions/       # Session management
-│   │   │   ├── tasks/          # Task management
-│   │   │   └── tools/          # Tool implementations
-│   │   ├── memory/             # SQLite, AgentDB, Hybrid
-│   │   ├── messaging/          # Priority queues, deques
-│   │   ├── neural/             # RL algorithms, LoRA, EWC
-│   │   ├── plugins/            # Plugin system
-│   │   ├── pool/               # Connection pooling
-│   │   ├── routing/            # Task routing
-│   │   ├── ruvector/           # PostgreSQL backend
-│   │   ├── security/           # Auth, hashing, validation
-│   │   └── topology/           # Mesh, Ring, Star, Hierarchical
-│   │
-│   └── shared/                  # Shared types and utilities
-│
-└── pkg/
-    └── claude-flow/             # Public API
-        └── claude-flow.go       # High-level interface
+# Save results
+claude-flow benchmark all --output json --save ./benchmark-results.json
 ```
 
 ---
@@ -821,45 +643,6 @@ claude-flow ruvector init \
 
 # Migrate from SQLite
 claude-flow ruvector import --from-sqlite ./data/memory.db
-```
-
-### Hybrid Mode
-
-Combine both for optimal performance:
-
-```go
-backend, _ := claudeflow.NewMemoryBackend(claudeflow.MemoryBackendConfig{
-    SQLitePath:     "./data/local.db",      // Fast local cache
-    PostgresConfig: postgresConfig,          // Distributed storage
-    Mode:           claudeflow.HybridMode,
-})
-```
-
----
-
-## MCP Integration
-
-Claude Flow Go implements the **MCP 2025-11-25** specification for seamless Claude Code integration.
-
-### Capabilities
-
-| Capability | Description |
-|------------|-------------|
-| **Tools** | 20+ tools for agent, memory, task, and session operations |
-| **Resources** | Cached resource access with configurable TTL |
-| **Prompts** | Dynamic prompt templates with argument interpolation |
-| **Sampling** | LLM provider abstraction with automatic failover |
-| **Logging** | Structured logging with configurable levels |
-| **Sessions** | Persistent session management with context preservation |
-
-### Adding to Claude Code
-
-```bash
-# Register the MCP server
-claude mcp add claude-flow-go -- claude-flow serve --port 3000
-
-# Verify registration
-claude mcp list
 ```
 
 ---
@@ -911,9 +694,6 @@ go test ./...
 # Run with race detector
 go test -race ./...
 
-# Run linter
-golangci-lint run
-
 # Build for multiple platforms
 GOOS=linux GOARCH=amd64 go build -o claude-flow-linux ./cmd/claude-flow
 GOOS=darwin GOARCH=arm64 go build -o claude-flow-mac ./cmd/claude-flow
@@ -926,9 +706,9 @@ GOOS=darwin GOARCH=arm64 go build -o claude-flow-mac ./cmd/claude-flow
 claude-flow doctor
 
 # Check specific components
-claude-flow doctor --check memory
-claude-flow doctor --check neural
-claude-flow doctor --check consensus
+claude-flow doctor --component memory
+claude-flow doctor --component neural
+claude-flow doctor --component daemon
 ```
 
 ---

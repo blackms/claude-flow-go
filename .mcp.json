@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "claude-flow": {
+      "command": "/Users/alessiorocchi/Projects/claude-flow-go/claude-flow",
+      "args": ["serve", "--stdio"]
+    }
+  }
+}

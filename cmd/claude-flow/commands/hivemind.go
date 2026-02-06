@@ -14,7 +14,6 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/application/coordinator"
 	"github.com/anthropics/claude-flow-go/internal/application/hivemind"
 	appMemory "github.com/anthropics/claude-flow-go/internal/application/memory"
-	infraMemory "github.com/anthropics/claude-flow-go/internal/infrastructure/memory"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
@@ -277,7 +276,7 @@ func runHiveMindStatus() error {
 		fmt.Fprintln(w, "DOMAIN\tTOTAL\tACTIVE\tHEALTH\tAVG LOAD")
 		for domain, h := range health {
 			healthPct := fmt.Sprintf("%.0f%%", h.HealthScore*100)
-			loadPct := fmt.Sprintf("%.0f%%", h.AverageLoad*100)
+			loadPct := fmt.Sprintf("%.0f%%", h.AvgLoad*100)
 			fmt.Fprintf(w, "%s\t%d\t%d\t%s\t%s\n",
 				domain, h.TotalAgents, h.ActiveAgents, healthPct, loadPct)
 		}
@@ -342,7 +341,7 @@ func runHiveMindTask() error {
 	}
 
 	// Parse priority
-	var priority shared.Priority
+	var priority shared.TaskPriority
 	switch strings.ToLower(taskPriority) {
 	case "high":
 		priority = shared.PriorityHigh
@@ -377,7 +376,6 @@ func runHiveMindTask() error {
 		Priority:    priority,
 		Type:        shared.TaskTypeCode,
 		Status:      shared.TaskStatusPending,
-		CreatedAt:   shared.Now(),
 	}
 
 	ctx := context.Background()
@@ -720,16 +718,9 @@ func runHiveMindBroadcast(message string) error {
 
 	msg := shared.AgentMessage{
 		From:      "cli-user",
-		Content:   message,
-		Type:      shared.MessageTypeBroadcast,
-		Priority:  shared.MessagePriorityNormal,
+		Type:      "broadcast",
+		Payload:   map[string]interface{}{"content": message, "priority": broadcastPriority},
 		Timestamp: shared.Now(),
-	}
-
-	if strings.ToLower(broadcastPriority) == "high" {
-		msg.Priority = shared.MessagePriorityHigh
-	} else if strings.ToLower(broadcastPriority) == "low" {
-		msg.Priority = shared.MessagePriorityLow
 	}
 
 	ctx := context.Background()
@@ -812,13 +803,13 @@ func runMemorySet(content string) error {
 	var memType shared.MemoryType
 	switch strings.ToLower(memorySetType) {
 	case "fact":
-		memType = shared.MemoryTypeFact
+		memType = shared.MemoryTypeContext
 	case "observation":
-		memType = shared.MemoryTypeObservation
+		memType = shared.MemoryTypeEvent
 	case "decision":
-		memType = shared.MemoryTypeDecision
+		memType = shared.MemoryTypeTask
 	default:
-		memType = shared.MemoryTypeFact
+		memType = shared.MemoryTypeContext
 	}
 
 	fmt.Printf("Memory stored: %s\n", memoryID)

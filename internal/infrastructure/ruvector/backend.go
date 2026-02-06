@@ -53,7 +53,11 @@ func (b *Backend) Store(memory shared.Memory) (shared.Memory, error) {
 	}
 
 	// Convert embedding to PostgreSQL format
-	embeddingStr := formatEmbedding(memory.Embedding, config.Dimensions)
+	embedding32 := make([]float32, len(memory.Embedding))
+	for i, v := range memory.Embedding {
+		embedding32[i] = float32(v)
+	}
+	embeddingStr := formatEmbedding(embedding32, config.Dimensions)
 	metadataJSON, _ := json.Marshal(memory.Metadata)
 
 	_, err := b.conn.Exec(ctx, fmt.Sprintf(`

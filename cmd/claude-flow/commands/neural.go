@@ -52,11 +52,11 @@ var (
 	importCategory string
 
 	// benchmark flags
-	benchmarkDim        int
-	benchmarkIterations int
+	benchmarkDim              int
+	neuralBenchmarkIterations int
 
 	// status flags
-	statusVerbose bool
+	neuralStatusVerbose bool
 )
 
 // NeuralCmd is the parent command for all neural subcommands.
@@ -349,7 +349,7 @@ var benchmarkCmd = &cobra.Command{
 
 		config := neural.BenchmarkConfig{
 			Dimension:  benchmarkDim,
-			Iterations: benchmarkIterations,
+			Iterations: neuralBenchmarkIterations,
 		}
 
 		fmt.Printf("Running benchmarks (dim: %d, iterations: %d)...\n\n", config.Dimension, config.Iterations)
@@ -399,7 +399,7 @@ var statusCmd = &cobra.Command{
 			fmt.Printf("  Last updated:   %s\n", status.LastUpdated)
 		}
 
-		if statusVerbose {
+		if neuralStatusVerbose {
 			fmt.Println("\nStorage Info:")
 			fmt.Printf("  Base path: %s\n", service.GetBasePath())
 		}
@@ -446,10 +446,10 @@ func init() {
 
 	// benchmark command flags
 	benchmarkCmd.Flags().IntVarP(&benchmarkDim, "dim", "d", 256, "Embedding dimension")
-	benchmarkCmd.Flags().IntVarP(&benchmarkIterations, "iterations", "i", 1000, "Number of iterations")
+	benchmarkCmd.Flags().IntVarP(&neuralBenchmarkIterations, "iterations", "i", 1000, "Number of iterations")
 
 	// status command flags
-	statusCmd.Flags().BoolVarP(&statusVerbose, "verbose", "v", false, "Show detailed metrics")
+	statusCmd.Flags().BoolVarP(&neuralStatusVerbose, "verbose", "v", false, "Show detailed metrics")
 
 	// Add subcommands to neural
 	NeuralCmd.AddCommand(trainCmd)

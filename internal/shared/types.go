@@ -2340,8 +2340,8 @@ type TaskUpdate struct {
 	Metadata    map[string]interface{}  `json:"metadata,omitempty"`
 }
 
-// TaskResult represents the result of a completed task.
-type TaskResult struct {
+// ManagedTaskResult represents the result of a completed managed task.
+type ManagedTaskResult struct {
 	TaskID        string         `json:"taskId"`
 	Status        ManagedTaskStatus `json:"status"`
 	Output        interface{}    `json:"output,omitempty"`

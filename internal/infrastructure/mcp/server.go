@@ -274,17 +274,42 @@ func (s *Server) ListTools() []shared.MCPTool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	tools := make([]shared.MCPTool, 0, len(s.toolRegistry))
+	seen := make(map[string]bool)
+	result := make([]shared.MCPTool, 0)
+
+	// Add tools from registry
 	for _, tool := range s.toolRegistry {
-		tools = append(tools, tool)
+		if !seen[tool.Name] {
+			result = append(result, tool)
+			seen[tool.Name] = true
+		}
 	}
-	return tools
+
+	// Add tools from providers
+	for _, provider := range s.tools {
+		for _, tool := range provider.GetTools() {
+			if !seen[tool.Name] {
+				result = append(result, tool)
+				seen[tool.Name] = true
+			}
+		}
+	}
+
+	return result
 }
 
 // HandleRequest handles an MCP request.
 func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) shared.MCPResponse {
 	// Handle MCP protocol methods first
 	switch request.Method {
+	case "initialize":
+		return s.handleInitialize(request)
+	case "notifications/initialized":
+		return shared.MCPResponse{ID: request.ID}
+	case "tools/list":
+		return s.handleToolsList(request)
+	case "tools/call":
+		return s.handleToolsCall(ctx, request)
 	case "resources/list":
 		return s.handleResourcesList(request)
 	case "resources/read":
@@ -334,6 +359,94 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 // ============================================================================
 // MCP Protocol Method Handlers
 // ============================================================================
+
+func (s *Server) handleInitialize(request shared.MCPRequest) shared.MCPResponse {
+	return shared.MCPResponse{
+		ID: request.ID,
+		Result: map[string]interface{}{
+			"protocolVersion": "2025-11-25",
+			"capabilities": map[string]interface{}{
+				"tools":     map[string]interface{}{},
+				"resources": map[string]interface{}{},
+				"prompts":   map[string]interface{}{},
+			},
+			"serverInfo": map[string]interface{}{
+				"name":    "claude-flow",
+				"version": "3.0.0-alpha.1",
+			},
+		},
+	}
+}
+
+func (s *Server) handleToolsList(request shared.MCPRequest) shared.MCPResponse {
+	toolsList := s.ListTools()
+	mcpTools := make([]map[string]interface{}, 0, len(toolsList))
+	for _, tool := range toolsList {
+		t := map[string]interface{}{
+			"name":        tool.Name,
+			"description": tool.Description,
+		}
+		if tool.Parameters != nil {
+			t["inputSchema"] = tool.Parameters
+		} else {
+			t["inputSchema"] = map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			}
+		}
+		mcpTools = append(mcpTools, t)
+	}
+	return shared.MCPResponse{
+		ID:     request.ID,
+		Result: map[string]interface{}{"tools": mcpTools},
+	}
+}
+
+func (s *Server) handleToolsCall(ctx context.Context, request shared.MCPRequest) shared.MCPResponse {
+	toolName, _ := request.Params["name"].(string)
+	arguments, _ := request.Params["arguments"].(map[string]interface{})
+
+	if toolName == "" {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32602,
+				Message: "Missing tool name",
+			},
+		}
+	}
+
+	s.mu.RLock()
+	providers := s.tools
+	s.mu.RUnlock()
+
+	for _, provider := range providers {
+		result, err := provider.Execute(ctx, toolName, arguments)
+		if err != nil {
+			continue
+		}
+		resultJSON, _ := json.Marshal(result)
+		return shared.MCPResponse{
+			ID: request.ID,
+			Result: map[string]interface{}{
+				"content": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": string(resultJSON),
+					},
+				},
+			},
+		}
+	}
+
+	return shared.MCPResponse{
+		ID: request.ID,
+		Error: &shared.MCPError{
+			Code:    -32601,
+			Message: fmt.Sprintf("Tool not found: %s", toolName),
+		},
+	}
+}
 
 func (s *Server) handleResourcesList(request shared.MCPRequest) shared.MCPResponse {
 	cursor := ""

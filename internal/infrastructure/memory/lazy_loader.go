@@ -284,7 +284,7 @@ func (l *LazyLoader) loadFromBackend(ctx context.Context, id string) (*shared.Me
 		return nil, err
 	}
 
-	return &m, nil
+	return m, nil
 }
 
 // Preload preloads frequently accessed memories.

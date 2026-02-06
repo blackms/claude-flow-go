@@ -139,7 +139,7 @@ func (s *MemoryService) Store(ctx context.Context, memory *shared.Memory) error 
 	}()
 
 	// Store in backend
-	if err := s.backend.Store(*memory); err != nil {
+	if _, err := s.backend.Store(*memory); err != nil {
 		return err
 	}
 
@@ -193,7 +193,7 @@ func (s *MemoryService) Retrieve(ctx context.Context, id string) (*shared.Memory
 		return nil, err
 	}
 
-	return &memory, nil
+	return memory, nil
 }
 
 // Delete deletes a memory.
@@ -245,7 +245,7 @@ func (s *MemoryService) SemanticSearch(ctx context.Context, query *domainMemory.
 		for _, t := range query.MemoryTypes {
 			typeSet[t] = true
 		}
-		filtered := make([]shared.SearchResult, 0)
+		filtered := make([]shared.MemorySearchResult, 0)
 		for _, r := range results {
 			if typeSet[string(r.Memory.Type)] {
 				filtered = append(filtered, r)
@@ -256,7 +256,7 @@ func (s *MemoryService) SemanticSearch(ctx context.Context, query *domainMemory.
 
 	// Filter by agent if specified
 	if query.AgentID != "" {
-		filtered := make([]shared.SearchResult, 0)
+		filtered := make([]shared.MemorySearchResult, 0)
 		for _, r := range results {
 			if r.Memory.AgentID == query.AgentID {
 				filtered = append(filtered, r)
@@ -267,9 +267,9 @@ func (s *MemoryService) SemanticSearch(ctx context.Context, query *domainMemory.
 
 	// Filter by min score
 	if query.MinScore > 0 {
-		filtered := make([]shared.SearchResult, 0)
+		filtered := make([]shared.MemorySearchResult, 0)
 		for _, r := range results {
-			if r.Score >= query.MinScore {
+			if r.Similarity >= query.MinScore {
 				filtered = append(filtered, r)
 			}
 		}
@@ -287,8 +287,8 @@ func (s *MemoryService) SemanticSearch(ctx context.Context, query *domainMemory.
 		memory := domainMemory.FromShared(r.Memory)
 		searchResults.Results[i] = &domainMemory.SearchResult{
 			Memory:        memory,
-			Score:         r.Score,
-			SemanticScore: r.Score,
+			Score:         r.Similarity,
+			SemanticScore: r.Similarity,
 		}
 	}
 

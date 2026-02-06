@@ -452,12 +452,12 @@ func (s *TrajectoryStore) FindSimilarTrajectories(embedding []float32, k int, mi
 	latencyMs := float64(time.Since(startTime).Microseconds()) / 1000.0
 
 	results := make([]domainNeural.TrajectorySearchResult, 0, len(scored))
-	for _, s := range scored {
-		traj, err := s.GetTrajectory(s.trajectoryID)
+	for _, st := range scored {
+		traj, err := s.GetTrajectory(st.trajectoryID)
 		if err == nil && traj != nil {
 			results = append(results, domainNeural.TrajectorySearchResult{
 				Trajectory: traj,
-				Similarity: s.similarity,
+				Similarity: st.similarity,
 				LatencyMs:  latencyMs,
 			})
 		}
@@ -646,21 +646,4 @@ func bytesToFloat32Slice(bytes []byte) []float32 {
 	return slice
 }
 
-func cosineSimilarityFloat32(a, b []float32) float64 {
-	if len(a) != len(b) || len(a) == 0 {
-		return 0
-	}
-
-	var dotProduct, normA, normB float64
-	for i := range a {
-		dotProduct += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
-	}
-
-	if normA == 0 || normB == 0 {
-		return 0
-	}
-
-	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
-}
+// cosineSimilarityFloat32 is defined in reasoning_store.go

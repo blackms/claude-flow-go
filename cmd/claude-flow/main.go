@@ -47,14 +47,13 @@ It provides:
 
 var servePort int
 var serveHost string
+var serveStdio bool
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the MCP server",
 	Long:  `Start the MCP server to handle Model Context Protocol requests.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Printf("Starting Claude Flow MCP Server on %s:%d...\n", serveHost, servePort)
-
 		// Create coordinator
 		coordinator, err := claudeflow.NewSwarmCoordinator(claudeflow.SwarmConfig{
 			Topology: claudeflow.TopologyMesh,
@@ -80,6 +79,24 @@ var serveCmd = &cobra.Command{
 			Coordinator: coordinator,
 			Memory:      memory,
 		})
+
+		// Stdio mode for Claude Code / Claude Desktop integration
+		if serveStdio {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			sigChan := make(chan os.Signal, 1)
+			signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+			go func() {
+				<-sigChan
+				cancel()
+			}()
+
+			return server.RunStdio(ctx, os.Stdin, os.Stdout)
+		}
+
+		// HTTP mode
+		fmt.Printf("Starting Claude Flow MCP Server on %s:%d...\n", serveHost, servePort)
 
 		if err := server.Start(); err != nil {
 			return fmt.Errorf("failed to start server: %w", err)
@@ -372,6 +389,7 @@ func init() {
 	// Serve command
 	serveCmd.Flags().IntVarP(&servePort, "port", "p", 3000, "Port to listen on")
 	serveCmd.Flags().StringVarP(&serveHost, "host", "H", "localhost", "Host to listen on")
+	serveCmd.Flags().BoolVar(&serveStdio, "stdio", false, "Use stdio transport (for Claude Code/Desktop integration)")
 	rootCmd.AddCommand(serveCmd)
 
 	// Agent commands
