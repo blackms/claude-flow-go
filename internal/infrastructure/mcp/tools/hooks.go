@@ -726,24 +726,32 @@ func (t *HooksTools) assessCommandRisk(command, workingDir string) *shared.RiskA
 
 	commandLower := strings.ToLower(command)
 
-	// Check for dangerous patterns
-	dangerousPatterns := map[string]string{
-		"rm -rf":      "Recursive force delete",
-		"rm -r /":     "Recursive delete from root",
-		"dd if=":      "Low-level disk write",
-		":(){":        "Fork bomb pattern",
-		"> /dev/sda":  "Direct disk write",
-		"chmod 777":   "Overly permissive permissions",
-		"--no-verify": "Skipping verification",
-		"--force":     "Force operation",
-		"DROP TABLE":  "Database table deletion",
-		"DELETE FROM": "Database record deletion",
+	// Check for dangerous patterns with severity-based weights
+	type dangerousPattern struct {
+		pattern string
+		concern string
+		weight  float64
+	}
+	dangerousPatterns := []dangerousPattern{
+		// Critical: destructive and irreversible
+		{"rm -rf", "Recursive force delete", 0.8},
+		{"rm -r /", "Recursive delete from root", 0.8},
+		{"dd if=", "Low-level disk write", 0.8},
+		{":(){", "Fork bomb pattern", 0.8},
+		{"> /dev/sda", "Direct disk write", 0.8},
+		// High: risky but more targeted
+		{"chmod 777", "Overly permissive permissions", 0.5},
+		{"DROP TABLE", "Database table deletion", 0.5},
+		{"DELETE FROM", "Database record deletion", 0.5},
+		// Medium: caution-worthy
+		{"--no-verify", "Skipping verification", 0.3},
+		{"--force", "Force operation", 0.3},
 	}
 
-	for pattern, concern := range dangerousPatterns {
-		if strings.Contains(commandLower, strings.ToLower(pattern)) {
-			assessment.Concerns = append(assessment.Concerns, concern)
-			assessment.Score += 0.3
+	for _, dp := range dangerousPatterns {
+		if strings.Contains(commandLower, strings.ToLower(dp.pattern)) {
+			assessment.Concerns = append(assessment.Concerns, dp.concern)
+			assessment.Score += dp.weight
 		}
 	}
 
