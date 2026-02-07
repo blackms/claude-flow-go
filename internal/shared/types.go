@@ -399,6 +399,18 @@ const (
 	PriorityLow    TaskPriority = "low"
 )
 
+// IntToPriority maps a numeric priority (1-10) to a TaskPriority string.
+func IntToPriority(p int) TaskPriority {
+	switch {
+	case p >= 8:
+		return PriorityHigh
+	case p >= 4:
+		return PriorityMedium
+	default:
+		return PriorityLow
+	}
+}
+
 // TaskStatus represents the current status of a task.
 type TaskStatus string
 
@@ -2228,18 +2240,18 @@ func DefaultResourceCacheConfig() ResourceCacheConfig {
 
 // SamplingConfig holds configuration for the sampling manager.
 type SamplingConfig struct {
-	DefaultMaxTokens int     `json:"defaultMaxTokens"` // Default: 4096
+	DefaultMaxTokens int     `json:"defaultMaxTokens"` // Default: 8192
 	DefaultTemperature float64 `json:"defaultTemperature"` // Default: 0.7
-	TimeoutMs        int64   `json:"timeoutMs"`        // Default: 30000
+	TimeoutMs        int64   `json:"timeoutMs"`        // Default: 180000
 	EnableLogging    bool    `json:"enableLogging"`    // Default: true
 }
 
 // DefaultSamplingConfig returns the default sampling configuration.
 func DefaultSamplingConfig() SamplingConfig {
 	return SamplingConfig{
-		DefaultMaxTokens:   4096,
+		DefaultMaxTokens:   8192,
 		DefaultTemperature: 0.7,
-		TimeoutMs:          30000,
+		TimeoutMs:          180000,
 		EnableLogging:      true,
 	}
 }

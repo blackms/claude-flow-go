@@ -14,6 +14,11 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
+// TaskExecutorInterface allows injecting an LLM-backed executor into the coordinator.
+type TaskExecutorInterface interface {
+	Execute(ctx context.Context, a *agent.Agent, t shared.Task, phaseContext string) (shared.TaskResult, error)
+}
+
 // SwarmCoordinator coordinates multi-agent swarms with support for hierarchical and mesh topologies.
 type SwarmCoordinator struct {
 	mu             sync.RWMutex
@@ -25,6 +30,7 @@ type SwarmCoordinator struct {
 	agentMetrics   map[string]*shared.AgentMetrics
 	connections    []shared.MeshConnection
 	initialized    bool
+	taskExecutor   TaskExecutorInterface
 }
 
 // Options holds configuration options for SwarmCoordinator.
@@ -235,10 +241,19 @@ func (sc *SwarmCoordinator) DistributeTasks(tasks []shared.Task) ([]shared.TaskA
 	return assignments, nil
 }
 
+// SetTaskExecutor sets an optional LLM-backed task executor.
+// When set, ExecuteTask will delegate to the executor instead of the agent's built-in method.
+func (sc *SwarmCoordinator) SetTaskExecutor(te TaskExecutorInterface) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sc.taskExecutor = te
+}
+
 // ExecuteTask executes a task on a specific agent.
 func (sc *SwarmCoordinator) ExecuteTask(ctx context.Context, agentID string, t shared.Task) (shared.TaskResult, error) {
 	sc.mu.RLock()
 	a, exists := sc.agents[agentID]
+	te := sc.taskExecutor
 	sc.mu.RUnlock()
 
 	if !exists {
@@ -250,7 +265,19 @@ func (sc *SwarmCoordinator) ExecuteTask(ctx context.Context, agentID string, t s
 		}, nil
 	}
 
-	result := a.ExecuteTask(ctx, t)
+	// Use LLM executor if available; otherwise fall back to agent's built-in method.
+	var result shared.TaskResult
+	if te != nil {
+		phaseContext, _ := t.Metadata["phaseContext"].(string)
+		var err error
+		result, err = te.Execute(ctx, a, t, phaseContext)
+		if err != nil {
+			// Fallback to built-in on LLM error.
+			result = a.ExecuteTask(ctx, t)
+		}
+	} else {
+		result = a.ExecuteTask(ctx, t)
+	}
 
 	// Update metrics
 	sc.mu.Lock()

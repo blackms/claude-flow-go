@@ -37,6 +37,7 @@ import (
 	mcplogging "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/logging"
 	mcpprompts "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/prompts"
 	mcpresources "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/resources"
+	"github.com/anthropics/claude-flow-go/internal/application/executor"
 	mcpsampling "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sampling"
 	mcpsessions "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sessions"
 	mcptasks "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tasks"
@@ -638,6 +639,34 @@ func NewMCPServer(config MCPServerConfig) *MCPServer {
 	if config.Memory != nil {
 		providers = append(providers, tools.NewMemoryTools(config.Memory))
 	}
+
+	// Create sampling manager + Claude CLI provider.
+	samplingMgr := mcpsampling.NewSamplingManagerWithDefaults()
+	cliProvider := mcpsampling.NewClaudeCLIProvider(mcpsampling.ClaudeCLIConfig{})
+	if cliProvider.IsAvailable() {
+		samplingMgr.RegisterProvider(cliProvider, true)
+	}
+
+	// Wire LLM executor into the coordinator when LLM is available.
+	if config.Coordinator != nil && samplingMgr.IsAvailable() {
+		taskExec := executor.New(executor.TaskExecutorConfig{
+			SamplingManager: samplingMgr,
+			MemoryBackend:   config.Memory,
+			AgentRegistry:   agent.NewAgentTypeRegistry(),
+		})
+		config.Coordinator.internal.SetTaskExecutor(taskExec)
+	}
+
+	// Register orchestration tools when coordinator is available.
+	if config.Coordinator != nil {
+		routingEngine := hooks.NewRoutingEngine(0.1)
+		providers = append(providers, tools.NewOrchestrateTools(config.Coordinator.internal, routingEngine, config.Memory, samplingMgr))
+	}
+
+	// Register federation tools
+	fedHub := federation.NewFederationHubWithDefaults()
+	fedHub.Initialize()
+	providers = append(providers, tools.NewFederationTools(fedHub))
 
 	opts := mcp.Options{
 		Tools: providers,
