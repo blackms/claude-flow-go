@@ -475,6 +475,82 @@ func TestFederationHub_ShutdownPreventsPendingSpawnActivation(t *testing.T) {
 	}
 }
 
+func TestFederationHub_ReadOperationsRemainAvailableAfterShutdown(t *testing.T) {
+	cfg := shared.DefaultFederationConfig()
+	cfg.ConsensusQuorum = 1.0
+
+	hub := NewFederationHub(cfg)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "shutdown-read-source",
+		Name:      "Shutdown Read Source",
+		MaxAgents: 3,
+	}); err != nil {
+		t.Fatalf("failed to register source swarm: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "shutdown-read-target",
+		Name:      "Shutdown Read Target",
+		MaxAgents: 3,
+	}); err != nil {
+		t.Fatalf("failed to register target swarm: %v", err)
+	}
+
+	spawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "shutdown-read-source",
+		Type:    "coder",
+		Task:    "shutdown read validation",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn agent: %v", err)
+	}
+
+	if _, err := hub.SendMessage("shutdown-read-source", "shutdown-read-target", map[string]interface{}{"ok": true}); err != nil {
+		t.Fatalf("failed to send message: %v", err)
+	}
+
+	if _, err := hub.Propose("shutdown-read-source", "policy", map[string]interface{}{"mode": "safe"}); err != nil {
+		t.Fatalf("failed to propose value: %v", err)
+	}
+
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("failed to shutdown federation hub: %v", err)
+	}
+
+	swarms := hub.GetSwarms()
+	if len(swarms) != 2 {
+		t.Fatalf("expected two swarms available for read after shutdown, got %d", len(swarms))
+	}
+	agents := hub.GetAgents()
+	if len(agents) != 1 {
+		t.Fatalf("expected one agent available for read after shutdown, got %d", len(agents))
+	}
+	if agents[0].ID != spawn.AgentID {
+		t.Fatalf("expected shutdown-read agent %s, got %s", spawn.AgentID, agents[0].ID)
+	}
+	if agents[0].Status != shared.EphemeralStatusTerminated {
+		t.Fatalf("expected read agent status terminated after shutdown, got %q", agents[0].Status)
+	}
+
+	messages := hub.GetMessages(0)
+	if len(messages) == 0 {
+		t.Fatal("expected message history to remain readable after shutdown")
+	}
+
+	proposals := hub.GetProposals()
+	if len(proposals) != 1 {
+		t.Fatalf("expected one proposal readable after shutdown, got %d", len(proposals))
+	}
+
+	events := hub.GetEvents(0)
+	if len(events) == 0 {
+		t.Fatal("expected event history to remain readable after shutdown")
+	}
+}
+
 func TestFederationHub_RegisterSwarmRejectsTrimmedDuplicateIDs(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
