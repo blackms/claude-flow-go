@@ -89,6 +89,7 @@ func TestMCPServer_StopShutsDownFederationHub(t *testing.T) {
 	if server.federationHub == nil {
 		t.Fatal("expected MCP server to retain federation hub reference")
 	}
+	fedHub := server.federationHub
 
 	if err := server.Stop(); err != nil {
 		t.Fatalf("expected first stop to succeed, got %v", err)
@@ -96,8 +97,11 @@ func TestMCPServer_StopShutsDownFederationHub(t *testing.T) {
 	if err := server.Stop(); err != nil {
 		t.Fatalf("expected second stop to remain idempotent, got %v", err)
 	}
+	if server.federationHub != nil {
+		t.Fatal("expected MCP server to clear federation hub reference after stop")
+	}
 
-	err := server.federationHub.RegisterSwarm(shared.SwarmRegistration{
+	err := fedHub.RegisterSwarm(shared.SwarmRegistration{
 		SwarmID:   "stopped-server-swarm",
 		Name:      "Stopped Server Swarm",
 		MaxAgents: 1,

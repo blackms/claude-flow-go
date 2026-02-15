@@ -690,7 +690,9 @@ func (ms *MCPServer) Start() error {
 func (ms *MCPServer) Stop() error {
 	stopErr := ms.internal.Stop()
 	if ms.federationHub != nil {
-		if shutdownErr := ms.federationHub.Shutdown(); stopErr == nil {
+		fedHub := ms.federationHub
+		ms.federationHub = nil
+		if shutdownErr := fedHub.Shutdown(); stopErr == nil {
 			stopErr = shutdownErr
 		}
 	}
