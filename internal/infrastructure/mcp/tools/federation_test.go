@@ -321,6 +321,149 @@ func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmSuccessParity(t *tes
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralSuccessParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	for _, swarmID := range []string{"swarm-exec", "swarm-direct"} {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 10,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/spawn-ephemeral", map[string]interface{}{
+		"swarmId": "swarm-exec",
+		"type":    "coder",
+		"task":    "implement feature A",
+		"ttl":     float64(60000),
+	})
+	if execErr != nil {
+		t.Fatalf("Execute should succeed, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result to be non-nil")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/spawn-ephemeral", map[string]interface{}{
+		"swarmId": "swarm-direct",
+		"type":    "reviewer",
+		"task":    "review feature A",
+		"ttl":     float64(45000),
+	})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execSpawn, ok := execResult.Data.(*shared.SpawnResult)
+	if !ok {
+		t.Fatalf("expected Execute data type *shared.SpawnResult, got %T", execResult.Data)
+	}
+	directSpawn, ok := directResult.Data.(*shared.SpawnResult)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type *shared.SpawnResult, got %T", directResult.Data)
+	}
+
+	if execSpawn.Status != directSpawn.Status {
+		t.Fatalf("expected spawn status parity, got Execute=%s ExecuteTool=%s", execSpawn.Status, directSpawn.Status)
+	}
+	if execSpawn.SwarmID != "swarm-exec" || directSpawn.SwarmID != "swarm-direct" {
+		t.Fatalf("expected spawned swarm IDs to match requests, got Execute=%s ExecuteTool=%s", execSpawn.SwarmID, directSpawn.SwarmID)
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_TerminateEphemeralSuccessParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	for _, swarmID := range []string{"swarm-exec", "swarm-direct"} {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 10,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	execSpawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-exec",
+		Type:    "coder",
+		Task:    "execute-terminate-path",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn Execute test agent: %v", err)
+	}
+	directSpawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-direct",
+		Type:    "reviewer",
+		Task:    "direct-terminate-path",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn ExecuteTool test agent: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/terminate-ephemeral", map[string]interface{}{
+		"agentId": execSpawn.AgentID,
+		"error":   "intentional-terminate",
+	})
+	if execErr != nil {
+		t.Fatalf("Execute should succeed, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result to be non-nil")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/terminate-ephemeral", map[string]interface{}{
+		"agentId": directSpawn.AgentID,
+		"error":   "intentional-terminate-direct",
+	})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execData, ok := execResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute terminate data map, got %T", execResult.Data)
+	}
+	directData, ok := directResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool terminate data map, got %T", directResult.Data)
+	}
+
+	if execData["terminated"] != execSpawn.AgentID {
+		t.Fatalf("expected Execute to terminate %s, got %v", execSpawn.AgentID, execData["terminated"])
+	}
+	if directData["terminated"] != directSpawn.AgentID {
+		t.Fatalf("expected ExecuteTool to terminate %s, got %v", directSpawn.AgentID, directData["terminated"])
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_BroadcastSuccessParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
