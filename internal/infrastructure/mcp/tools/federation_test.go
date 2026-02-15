@@ -3441,6 +3441,99 @@ func TestFederationTools_BroadcastReturnsDefensiveMessageCopies(t *testing.T) {
 	}
 }
 
+func TestFederationTools_BroadcastAndProposeHandleCyclicPayloads(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	for _, swarmID := range []string{"cyclic-source", "cyclic-target", "cyclic-proposer"} {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 5,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	execBroadcastPayload := map[string]interface{}{
+		"event": "exec-broadcast",
+	}
+	execBroadcastPayload["self"] = execBroadcastPayload
+	execBroadcastInputPtr := reflect.ValueOf(execBroadcastPayload).Pointer()
+
+	execBroadcastResult, execBroadcastErr := ft.Execute(context.Background(), "federation/broadcast", map[string]interface{}{
+		"sourceSwarmId": "cyclic-source",
+		"payload":       execBroadcastPayload,
+	})
+	if execBroadcastErr != nil {
+		t.Fatalf("Execute broadcast with cyclic payload should succeed, got %v", execBroadcastErr)
+	}
+	if execBroadcastResult == nil || !execBroadcastResult.Success {
+		t.Fatalf("expected Execute broadcast success result, got %+v", execBroadcastResult)
+	}
+	execBroadcastMsg, ok := execBroadcastResult.Data.(*shared.FederationMessage)
+	if !ok {
+		t.Fatalf("expected Execute broadcast data type *shared.FederationMessage, got %T", execBroadcastResult.Data)
+	}
+	execBroadcastPayloadCopy, ok := execBroadcastMsg.Payload.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute broadcast payload map, got %T", execBroadcastMsg.Payload)
+	}
+	execBroadcastSelf, ok := execBroadcastPayloadCopy["self"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute broadcast self payload map, got %T", execBroadcastPayloadCopy["self"])
+	}
+	if reflect.ValueOf(execBroadcastPayloadCopy).Pointer() == execBroadcastInputPtr {
+		t.Fatal("expected Execute broadcast payload clone to be detached from input payload")
+	}
+	if execBroadcastSelf["event"] != "exec-broadcast" {
+		t.Fatalf("expected Execute broadcast self payload event to remain exec-broadcast, got %v", execBroadcastSelf["event"])
+	}
+
+	directProposalValue := map[string]interface{}{
+		"kind": "direct-proposal",
+	}
+	directProposalValue["self"] = directProposalValue
+	directProposalInputPtr := reflect.ValueOf(directProposalValue).Pointer()
+
+	directProposalResult, directProposalErr := ft.ExecuteTool(context.Background(), "federation/propose", map[string]interface{}{
+		"proposerId":   "cyclic-proposer",
+		"proposalType": "cyclic-check",
+		"value":        directProposalValue,
+	})
+	if directProposalErr != nil {
+		t.Fatalf("ExecuteTool propose with cyclic value should succeed, got %v", directProposalErr)
+	}
+	if !directProposalResult.Success {
+		t.Fatalf("expected ExecuteTool propose success, got %+v", directProposalResult)
+	}
+	directProposal, ok := directProposalResult.Data.(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected ExecuteTool propose data type *shared.FederationProposal, got %T", directProposalResult.Data)
+	}
+	directProposalValueCopy, ok := directProposal.Value.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool proposal value map, got %T", directProposal.Value)
+	}
+	directProposalSelf, ok := directProposalValueCopy["self"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool proposal self value map, got %T", directProposalValueCopy["self"])
+	}
+	if reflect.ValueOf(directProposalValueCopy).Pointer() == directProposalInputPtr {
+		t.Fatal("expected ExecuteTool proposal value clone to be detached from input value")
+	}
+	if directProposalSelf["kind"] != "direct-proposal" {
+		t.Fatalf("expected ExecuteTool proposal self value kind to remain direct-proposal, got %v", directProposalSelf["kind"])
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_ProposeSuccessParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {

@@ -1000,236 +1000,106 @@ func cloneStringInterfaceMap(input map[string]interface{}) map[string]interface{
 	return output
 }
 
-func cloneInterfaceValue(value interface{}) interface{} {
-	switch typed := value.(type) {
-	case map[string]interface{}:
-		return cloneStringInterfaceMap(typed)
-	case map[string]string:
-		cloned := make(map[string]string, len(typed))
-		for key, val := range typed {
-			cloned[key] = val
-		}
-		return cloned
-	case map[string]bool:
-		cloned := make(map[string]bool, len(typed))
-		for key, val := range typed {
-			cloned[key] = val
-		}
-		return cloned
-	case map[string]int:
-		cloned := make(map[string]int, len(typed))
-		for key, val := range typed {
-			cloned[key] = val
-		}
-		return cloned
-	case map[string]int64:
-		cloned := make(map[string]int64, len(typed))
-		for key, val := range typed {
-			cloned[key] = val
-		}
-		return cloned
-	case map[string]float64:
-		cloned := make(map[string]float64, len(typed))
-		for key, val := range typed {
-			cloned[key] = val
-		}
-		return cloned
-	case []interface{}:
-		cloned := make([]interface{}, len(typed))
-		for i := range typed {
-			cloned[i] = cloneInterfaceValue(typed[i])
-		}
-		return cloned
-	case []map[string]interface{}:
-		cloned := make([]map[string]interface{}, len(typed))
-		for i := range typed {
-			cloned[i] = cloneStringInterfaceMap(typed[i])
-		}
-		return cloned
-	case []map[string]string:
-		cloned := make([]map[string]string, len(typed))
-		for i := range typed {
-			item := make(map[string]string, len(typed[i]))
-			for key, val := range typed[i] {
-				item[key] = val
-			}
-			cloned[i] = item
-		}
-		return cloned
-	case []map[string]bool:
-		cloned := make([]map[string]bool, len(typed))
-		for i := range typed {
-			item := make(map[string]bool, len(typed[i]))
-			for key, val := range typed[i] {
-				item[key] = val
-			}
-			cloned[i] = item
-		}
-		return cloned
-	case []map[string]int:
-		cloned := make([]map[string]int, len(typed))
-		for i := range typed {
-			item := make(map[string]int, len(typed[i]))
-			for key, val := range typed[i] {
-				item[key] = val
-			}
-			cloned[i] = item
-		}
-		return cloned
-	case []map[string]int64:
-		cloned := make([]map[string]int64, len(typed))
-		for i := range typed {
-			item := make(map[string]int64, len(typed[i]))
-			for key, val := range typed[i] {
-				item[key] = val
-			}
-			cloned[i] = item
-		}
-		return cloned
-	case []map[string]float64:
-		cloned := make([]map[string]float64, len(typed))
-		for i := range typed {
-			item := make(map[string]float64, len(typed[i]))
-			for key, val := range typed[i] {
-				item[key] = val
-			}
-			cloned[i] = item
-		}
-		return cloned
-	case []string:
-		cloned := make([]string, len(typed))
-		copy(cloned, typed)
-		return cloned
-	case []bool:
-		cloned := make([]bool, len(typed))
-		copy(cloned, typed)
-		return cloned
-	case []int:
-		cloned := make([]int, len(typed))
-		copy(cloned, typed)
-		return cloned
-	case []int64:
-		cloned := make([]int64, len(typed))
-		copy(cloned, typed)
-		return cloned
-	case []float64:
-		cloned := make([]float64, len(typed))
-		copy(cloned, typed)
-		return cloned
-	default:
-		return cloneReflectContainer(value)
-	}
+type cloneVisit struct {
+	typ reflect.Type
+	ptr uintptr
 }
 
-func cloneReflectContainer(value interface{}) interface{} {
+func cloneInterfaceValue(value interface{}) interface{} {
 	if value == nil {
 		return nil
 	}
+	cloned := cloneReflectValue(reflect.ValueOf(value), make(map[cloneVisit]reflect.Value))
+	if !cloned.IsValid() {
+		return nil
+	}
+	return cloned.Interface()
+}
 
-	reflected := reflect.ValueOf(value)
-	switch reflected.Kind() {
+func cloneReflectValue(value reflect.Value, seen map[cloneVisit]reflect.Value) reflect.Value {
+	if !value.IsValid() {
+		return value
+	}
+
+	switch value.Kind() {
 	case reflect.Map:
-		return cloneMapValue(reflected).Interface()
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if cached, ok := seen[visit]; ok {
+			return cached
+		}
+		clonedMap := reflect.MakeMapWithSize(value.Type(), value.Len())
+		seen[visit] = clonedMap
+		for _, key := range value.MapKeys() {
+			clonedKey := cloneReflectValue(key, seen)
+			clonedMap.SetMapIndex(clonedKey, cloneReflectValue(value.MapIndex(key), seen))
+		}
+		return clonedMap
 	case reflect.Slice:
-		return cloneSliceValue(reflected).Interface()
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if visit.ptr != 0 {
+			if cached, ok := seen[visit]; ok {
+				return cached
+			}
+		}
+		clonedSlice := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+		if visit.ptr != 0 {
+			seen[visit] = clonedSlice
+		}
+		for i := 0; i < value.Len(); i++ {
+			clonedSlice.Index(i).Set(cloneReflectValue(value.Index(i), seen))
+		}
+		return clonedSlice
 	case reflect.Array:
-		return cloneArrayValue(reflected).Interface()
+		clonedArray := reflect.New(value.Type()).Elem()
+		for i := 0; i < value.Len(); i++ {
+			clonedArray.Index(i).Set(cloneReflectValue(value.Index(i), seen))
+		}
+		return clonedArray
 	case reflect.Ptr:
-		return clonePointerValue(reflected).Interface()
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if cached, ok := seen[visit]; ok {
+			return cached
+		}
+		clonedPointer := reflect.New(value.Type().Elem())
+		seen[visit] = clonedPointer
+		clonedPointer.Elem().Set(cloneReflectValue(value.Elem(), seen))
+		return clonedPointer
+	case reflect.Interface:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		return cloneReflectValue(value.Elem(), seen)
 	case reflect.Struct:
-		return cloneStructValue(reflected).Interface()
+		clonedStruct := reflect.New(value.Type()).Elem()
+		clonedStruct.Set(value)
+		for i := 0; i < value.NumField(); i++ {
+			destinationField := clonedStruct.Field(i)
+			if !destinationField.CanSet() {
+				continue
+			}
+			clonedField := cloneReflectValue(value.Field(i), seen)
+			if !clonedField.IsValid() {
+				continue
+			}
+			if clonedField.Type().AssignableTo(destinationField.Type()) {
+				destinationField.Set(clonedField)
+			} else if clonedField.Type().ConvertibleTo(destinationField.Type()) {
+				destinationField.Set(clonedField.Convert(destinationField.Type()))
+			}
+		}
+		return clonedStruct
 	default:
 		return value
 	}
-}
-
-func cloneMapValue(value reflect.Value) reflect.Value {
-	if value.IsNil() {
-		return reflect.Zero(value.Type())
-	}
-
-	cloned := reflect.MakeMapWithSize(value.Type(), value.Len())
-	elemType := value.Type().Elem()
-	iter := value.MapRange()
-	for iter.Next() {
-		cloned.SetMapIndex(iter.Key(), cloneValueForType(elemType, iter.Value()))
-	}
-	return cloned
-}
-
-func cloneSliceValue(value reflect.Value) reflect.Value {
-	if value.IsNil() {
-		return reflect.Zero(value.Type())
-	}
-
-	cloned := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
-	elemType := value.Type().Elem()
-	for i := 0; i < value.Len(); i++ {
-		cloned.Index(i).Set(cloneValueForType(elemType, value.Index(i)))
-	}
-	return cloned
-}
-
-func cloneArrayValue(value reflect.Value) reflect.Value {
-	cloned := reflect.New(value.Type()).Elem()
-	elemType := value.Type().Elem()
-	for i := 0; i < value.Len(); i++ {
-		cloned.Index(i).Set(cloneValueForType(elemType, value.Index(i)))
-	}
-	return cloned
-}
-
-func clonePointerValue(value reflect.Value) reflect.Value {
-	if value.IsNil() {
-		return reflect.Zero(value.Type())
-	}
-
-	elemType := value.Type().Elem()
-	clonedPtr := reflect.New(elemType)
-	clonedPtr.Elem().Set(cloneValueForType(elemType, value.Elem()))
-	return clonedPtr
-}
-
-func cloneStructValue(value reflect.Value) reflect.Value {
-	cloned := reflect.New(value.Type()).Elem()
-	cloned.Set(value)
-	for i := 0; i < value.NumField(); i++ {
-		targetField := cloned.Field(i)
-		if !targetField.CanSet() {
-			continue
-		}
-		targetField.Set(cloneValueForType(targetField.Type(), value.Field(i)))
-	}
-	return cloned
-}
-
-func cloneValueForType(targetType reflect.Type, value reflect.Value) reflect.Value {
-	if !value.IsValid() {
-		return reflect.Zero(targetType)
-	}
-
-	if value.CanInterface() {
-		clonedInterface := cloneInterfaceValue(value.Interface())
-		if clonedInterface != nil {
-			clonedValue := reflect.ValueOf(clonedInterface)
-			if clonedValue.IsValid() {
-				if clonedValue.Type().AssignableTo(targetType) {
-					return clonedValue
-				}
-				if clonedValue.Type().ConvertibleTo(targetType) {
-					return clonedValue.Convert(targetType)
-				}
-			}
-		}
-	}
-
-	if value.Type().AssignableTo(targetType) {
-		return value
-	}
-	if value.Type().ConvertibleTo(targetType) {
-		return value.Convert(targetType)
-	}
-	return reflect.Zero(targetType)
 }
 
 func cloneFederationMessage(msg *shared.FederationMessage) *shared.FederationMessage {
