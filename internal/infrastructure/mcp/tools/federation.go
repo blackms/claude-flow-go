@@ -98,6 +98,7 @@ func (t *FederationTools) GetTools() []shared.MCPTool {
 					"status": map[string]interface{}{
 						"type":        "string",
 						"description": "Filter by status (spawning, active, completing, terminated)",
+						"enum":        []string{"spawning", "active", "completing", "terminated"},
 					},
 				},
 			},
@@ -353,17 +354,43 @@ func (t *FederationTools) terminateEphemeral(ctx context.Context, args map[strin
 
 // listEphemeral lists ephemeral agents.
 func (t *FederationTools) listEphemeral(ctx context.Context, args map[string]interface{}) (shared.MCPToolResult, error) {
-	var agents []*shared.EphemeralAgent
+	swarmID := ""
+	if rawSwarmID, ok := args["swarmId"].(string); ok {
+		swarmID = strings.TrimSpace(rawSwarmID)
+	}
 
-	if swarmID, ok := args["swarmId"].(string); ok && strings.TrimSpace(swarmID) != "" {
-		swarmID = strings.TrimSpace(swarmID)
+	hasStatusFilter := false
+	var statusFilter shared.EphemeralAgentStatus
+	if rawStatus, ok := args["status"].(string); ok && strings.TrimSpace(rawStatus) != "" {
+		parsedStatus, valid := parseEphemeralAgentStatus(rawStatus)
+		if !valid {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "status must be one of: spawning, active, completing, terminated",
+			}, fmt.Errorf("status must be one of: spawning, active, completing, terminated")
+		}
+		hasStatusFilter = true
+		statusFilter = parsedStatus
+	}
+
+	var agents []*shared.EphemeralAgent
+	switch {
+	case swarmID != "":
 		agents = t.hub.GetAgentsBySwarm(swarmID)
-	} else if statusStr, ok := args["status"].(string); ok && strings.TrimSpace(statusStr) != "" {
-		statusStr = strings.TrimSpace(statusStr)
-		status := shared.EphemeralAgentStatus(statusStr)
-		agents = t.hub.GetAgentsByStatus(status)
-	} else {
+	case hasStatusFilter:
+		agents = t.hub.GetAgentsByStatus(statusFilter)
+	default:
 		agents = t.hub.GetAgents()
+	}
+
+	if swarmID != "" && hasStatusFilter {
+		filtered := make([]*shared.EphemeralAgent, 0, len(agents))
+		for _, agent := range agents {
+			if agent.Status == statusFilter {
+				filtered = append(filtered, agent)
+			}
+		}
+		agents = filtered
 	}
 
 	return shared.MCPToolResult{
@@ -595,4 +622,17 @@ func normalizeCapabilities(raw interface{}) []string {
 	}
 
 	return capabilities
+}
+
+func parseEphemeralAgentStatus(raw string) (shared.EphemeralAgentStatus, bool) {
+	status := shared.EphemeralAgentStatus(strings.ToLower(strings.TrimSpace(raw)))
+	switch status {
+	case shared.EphemeralStatusSpawning,
+		shared.EphemeralStatusActive,
+		shared.EphemeralStatusCompleting,
+		shared.EphemeralStatusTerminated:
+		return status, true
+	default:
+		return "", false
+	}
 }

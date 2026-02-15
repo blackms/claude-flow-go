@@ -125,6 +125,68 @@ func TestFederationTools_GetTools_HaveObjectSchemasAndRequiredFields(t *testing.
 	}
 }
 
+func TestFederationTools_GetTools_ListEphemeralStatusEnum(t *testing.T) {
+	ft := &FederationTools{}
+
+	tools := ft.GetTools()
+	var listTool *shared.MCPTool
+	for i := range tools {
+		if tools[i].Name == "federation/list-ephemeral" {
+			listTool = &tools[i]
+			break
+		}
+	}
+	if listTool == nil {
+		t.Fatal("expected federation/list-ephemeral tool to exist")
+	}
+
+	propertiesRaw, ok := listTool.Parameters["properties"]
+	if !ok {
+		t.Fatal("expected properties in list-ephemeral schema")
+	}
+	properties, ok := propertiesRaw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected properties to be map[string]interface{}, got %T", propertiesRaw)
+	}
+
+	statusRaw, ok := properties["status"]
+	if !ok {
+		t.Fatal("expected status property in list-ephemeral schema")
+	}
+	statusProperty, ok := statusRaw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected status property map, got %T", statusRaw)
+	}
+
+	enumRaw, ok := statusProperty["enum"]
+	if !ok {
+		t.Fatal("expected enum definition for list-ephemeral status property")
+	}
+	enumValues, ok := enumRaw.([]string)
+	if !ok {
+		t.Fatalf("expected status enum as []string, got %T", enumRaw)
+	}
+
+	expected := map[string]bool{
+		"spawning":   true,
+		"active":     true,
+		"completing": true,
+		"terminated": true,
+	}
+	if len(enumValues) != len(expected) {
+		t.Fatalf("expected %d enum values, got %d (%v)", len(expected), len(enumValues), enumValues)
+	}
+	for _, value := range enumValues {
+		if !expected[value] {
+			t.Fatalf("unexpected enum value %q in status property", value)
+		}
+		delete(expected, value)
+	}
+	if len(expected) != 0 {
+		t.Fatalf("missing expected enum values: %v", expected)
+	}
+}
+
 func TestNormalizeCapabilities(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -306,6 +368,277 @@ func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralParity(t *testing.T)
 
 	if len(execAgents) != len(directAgents) {
 		t.Fatalf("expected list parity, got Execute=%d ExecuteTool=%d", len(execAgents), len(directAgents))
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralSwarmFilterParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-target", Name: "Target", MaxAgents: 5}); err != nil {
+		t.Fatalf("failed to register target swarm: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-other", Name: "Other", MaxAgents: 5}); err != nil {
+		t.Fatalf("failed to register other swarm: %v", err)
+	}
+
+	if _, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-target",
+		Type:    "coder",
+		Task:    "target task",
+	}); err != nil {
+		t.Fatalf("failed to spawn target agent: %v", err)
+	}
+	if _, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-other",
+		Type:    "reviewer",
+		Task:    "other task",
+	}); err != nil {
+		t.Fatalf("failed to spawn other agent: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{
+		"swarmId": "  swarm-list-target  ",
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/list-ephemeral", args)
+	if execErr != nil {
+		t.Fatalf("Execute should succeed with swarm filter, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", args)
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed with swarm filter, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execAgents, ok := execResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected Execute data type []*shared.EphemeralAgent, got %T", execResult.Data)
+	}
+	directAgents, ok := directResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type []*shared.EphemeralAgent, got %T", directResult.Data)
+	}
+	if len(execAgents) != len(directAgents) {
+		t.Fatalf("expected list parity, got Execute=%d ExecuteTool=%d", len(execAgents), len(directAgents))
+	}
+	if len(execAgents) == 0 {
+		t.Fatal("expected at least one filtered agent for target swarm")
+	}
+	for _, agent := range execAgents {
+		if agent.SwarmID != "swarm-list-target" {
+			t.Fatalf("expected Execute swarm filter to return only swarm-list-target agents, got %q", agent.SwarmID)
+		}
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralStatusFilterParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-status", Name: "Status Swarm", MaxAgents: 5}); err != nil {
+		t.Fatalf("failed to register status swarm: %v", err)
+	}
+
+	terminatedSpawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-status",
+		Type:    "coder",
+		Task:    "terminate me",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn terminated candidate agent: %v", err)
+	}
+	if err := hub.TerminateAgent(terminatedSpawn.AgentID, "done"); err != nil {
+		t.Fatalf("failed to terminate candidate agent: %v", err)
+	}
+	if _, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-status",
+		Type:    "reviewer",
+		Task:    "stay alive",
+	}); err != nil {
+		t.Fatalf("failed to spawn non-terminated agent: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{
+		"status": "  terminated  ",
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/list-ephemeral", args)
+	if execErr != nil {
+		t.Fatalf("Execute should succeed with status filter, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", args)
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed with status filter, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execAgents, ok := execResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected Execute data type []*shared.EphemeralAgent, got %T", execResult.Data)
+	}
+	directAgents, ok := directResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type []*shared.EphemeralAgent, got %T", directResult.Data)
+	}
+	if len(execAgents) != len(directAgents) {
+		t.Fatalf("expected list parity, got Execute=%d ExecuteTool=%d", len(execAgents), len(directAgents))
+	}
+	if len(execAgents) == 0 {
+		t.Fatal("expected at least one terminated agent")
+	}
+	for _, agent := range execAgents {
+		if agent.Status != shared.EphemeralStatusTerminated {
+			t.Fatalf("expected terminated status filter to return only terminated agents, got %q", agent.Status)
+		}
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralCombinedFilterParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-combined-target", Name: "Combined Target", MaxAgents: 5}); err != nil {
+		t.Fatalf("failed to register target swarm: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-combined-other", Name: "Combined Other", MaxAgents: 5}); err != nil {
+		t.Fatalf("failed to register other swarm: %v", err)
+	}
+
+	targetSpawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-combined-target",
+		Type:    "coder",
+		Task:    "target terminated",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn target agent: %v", err)
+	}
+	if err := hub.TerminateAgent(targetSpawn.AgentID, "done"); err != nil {
+		t.Fatalf("failed to terminate target agent: %v", err)
+	}
+
+	otherSpawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-combined-other",
+		Type:    "reviewer",
+		Task:    "other terminated",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn other agent: %v", err)
+	}
+	if err := hub.TerminateAgent(otherSpawn.AgentID, "done"); err != nil {
+		t.Fatalf("failed to terminate other agent: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{
+		"swarmId": "  swarm-list-combined-target  ",
+		"status":  "  TERMINATED  ",
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/list-ephemeral", args)
+	if execErr != nil {
+		t.Fatalf("Execute should succeed with combined filters, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", args)
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed with combined filters, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execAgents, ok := execResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected Execute data type []*shared.EphemeralAgent, got %T", execResult.Data)
+	}
+	directAgents, ok := directResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type []*shared.EphemeralAgent, got %T", directResult.Data)
+	}
+	if len(execAgents) != len(directAgents) {
+		t.Fatalf("expected list parity, got Execute=%d ExecuteTool=%d", len(execAgents), len(directAgents))
+	}
+	if len(execAgents) == 0 {
+		t.Fatal("expected at least one combined-filter match")
+	}
+	for _, agent := range execAgents {
+		if agent.SwarmID != "swarm-list-combined-target" {
+			t.Fatalf("expected combined filter to constrain swarm, got %q", agent.SwarmID)
+		}
+		if agent.Status != shared.EphemeralStatusTerminated {
+			t.Fatalf("expected combined filter to constrain status, got %q", agent.Status)
+		}
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralInvalidStatusParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{
+		"status": "unknown-status",
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/list-ephemeral", args)
+	if execErr == nil {
+		t.Fatal("expected Execute to return validation error for invalid status")
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result for invalid status")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", args)
+	if directErr == nil {
+		t.Fatal("expected ExecuteTool to return validation error for invalid status")
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+	if execResult.Error != directResult.Error {
+		t.Fatalf("expected error parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
 	}
 }
 
