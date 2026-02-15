@@ -207,6 +207,45 @@ func TestFederationHub_ProposeRejectsInvalidProposalTimeoutConfiguration(t *test
 	}
 }
 
+func TestFederationHub_ProposeRejectsInvalidConsensusQuorumConfiguration(t *testing.T) {
+	invalidQuorumConfigs := []struct {
+		name  string
+		quorum float64
+	}{
+		{name: "zero quorum", quorum: 0},
+		{name: "negative quorum", quorum: -0.1},
+		{name: "greater than one quorum", quorum: 1.1},
+	}
+
+	for _, tc := range invalidQuorumConfigs {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := shared.DefaultFederationConfig()
+			cfg.ConsensusQuorum = tc.quorum
+
+			hub := NewFederationHub(cfg)
+			if err := hub.Initialize(); err != nil {
+				t.Fatalf("failed to initialize hub: %v", err)
+			}
+			t.Cleanup(func() {
+				_ = hub.Shutdown()
+			})
+
+			_, err := hub.Propose("some-proposer", "policy-update", map[string]interface{}{"value": "on"})
+			if err == nil || err.Error() != "consensus quorum must be between 0 and 1" {
+				t.Fatalf("expected invalid quorum validation error, got %v", err)
+			}
+
+			stats := hub.GetStats()
+			if stats.PendingProposals != 0 {
+				t.Fatalf("expected pending proposals to remain 0, got %d", stats.PendingProposals)
+			}
+			if proposals := hub.GetProposals(); len(proposals) != 0 {
+				t.Fatalf("expected no proposals to be stored for invalid quorum, got %d", len(proposals))
+			}
+		})
+	}
+}
+
 func registerTestSwarm(t *testing.T, hub *FederationHub, swarmID, name string) {
 	t.Helper()
 
