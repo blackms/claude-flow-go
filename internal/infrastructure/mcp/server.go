@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"sync"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/hooks"
@@ -336,6 +337,10 @@ func (s *Server) ListTools() []shared.MCPTool {
 			}
 		}
 	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Name < result[j].Name
+	})
 
 	return result
 }
