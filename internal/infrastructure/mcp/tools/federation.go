@@ -198,6 +198,12 @@ func (t *FederationTools) GetTools() []shared.MCPTool {
 	}
 }
 
+// Execute executes a federation tool using MCPToolProvider signature.
+func (t *FederationTools) Execute(ctx context.Context, toolName string, params map[string]interface{}) (*shared.MCPToolResult, error) {
+	result, err := t.ExecuteTool(ctx, toolName, params)
+	return &result, err
+}
+
 // ExecuteTool executes a federation tool.
 func (t *FederationTools) ExecuteTool(ctx context.Context, name string, args map[string]interface{}) (shared.MCPToolResult, error) {
 	switch name {
