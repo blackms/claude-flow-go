@@ -178,6 +178,40 @@ func normalizeAndCloneTool(tool shared.MCPTool) (shared.MCPTool, bool) {
 	return tool, true
 }
 
+func providerGetTools(provider shared.MCPToolProvider) (tools []shared.MCPTool) {
+	if provider == nil {
+		return nil
+	}
+
+	defer func() {
+		if recover() != nil {
+			tools = nil
+		}
+	}()
+
+	return provider.GetTools()
+}
+
+func providerExecute(
+	provider shared.MCPToolProvider,
+	ctx context.Context,
+	toolName string,
+	params map[string]interface{},
+) (result *shared.MCPToolResult, err error) {
+	if provider == nil {
+		return nil, fmt.Errorf("provider is nil")
+	}
+
+	defer func() {
+		if recover() != nil {
+			result = nil
+			err = fmt.Errorf("provider execution panic")
+		}
+	}()
+
+	return provider.Execute(ctx, toolName, params)
+}
+
 // NewServer creates a new MCP server.
 func NewServer(opts Options) *Server {
 	port := opts.Port
@@ -323,10 +357,7 @@ func (s *Server) Start() error {
 
 	// Build tool registry
 	for _, provider := range s.tools {
-		if provider == nil {
-			continue
-		}
-		for _, tool := range provider.GetTools() {
+		for _, tool := range providerGetTools(provider) {
 			normalized, ok := normalizeAndCloneTool(tool)
 			if !ok {
 				continue
@@ -444,10 +475,7 @@ func (s *Server) ListTools() []shared.MCPTool {
 
 	// Add tools from providers
 	for _, provider := range s.tools {
-		if provider == nil {
-			continue
-		}
-		for _, tool := range provider.GetTools() {
+		for _, tool := range providerGetTools(provider) {
 			normalized, ok := normalizeAndCloneTool(tool)
 			if !ok {
 				continue
@@ -525,12 +553,12 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 
 	// Find the tool provider that can handle this request
 	for _, provider := range providers {
-		if provider == nil {
-			continue // Ignore malformed provider entries
-		}
-		result, err := provider.Execute(ctx, method, request.Params)
+		result, err := providerExecute(provider, ctx, method, request.Params)
 		if err != nil {
 			continue // Try next provider
+		}
+		if result == nil {
+			continue // Provider did not handle this request
 		}
 
 		return shared.MCPResponse{
@@ -614,11 +642,11 @@ func (s *Server) handleToolsCall(ctx context.Context, request shared.MCPRequest)
 	s.mu.RUnlock()
 
 	for _, provider := range providers {
-		if provider == nil {
+		result, err := providerExecute(provider, ctx, toolName, arguments)
+		if err != nil {
 			continue
 		}
-		result, err := provider.Execute(ctx, toolName, arguments)
-		if err != nil {
+		if result == nil {
 			continue
 		}
 		resultJSON, _ := json.Marshal(result)
@@ -967,7 +995,7 @@ func (s *Server) AddToolProvider(provider shared.MCPToolProvider) {
 	s.tools = append(s.tools, provider)
 
 	// Register tools from the provider
-	for _, tool := range provider.GetTools() {
+	for _, tool := range providerGetTools(provider) {
 		normalized, ok := normalizeAndCloneTool(tool)
 		if !ok {
 			continue

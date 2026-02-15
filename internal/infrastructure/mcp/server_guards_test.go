@@ -52,6 +52,25 @@ func (p mixedNameProvider) Execute(ctx context.Context, toolName string, params 
 	return nil, nil
 }
 
+type panicProvider struct {
+	panicOnGetTools bool
+	panicOnExecute  bool
+}
+
+func (p panicProvider) GetTools() []shared.MCPTool {
+	if p.panicOnGetTools {
+		panic("panic provider GetTools")
+	}
+	return []shared.MCPTool{{Name: "guard/panic-provider"}}
+}
+
+func (p panicProvider) Execute(ctx context.Context, toolName string, params map[string]interface{}) (*shared.MCPToolResult, error) {
+	if p.panicOnExecute {
+		panic("panic provider Execute")
+	}
+	return nil, nil
+}
+
 func TestServer_NilReceiverMethodsFailGracefully(t *testing.T) {
 	var server *Server
 
@@ -458,6 +477,70 @@ func TestServer_HandleRequestValidationPrecedence(t *testing.T) {
 	}
 	if resp.Error.Message != "mcp server is not initialized" {
 		t.Fatalf("expected initialization error precedence, got %q", resp.Error.Message)
+	}
+}
+
+func TestServer_HandleRequestIgnoresNilResultProviders(t *testing.T) {
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			guardTestProvider{},
+		},
+	})
+
+	methodResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "nil-result-method",
+		Method: "guard/unknown-method",
+		Params: map[string]interface{}{},
+	})
+	if methodResp.Error == nil || methodResp.Error.Message != "Method not found: guard/unknown-method" {
+		t.Fatalf("expected method-not-found for nil result provider path, got %+v", methodResp)
+	}
+
+	toolResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "nil-result-tool-call",
+		Method: "tools/call",
+		Params: map[string]interface{}{
+			"name":      "guard/unknown-tool",
+			"arguments": map[string]interface{}{},
+		},
+	})
+	if toolResp.Error == nil || toolResp.Error.Message != "Tool not found: guard/unknown-tool" {
+		t.Fatalf("expected tool-not-found for nil result provider path, got %+v", toolResp)
+	}
+}
+
+func TestServer_PanickingProviderIsIsolated(t *testing.T) {
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			panicProvider{panicOnGetTools: true, panicOnExecute: true},
+			guardTestProvider{},
+		},
+	})
+
+	tools := server.ListTools()
+	var sawGuard bool
+	for _, tool := range tools {
+		if tool.Name == "guard/provider-tool" {
+			sawGuard = true
+		}
+		if tool.Name == "guard/panic-provider" {
+			t.Fatalf("expected panicking provider tool to be omitted, got %+v", tools)
+		}
+	}
+	if !sawGuard {
+		t.Fatalf("expected non-panicking provider tool to remain available, got %+v", tools)
+	}
+
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "panic-provider-dispatch",
+		Method: "guard/provider-tool",
+		Params: map[string]interface{}{},
+	})
+	if resp.Error != nil {
+		t.Fatalf("expected dispatch to skip panicking provider and succeed, got %v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Fatal("expected non-nil result from fallback provider")
 	}
 }
 
