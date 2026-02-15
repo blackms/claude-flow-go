@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -63,6 +64,11 @@ type Options struct {
 	SessionConfig       *shared.SessionConfig
 }
 
+type cloneVisit struct {
+	typ reflect.Type
+	ptr uintptr
+}
+
 func (s *Server) isConfigured() bool {
 	if s == nil {
 		return false
@@ -93,11 +99,7 @@ func cloneCapabilities(c *shared.MCPCapabilities) *shared.MCPCapabilities {
 
 	cloned := *c
 	if c.Experimental != nil {
-		experimental := make(map[string]interface{}, len(c.Experimental))
-		for key, value := range c.Experimental {
-			experimental[key] = cloneInterfaceValue(value)
-		}
-		cloned.Experimental = experimental
+		cloned.Experimental = cloneMapStringInterface(c.Experimental)
 	}
 	if c.Logging != nil {
 		logging := *c.Logging
@@ -127,61 +129,119 @@ func normalizeToolName(name string) string {
 }
 
 func cloneInterfaceValue(value interface{}) interface{} {
-	switch typed := value.(type) {
-	case map[string]interface{}:
-		return cloneMapStringInterface(typed)
-	case []interface{}:
-		cloned := make([]interface{}, len(typed))
-		for i := range typed {
-			cloned[i] = cloneInterfaceValue(typed[i])
+	if value == nil {
+		return nil
+	}
+
+	cloned := cloneReflectValue(reflect.ValueOf(value), make(map[cloneVisit]reflect.Value))
+	if !cloned.IsValid() {
+		return nil
+	}
+	return cloned.Interface()
+}
+
+func cloneReflectValue(value reflect.Value, seen map[cloneVisit]reflect.Value) reflect.Value {
+	if !value.IsValid() {
+		return value
+	}
+
+	switch value.Kind() {
+	case reflect.Map:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
 		}
-		return cloned
-	case []string:
-		return append([]string(nil), typed...)
-	case []int:
-		return append([]int(nil), typed...)
-	case []int64:
-		return append([]int64(nil), typed...)
-	case []float64:
-		return append([]float64(nil), typed...)
-	case []bool:
-		return append([]bool(nil), typed...)
-	case []map[string]interface{}:
-		cloned := make([]map[string]interface{}, len(typed))
-		for i := range typed {
-			cloned[i] = cloneMapStringInterface(typed[i])
-		}
-		return cloned
-	case []map[string]string:
-		cloned := make([]map[string]string, len(typed))
-		for i := range typed {
-			entry := make(map[string]string, len(typed[i]))
-			for key, item := range typed[i] {
-				entry[key] = item
+
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if visit.ptr != 0 {
+			if cached, ok := seen[visit]; ok {
+				return cached
 			}
-			cloned[i] = entry
 		}
-		return cloned
-	case map[string]string:
-		cloned := make(map[string]string, len(typed))
-		for key, item := range typed {
-			cloned[key] = item
+
+		clonedMap := reflect.MakeMapWithSize(value.Type(), value.Len())
+		if visit.ptr != 0 {
+			seen[visit] = clonedMap
 		}
-		return cloned
-	case map[string][]string:
-		cloned := make(map[string][]string, len(typed))
-		for key, item := range typed {
-			cloned[key] = append([]string(nil), item...)
+		for _, key := range value.MapKeys() {
+			clonedKey := cloneReflectValue(key, seen)
+			clonedValue := cloneReflectValue(value.MapIndex(key), seen)
+			clonedMap.SetMapIndex(clonedKey, clonedValue)
 		}
-		return cloned
-	case map[string]map[string]interface{}:
-		cloned := make(map[string]map[string]interface{}, len(typed))
-		for key, item := range typed {
-			cloned[key] = cloneMapStringInterface(item)
+		return clonedMap
+
+	case reflect.Slice:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
 		}
-		return cloned
+
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if visit.ptr != 0 {
+			if cached, ok := seen[visit]; ok {
+				return cached
+			}
+		}
+
+		clonedSlice := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+		if visit.ptr != 0 {
+			seen[visit] = clonedSlice
+		}
+		for i := 0; i < value.Len(); i++ {
+			clonedSlice.Index(i).Set(cloneReflectValue(value.Index(i), seen))
+		}
+		return clonedSlice
+
+	case reflect.Array:
+		clonedArray := reflect.New(value.Type()).Elem()
+		for i := 0; i < value.Len(); i++ {
+			clonedArray.Index(i).Set(cloneReflectValue(value.Index(i), seen))
+		}
+		return clonedArray
+
+	case reflect.Ptr:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if cached, ok := seen[visit]; ok {
+			return cached
+		}
+
+		clonedPointer := reflect.New(value.Type().Elem())
+		seen[visit] = clonedPointer
+		clonedPointer.Elem().Set(cloneReflectValue(value.Elem(), seen))
+		return clonedPointer
+
+	case reflect.Interface:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		return cloneReflectValue(value.Elem(), seen)
+
+	case reflect.Struct:
+		clonedStruct := reflect.New(value.Type()).Elem()
+		clonedStruct.Set(value)
+		for i := 0; i < value.NumField(); i++ {
+			destinationField := clonedStruct.Field(i)
+			if !destinationField.CanSet() {
+				continue
+			}
+
+			clonedField := cloneReflectValue(value.Field(i), seen)
+			if !clonedField.IsValid() {
+				continue
+			}
+
+			if clonedField.Type().AssignableTo(destinationField.Type()) {
+				destinationField.Set(clonedField)
+			} else if clonedField.Type().ConvertibleTo(destinationField.Type()) {
+				destinationField.Set(clonedField.Convert(destinationField.Type()))
+			}
+		}
+		return clonedStruct
+
 	default:
-		return typed
+		return value
 	}
 }
 
@@ -189,9 +249,9 @@ func cloneMapStringInterface(value map[string]interface{}) map[string]interface{
 	if value == nil {
 		return nil
 	}
-	cloned := make(map[string]interface{}, len(value))
-	for key, item := range value {
-		cloned[key] = cloneInterfaceValue(item)
+	cloned, ok := cloneInterfaceValue(value).(map[string]interface{})
+	if !ok {
+		return nil
 	}
 	return cloned
 }

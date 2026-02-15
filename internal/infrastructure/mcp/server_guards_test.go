@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -939,5 +940,99 @@ func TestServer_ListToolsDefensiveCopyHandlesTypedNestedContainers(t *testing.T)
 	secondTypedNestedMap := second["typedNestedMap"].(map[string]map[string]interface{})
 	if secondTypedNestedMap["config"]["enabled"] != true {
 		t.Fatalf("expected typedNestedMap clone isolation, got %v", secondTypedNestedMap["config"]["enabled"])
+	}
+}
+
+func TestServer_ListToolsDefensiveCopyHandlesCyclicSchema(t *testing.T) {
+	server := NewServer(Options{})
+	cyclic := map[string]interface{}{
+		"type": "object",
+	}
+	cyclic["self"] = cyclic
+
+	server.RegisterTool(shared.MCPTool{
+		Name:        "guard/cyclic-schema",
+		Description: "cyclic schema",
+		Parameters:  cyclic,
+	})
+
+	getSchema := func() map[string]interface{} {
+		for _, tool := range server.ListTools() {
+			if tool.Name == "guard/cyclic-schema" {
+				return tool.Parameters
+			}
+		}
+		return nil
+	}
+
+	first := getSchema()
+	if first == nil {
+		t.Fatal("expected cyclic schema")
+	}
+	firstSelf, ok := first["self"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected cyclic self map, got %T", first["self"])
+	}
+	if reflect.ValueOf(firstSelf).Pointer() != reflect.ValueOf(first).Pointer() {
+		t.Fatalf("expected cloned schema self-reference cycle to be preserved")
+	}
+
+	firstSelf["type"] = "mutated"
+
+	second := getSchema()
+	if second == nil {
+		t.Fatal("expected cyclic schema on second read")
+	}
+	if second["type"] != "object" {
+		t.Fatalf("expected cyclic schema root value isolation, got %v", second["type"])
+	}
+	secondSelf, ok := second["self"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected second cyclic self map, got %T", second["self"])
+	}
+	if secondSelf["type"] != "object" {
+		t.Fatalf("expected cyclic schema nested value isolation, got %v", secondSelf["type"])
+	}
+}
+
+func TestServer_GetCapabilitiesDefensiveCopyHandlesCyclicExperimental(t *testing.T) {
+	server := NewServer(Options{})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	server.mu.Lock()
+	server.capabilities.Experimental = map[string]interface{}{
+		"value": "ok",
+	}
+	server.capabilities.Experimental["self"] = server.capabilities.Experimental
+	server.mu.Unlock()
+
+	caps := server.GetCapabilities()
+	if caps == nil || caps.Experimental == nil {
+		t.Fatal("expected capabilities experimental map")
+	}
+	capsSelf, ok := caps.Experimental["self"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected cloned experimental self map, got %T", caps.Experimental["self"])
+	}
+	if reflect.ValueOf(capsSelf).Pointer() != reflect.ValueOf(caps.Experimental).Pointer() {
+		t.Fatalf("expected experimental self-reference cycle to be preserved")
+	}
+	capsSelf["value"] = "mutated"
+
+	refetched := server.GetCapabilities()
+	if refetched == nil || refetched.Experimental == nil {
+		t.Fatal("expected refetched capabilities experimental map")
+	}
+	if got := refetched.Experimental["value"]; got != "ok" {
+		t.Fatalf("expected cyclic experimental isolation, got %v", got)
+	}
+	refetchedSelf, ok := refetched.Experimental["self"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected refetched experimental self map, got %T", refetched.Experimental["self"])
+	}
+	if got := refetchedSelf["value"]; got != "ok" {
+		t.Fatalf("expected refetched cyclic nested value isolation, got %v", got)
 	}
 }
