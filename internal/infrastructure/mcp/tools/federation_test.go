@@ -272,6 +272,50 @@ func TestNormalizeCapabilities(t *testing.T) {
 	}
 }
 
+func TestParseEphemeralAgentStatus(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		expected     shared.EphemeralAgentStatus
+		expectValid  bool
+	}{
+		{
+			name:        "valid lowercase",
+			input:       "active",
+			expected:    shared.EphemeralStatusActive,
+			expectValid: true,
+		},
+		{
+			name:        "valid uppercase with padding",
+			input:       "  TERMINATED  ",
+			expected:    shared.EphemeralStatusTerminated,
+			expectValid: true,
+		},
+		{
+			name:        "invalid value",
+			input:       "paused",
+			expectValid: false,
+		},
+		{
+			name:        "blank",
+			input:       "   ",
+			expectValid: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := parseEphemeralAgentStatus(tt.input)
+			if ok != tt.expectValid {
+				t.Fatalf("expected valid=%v, got %v (status=%q)", tt.expectValid, ok, got)
+			}
+			if tt.expectValid && got != tt.expected {
+				t.Fatalf("expected status %q, got %q", tt.expected, got)
+			}
+		})
+	}
+}
+
 func TestFederationTools_Execute_UnknownTool(t *testing.T) {
 	ft := &FederationTools{}
 
