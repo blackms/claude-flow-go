@@ -222,6 +222,9 @@ func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 
 	hasMemoryStore := false
 	hasMemoryRetrieve := false
+	hasAgentSpawn := false
+	hasConfigGet := false
+	hasOrchestratePlan := false
 	hasFederationStatus := false
 	hasHooksList := false
 	seen := make(map[string]bool, len(tools))
@@ -233,6 +236,12 @@ func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 		seen[tool.Name] = true
 
 		switch tool.Name {
+		case "agent_spawn":
+			hasAgentSpawn = true
+		case "config_get":
+			hasConfigGet = true
+		case "orchestrate_plan":
+			hasOrchestratePlan = true
 		case "memory_store":
 			hasMemoryStore = true
 		case "memory_retrieve":
@@ -246,6 +255,12 @@ func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 
 	if !hasMemoryStore || !hasMemoryRetrieve {
 		t.Fatalf("expected memory tools to be registered; got store=%v retrieve=%v", hasMemoryStore, hasMemoryRetrieve)
+	}
+	if hasAgentSpawn || hasConfigGet || hasOrchestratePlan {
+		t.Fatalf(
+			"expected coordinator tools to be absent in memory-only config; got agent=%v config=%v orchestrate=%v",
+			hasAgentSpawn, hasConfigGet, hasOrchestratePlan,
+		)
 	}
 	if !hasFederationStatus || !hasHooksList {
 		t.Fatalf("expected federation/hooks tools to remain registered; got federation=%v hooks=%v", hasFederationStatus, hasHooksList)
