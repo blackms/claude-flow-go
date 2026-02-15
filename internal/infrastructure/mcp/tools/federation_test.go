@@ -3637,6 +3637,74 @@ func TestFederationTools_ExecuteAndExecuteTool_ReadToolsAfterShutdownParity(t *t
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ReadToolsBeforeInitializeParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	ft := NewFederationTools(hub)
+
+	execStatus, execStatusErr := ft.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if execStatusErr != nil {
+		t.Fatalf("expected Execute status before initialize to succeed, got %v", execStatusErr)
+	}
+	if execStatus == nil || !execStatus.Success {
+		t.Fatalf("expected Execute status success before initialize, got %+v", execStatus)
+	}
+
+	directStatus, directStatusErr := ft.ExecuteTool(context.Background(), "federation/status", map[string]interface{}{})
+	if directStatusErr != nil {
+		t.Fatalf("expected ExecuteTool status before initialize to succeed, got %v", directStatusErr)
+	}
+	if !directStatus.Success {
+		t.Fatalf("expected ExecuteTool status success before initialize, got %+v", directStatus)
+	}
+
+	execStatusData, ok := execStatus.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute status data map, got %T", execStatus.Data)
+	}
+	directStatusData, ok := directStatus.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool status data map, got %T", directStatus.Data)
+	}
+	execStats, ok := execStatusData["stats"].(shared.FederationStats)
+	if !ok {
+		t.Fatalf("expected Execute stats shared.FederationStats, got %T", execStatusData["stats"])
+	}
+	directStats, ok := directStatusData["stats"].(shared.FederationStats)
+	if !ok {
+		t.Fatalf("expected ExecuteTool stats shared.FederationStats, got %T", directStatusData["stats"])
+	}
+	if execStats.TotalSwarms != 0 || directStats.TotalSwarms != 0 {
+		t.Fatalf("expected zero swarms before initialize, got Execute=%d ExecuteTool=%d", execStats.TotalSwarms, directStats.TotalSwarms)
+	}
+	if execStats.ActiveAgents != 0 || directStats.ActiveAgents != 0 {
+		t.Fatalf("expected zero active agents before initialize, got Execute=%d ExecuteTool=%d", execStats.ActiveAgents, directStats.ActiveAgents)
+	}
+
+	execList, execListErr := ft.Execute(context.Background(), "federation/list-ephemeral", map[string]interface{}{})
+	if execListErr != nil {
+		t.Fatalf("expected Execute list-ephemeral before initialize to succeed, got %v", execListErr)
+	}
+	directList, directListErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", map[string]interface{}{})
+	if directListErr != nil {
+		t.Fatalf("expected ExecuteTool list-ephemeral before initialize to succeed, got %v", directListErr)
+	}
+	if execList == nil || !execList.Success || !directList.Success {
+		t.Fatalf("expected list success parity before initialize, got Execute=%+v ExecuteTool=%+v", execList, directList)
+	}
+
+	execAgents, ok := execList.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected Execute list data []*shared.EphemeralAgent, got %T", execList.Data)
+	}
+	directAgents, ok := directList.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected ExecuteTool list data []*shared.EphemeralAgent, got %T", directList.Data)
+	}
+	if len(execAgents) != 0 || len(directAgents) != 0 {
+		t.Fatalf("expected empty agent lists before initialize, got Execute=%d ExecuteTool=%d", len(execAgents), len(directAgents))
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_MutatingToolsRejectBeforeInitializeParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	ft := NewFederationTools(hub)
