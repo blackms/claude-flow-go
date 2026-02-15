@@ -3423,6 +3423,16 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 			expectedError: "ttl must be an integer",
 		},
 		{
+			name:     "spawn ttl nil",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  nil,
+			},
+			expectedError: "ttl must be an integer",
+		},
+		{
 			name:     "spawn ttl non-positive",
 			toolName: "federation/spawn-ephemeral",
 			args: map[string]interface{}{
@@ -3494,6 +3504,16 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 			expectedError: "capabilities must be an array of strings",
 		},
 		{
+			name:     "register maxAgents nil",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      "swarm-one",
+				"maxAgents": nil,
+			},
+			expectedError: "maxAgents must be an integer",
+		},
+		{
 			name:     "vote approve wrong type",
 			toolName: "federation/vote",
 			args: map[string]interface{}{
@@ -3520,6 +3540,14 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 				"status": true,
 			},
 			expectedError: "status must be a string",
+		},
+		{
+			name:     "list swarmId nil",
+			toolName: "federation/list-ephemeral",
+			args: map[string]interface{}{
+				"swarmId": nil,
+			},
+			expectedError: "swarmId must be a string",
 		},
 		{
 			name:     "list status nil",
@@ -3555,6 +3583,25 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 				"payload":       map[string]interface{}{"event": "x"},
 			},
 			expectedError: "sourceSwarmId must be a string",
+		},
+		{
+			name:     "broadcast payload nil",
+			toolName: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": "swarm-1",
+				"payload":       nil,
+			},
+			expectedError: "payload is required",
+		},
+		{
+			name:     "propose value nil",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "swarm-1",
+				"proposalType": "scale",
+				"value":        nil,
+			},
+			expectedError: "value is required",
 		},
 	}
 
