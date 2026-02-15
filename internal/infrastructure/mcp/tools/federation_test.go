@@ -103,40 +103,88 @@ func TestFederationTools_ExecuteAndExecuteTool_RequireConfiguredHub(t *testing.T
 
 func TestFederationTools_ExecuteAndExecuteTool_ZeroValueInternalHubRejectsMutations(t *testing.T) {
 	ft := NewFederationTools(&federation.FederationHub{})
-	args := map[string]interface{}{
-		"swarmId":   "zero-value-hub-swarm",
-		"name":      "Zero Value Hub Swarm",
-		"maxAgents": 1,
+	testCases := []struct {
+		name string
+		args map[string]interface{}
+	}{
+		{
+			name: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "zero-value-hub-swarm",
+				"name":      "Zero Value Hub Swarm",
+				"maxAgents": 1,
+			},
+		},
+		{
+			name: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "zero-value-hub-spawn",
+			},
+		},
+		{
+			name: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": "zero-value-agent",
+			},
+		},
+		{
+			name: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": "zero-value-source",
+				"payload":       map[string]interface{}{"hello": "world"},
+			},
+		},
+		{
+			name: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "zero-value-source",
+				"proposalType": "sync",
+				"value":        map[string]interface{}{"k": "v"},
+			},
+		},
+		{
+			name: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "zero-value-source",
+				"proposalId": "zero-value-proposal",
+				"approve":    true,
+			},
+		},
 	}
 
-	execResult, execErr := ft.Execute(context.Background(), "federation/register-swarm", args)
-	if execErr == nil {
-		t.Fatal("expected Execute to fail with zero-value internal hub")
-	}
-	if execResult == nil {
-		t.Fatal("expected Execute result with zero-value internal hub")
-	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			execResult, execErr := ft.Execute(context.Background(), tc.name, tc.args)
+			if execErr == nil {
+				t.Fatal("expected Execute to fail with zero-value internal hub")
+			}
+			if execResult == nil {
+				t.Fatal("expected Execute result with zero-value internal hub")
+			}
 
-	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/register-swarm", args)
-	if directErr == nil {
-		t.Fatal("expected ExecuteTool to fail with zero-value internal hub")
-	}
+			directResult, directErr := ft.ExecuteTool(context.Background(), tc.name, tc.args)
+			if directErr == nil {
+				t.Fatal("expected ExecuteTool to fail with zero-value internal hub")
+			}
 
-	const expectedErr = "federation hub is not configured"
-	if execErr.Error() != expectedErr {
-		t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
-	}
-	if directErr.Error() != expectedErr {
-		t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
-	}
-	if execResult.Error != expectedErr {
-		t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
-	}
-	if directResult.Error != expectedErr {
-		t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
-	}
-	if execResult.Success || directResult.Success {
-		t.Fatalf("expected both paths to fail, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+			const expectedErr = "federation hub is not configured"
+			if execErr.Error() != expectedErr {
+				t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
+			}
+			if directErr.Error() != expectedErr {
+				t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
+			}
+			if execResult.Error != expectedErr {
+				t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
+			}
+			if directResult.Error != expectedErr {
+				t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
+			}
+			if execResult.Success || directResult.Success {
+				t.Fatalf("expected both paths to fail, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+			}
+		})
 	}
 }
 
