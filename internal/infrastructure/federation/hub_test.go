@@ -510,3 +510,122 @@ func TestFederationHub_RegisterSwarmTrimsFields(t *testing.T) {
 		}
 	}
 }
+
+func TestFederationHub_SwarmOperationsTrimIdentifiers(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-op-trim",
+		Name:      "Swarm Operation Trim",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register swarm: %v", err)
+	}
+
+	if _, ok := hub.GetSwarm("  swarm-op-trim  "); !ok {
+		t.Fatal("expected GetSwarm to resolve trimmed swarm identifier")
+	}
+
+	if err := hub.Heartbeat("  swarm-op-trim  "); err != nil {
+		t.Fatalf("expected heartbeat with padded swarmId to succeed, got %v", err)
+	}
+
+	if err := hub.UnregisterSwarm("  swarm-op-trim  "); err != nil {
+		t.Fatalf("expected unregister with padded swarmId to succeed, got %v", err)
+	}
+
+	if _, ok := hub.GetSwarm("swarm-op-trim"); ok {
+		t.Fatal("expected swarm to be unregistered")
+	}
+
+	if err := hub.Heartbeat("   "); err == nil || err.Error() != "swarmId is required" {
+		t.Fatalf("expected heartbeat blank id error, got %v", err)
+	}
+
+	if err := hub.UnregisterSwarm("   "); err == nil || err.Error() != "swarmId is required" {
+		t.Fatalf("expected unregister blank id error, got %v", err)
+	}
+}
+
+func TestFederationHub_AgentOperationsTrimIdentifiers(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-agent-trim",
+		Name:      "Agent Trim Swarm",
+		MaxAgents: 4,
+	}); err != nil {
+		t.Fatalf("failed to register swarm: %v", err)
+	}
+
+	firstSpawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-agent-trim",
+		Type:    "coder",
+		Task:    "first task",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn first agent: %v", err)
+	}
+
+	if _, ok := hub.GetAgent("  " + firstSpawn.AgentID + "  "); !ok {
+		t.Fatal("expected GetAgent to resolve trimmed agent identifier")
+	}
+
+	agentsBySwarm := hub.GetAgentsBySwarm("  swarm-agent-trim  ")
+	if len(agentsBySwarm) != 1 {
+		t.Fatalf("expected one agent from trimmed swarm lookup, got %d", len(agentsBySwarm))
+	}
+
+	if err := hub.CompleteAgent("  "+firstSpawn.AgentID+"  ", map[string]interface{}{"ok": true}); err != nil {
+		t.Fatalf("expected complete with padded agentId to succeed, got %v", err)
+	}
+
+	secondSpawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-agent-trim",
+		Type:    "reviewer",
+		Task:    "second task",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn second agent: %v", err)
+	}
+
+	if err := hub.TerminateAgent("  "+secondSpawn.AgentID+"  ", "terminated for test"); err != nil {
+		t.Fatalf("expected terminate with padded agentId to succeed, got %v", err)
+	}
+
+	secondAgent, ok := hub.GetAgent(secondSpawn.AgentID)
+	if !ok {
+		t.Fatal("expected terminated agent to remain discoverable")
+	}
+	if secondAgent.Status != shared.EphemeralStatusTerminated {
+		t.Fatalf("expected second agent to be terminated, got %q", secondAgent.Status)
+	}
+	if secondAgent.Error != "terminated for test" {
+		t.Fatalf("expected terminate error to be recorded, got %q", secondAgent.Error)
+	}
+
+	if err := hub.CompleteAgent("   ", nil); err == nil || err.Error() != "agentId is required" {
+		t.Fatalf("expected complete blank id error, got %v", err)
+	}
+	if err := hub.TerminateAgent("   ", ""); err == nil || err.Error() != "agentId is required" {
+		t.Fatalf("expected terminate blank id error, got %v", err)
+	}
+	if _, ok := hub.GetAgent("   "); ok {
+		t.Fatal("expected blank GetAgent lookup to fail")
+	}
+	if agents := hub.GetAgentsBySwarm("   "); len(agents) != 0 {
+		t.Fatalf("expected blank swarm lookup to return no agents, got %d", len(agents))
+	}
+}

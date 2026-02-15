@@ -181,6 +181,11 @@ func (fh *FederationHub) UnregisterSwarm(swarmID string) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
+	swarmID = strings.TrimSpace(swarmID)
+	if swarmID == "" {
+		return fmt.Errorf("swarmId is required")
+	}
+
 	swarm, exists := fh.swarms[swarmID]
 	if !exists {
 		return fmt.Errorf("swarm %s not found", swarmID)
@@ -212,6 +217,11 @@ func (fh *FederationHub) Heartbeat(swarmID string) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
+	swarmID = strings.TrimSpace(swarmID)
+	if swarmID == "" {
+		return fmt.Errorf("swarmId is required")
+	}
+
 	swarm, exists := fh.swarms[swarmID]
 	if !exists {
 		return fmt.Errorf("swarm %s not found", swarmID)
@@ -236,6 +246,10 @@ func (fh *FederationHub) Heartbeat(swarmID string) error {
 func (fh *FederationHub) GetSwarm(swarmID string) (*shared.SwarmRegistration, bool) {
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
+	swarmID = strings.TrimSpace(swarmID)
+	if swarmID == "" {
+		return nil, false
+	}
 	swarm, exists := fh.swarms[swarmID]
 	return swarm, exists
 }

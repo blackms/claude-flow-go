@@ -169,6 +169,11 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return fmt.Errorf("agentId is required")
+	}
+
 	agent, exists := fh.ephemeralAgents[agentID]
 	if !exists {
 		return fmt.Errorf("agent %s not found", agentID)
@@ -210,6 +215,10 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 func (fh *FederationHub) TerminateAgent(agentID string, errorMsg string) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return fmt.Errorf("agentId is required")
+	}
 	return fh.terminateAgentInternal(agentID, errorMsg)
 }
 
@@ -273,6 +282,10 @@ func (fh *FederationHub) terminateAgentInternal(agentID string, errorMsg string)
 func (fh *FederationHub) GetAgent(agentID string) (*shared.EphemeralAgent, bool) {
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, false
+	}
 	agent, exists := fh.ephemeralAgents[agentID]
 	return agent, exists
 }
@@ -307,6 +320,11 @@ func (fh *FederationHub) GetActiveAgents() []*shared.EphemeralAgent {
 func (fh *FederationHub) GetAgentsBySwarm(swarmID string) []*shared.EphemeralAgent {
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
+
+	swarmID = strings.TrimSpace(swarmID)
+	if swarmID == "" {
+		return []*shared.EphemeralAgent{}
+	}
 
 	agents := make([]*shared.EphemeralAgent, 0)
 	if agentIDs, exists := fh.agentsBySwarm[swarmID]; exists {
