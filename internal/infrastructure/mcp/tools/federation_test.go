@@ -3537,6 +3537,106 @@ func TestFederationTools_ExecuteAndExecuteTool_MutatingToolsRejectAfterHubShutdo
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ReadToolsAfterShutdownParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "shutdown-read-swarm",
+		Name:      "Shutdown Read Swarm",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register swarm: %v", err)
+	}
+
+	spawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "shutdown-read-swarm",
+		Type:    "coder",
+		Task:    "shutdown-read-task",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn agent: %v", err)
+	}
+
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("failed to shutdown hub: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+
+	execStatus, execStatusErr := ft.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if execStatusErr != nil {
+		t.Fatalf("expected Execute status to succeed after shutdown, got %v", execStatusErr)
+	}
+	if execStatus == nil || !execStatus.Success {
+		t.Fatalf("expected Execute status success after shutdown, got %+v", execStatus)
+	}
+
+	directStatus, directStatusErr := ft.ExecuteTool(context.Background(), "federation/status", map[string]interface{}{})
+	if directStatusErr != nil {
+		t.Fatalf("expected ExecuteTool status to succeed after shutdown, got %v", directStatusErr)
+	}
+	if !directStatus.Success {
+		t.Fatalf("expected ExecuteTool status success after shutdown, got %+v", directStatus)
+	}
+
+	execStatusData, ok := execStatus.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute status data map, got %T", execStatus.Data)
+	}
+	directStatusData, ok := directStatus.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool status data map, got %T", directStatus.Data)
+	}
+
+	execStats, ok := execStatusData["stats"].(shared.FederationStats)
+	if !ok {
+		t.Fatalf("expected Execute status stats shared.FederationStats, got %T", execStatusData["stats"])
+	}
+	directStats, ok := directStatusData["stats"].(shared.FederationStats)
+	if !ok {
+		t.Fatalf("expected ExecuteTool status stats shared.FederationStats, got %T", directStatusData["stats"])
+	}
+	if execStats.ActiveAgents != 0 || directStats.ActiveAgents != 0 {
+		t.Fatalf("expected no active agents after shutdown, got Execute=%d ExecuteTool=%d", execStats.ActiveAgents, directStats.ActiveAgents)
+	}
+
+	execList, execListErr := ft.Execute(context.Background(), "federation/list-ephemeral", map[string]interface{}{})
+	if execListErr != nil {
+		t.Fatalf("expected Execute list-ephemeral to succeed after shutdown, got %v", execListErr)
+	}
+	directList, directListErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", map[string]interface{}{})
+	if directListErr != nil {
+		t.Fatalf("expected ExecuteTool list-ephemeral to succeed after shutdown, got %v", directListErr)
+	}
+	if execList == nil || !execList.Success || !directList.Success {
+		t.Fatalf("expected list success parity after shutdown, got Execute=%+v ExecuteTool=%+v", execList, directList)
+	}
+
+	execAgents, ok := execList.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected Execute list data []*shared.EphemeralAgent, got %T", execList.Data)
+	}
+	directAgents, ok := directList.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected ExecuteTool list data []*shared.EphemeralAgent, got %T", directList.Data)
+	}
+	if len(execAgents) != len(directAgents) {
+		t.Fatalf("expected list parity lengths, got Execute=%d ExecuteTool=%d", len(execAgents), len(directAgents))
+	}
+	if len(execAgents) != 1 {
+		t.Fatalf("expected exactly one historical agent after shutdown scenario, got %d", len(execAgents))
+	}
+	if execAgents[0].ID != spawn.AgentID || directAgents[0].ID != spawn.AgentID {
+		t.Fatalf("expected both lists to include spawned agent %s, got Execute=%s ExecuteTool=%s", spawn.AgentID, execAgents[0].ID, directAgents[0].ID)
+	}
+	if execAgents[0].Status != shared.EphemeralStatusTerminated || directAgents[0].Status != shared.EphemeralStatusTerminated {
+		t.Fatalf("expected listed agent to be terminated after shutdown, got Execute=%s ExecuteTool=%s", execAgents[0].Status, directAgents[0].Status)
+	}
+}
+
 func TestFederationTools_ProposeAndVoteReturnDefensiveProposalCopies(t *testing.T) {
 	config := shared.DefaultFederationConfig()
 	config.ConsensusQuorum = 1.0
