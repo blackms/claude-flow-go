@@ -387,6 +387,163 @@ func TestFederationTools_ExecuteAndExecuteTool_BroadcastSuccessParity(t *testing
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ProposeSuccessParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	registered := []string{"swarm-proposer-exec", "swarm-proposer-direct", "swarm-voter-a", "swarm-voter-b"}
+	for _, swarmID := range registered {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 10,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	execArgs := map[string]interface{}{
+		"proposerId":   "swarm-proposer-exec",
+		"proposalType": "scale-up",
+		"value": map[string]interface{}{
+			"maxAgents": 20,
+		},
+	}
+	execResult, execErr := ft.Execute(context.Background(), "federation/propose", execArgs)
+	if execErr != nil {
+		t.Fatalf("Execute should succeed, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result to be non-nil")
+	}
+
+	directArgs := map[string]interface{}{
+		"proposerId":   "swarm-proposer-direct",
+		"proposalType": "scale-down",
+		"value": map[string]interface{}{
+			"maxAgents": 5,
+		},
+	}
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/propose", directArgs)
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execProposal, ok := execResult.Data.(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected Execute data type *shared.FederationProposal, got %T", execResult.Data)
+	}
+	directProposal, ok := directResult.Data.(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type *shared.FederationProposal, got %T", directResult.Data)
+	}
+
+	if execProposal.ProposerID != "swarm-proposer-exec" {
+		t.Fatalf("expected Execute proposer swarm-proposer-exec, got %s", execProposal.ProposerID)
+	}
+	if directProposal.ProposerID != "swarm-proposer-direct" {
+		t.Fatalf("expected ExecuteTool proposer swarm-proposer-direct, got %s", directProposal.ProposerID)
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_VoteSuccessParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	registered := []string{"swarm-proposer-exec", "swarm-proposer-direct", "swarm-voter-exec", "swarm-voter-direct"}
+	for _, swarmID := range registered {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 10,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	execProposalRaw, execProposalErr := ft.ExecuteTool(context.Background(), "federation/propose", map[string]interface{}{
+		"proposerId":   "swarm-proposer-exec",
+		"proposalType": "exec-vote",
+		"value":        map[string]interface{}{"threshold": 1},
+	})
+	if execProposalErr != nil {
+		t.Fatalf("failed to create proposal for Execute vote path: %v", execProposalErr)
+	}
+	execProposal, ok := execProposalRaw.Data.(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected exec proposal type *shared.FederationProposal, got %T", execProposalRaw.Data)
+	}
+
+	directProposalRaw, directProposalErr := ft.ExecuteTool(context.Background(), "federation/propose", map[string]interface{}{
+		"proposerId":   "swarm-proposer-direct",
+		"proposalType": "direct-vote",
+		"value":        map[string]interface{}{"threshold": 2},
+	})
+	if directProposalErr != nil {
+		t.Fatalf("failed to create proposal for ExecuteTool vote path: %v", directProposalErr)
+	}
+	directProposal, ok := directProposalRaw.Data.(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected direct proposal type *shared.FederationProposal, got %T", directProposalRaw.Data)
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/vote", map[string]interface{}{
+		"voterId":    "swarm-voter-exec",
+		"proposalId": execProposal.ID,
+		"approve":    true,
+	})
+	if execErr != nil {
+		t.Fatalf("Execute vote should succeed, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute vote result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/vote", map[string]interface{}{
+		"voterId":    "swarm-voter-direct",
+		"proposalId": directProposal.ID,
+		"approve":    true,
+	})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool vote should succeed, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execData, ok := execResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute vote data map, got %T", execResult.Data)
+	}
+	directData, ok := directResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool vote data map, got %T", directResult.Data)
+	}
+
+	if execData["voted"] != true || directData["voted"] != true {
+		t.Fatalf("expected voted=true for both paths, got Execute=%v ExecuteTool=%v", execData["voted"], directData["voted"])
+	}
+}
+
 func TestFederationTools_Execute_ValidationErrorPropagation(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
