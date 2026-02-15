@@ -5157,6 +5157,49 @@ func TestFederationTools_ExecuteAndExecuteTool_UnknownToolParity(t *testing.T) {
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_UnknownToolParityWithConfiguredHub(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/not-real", args)
+	if execErr == nil {
+		t.Fatal("expected Execute error for unknown tool")
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result for unknown tool")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/not-real", args)
+	if directErr == nil {
+		t.Fatal("expected ExecuteTool error for unknown tool")
+	}
+
+	expectedErr := "unknown tool: federation/not-real"
+	if execErr.Error() != expectedErr {
+		t.Fatalf("expected Execute unknown-tool error %q, got %q", expectedErr, execErr.Error())
+	}
+	if directErr.Error() != expectedErr {
+		t.Fatalf("expected ExecuteTool unknown-tool error %q, got %q", expectedErr, directErr.Error())
+	}
+	if execResult.Error != expectedErr {
+		t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
+	}
+	if directResult.Error != expectedErr {
+		t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
+	}
+	if execResult.Success || directResult.Success {
+		t.Fatalf("expected failure parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_NilArgsSafety(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
