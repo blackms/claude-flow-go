@@ -21,6 +21,7 @@ package claudeflow
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/anthropics/claude-flow-go/internal/application/consensus"
@@ -685,12 +686,25 @@ func NewMCPServer(config MCPServerConfig) *MCPServer {
 
 // Start starts the MCP server.
 func (ms *MCPServer) Start() error {
+	if ms == nil || ms.internal == nil {
+		return fmt.Errorf("mcp server is not initialized")
+	}
 	return ms.internal.Start()
 }
 
 // Stop stops the MCP server.
 func (ms *MCPServer) Stop() error {
-	stopErr := ms.internal.Stop()
+	if ms == nil {
+		return fmt.Errorf("mcp server is not initialized")
+	}
+
+	var stopErr error
+	if ms.internal != nil {
+		stopErr = ms.internal.Stop()
+	} else {
+		stopErr = fmt.Errorf("mcp server is not initialized")
+	}
+
 	if ms.federationHub != nil {
 		fedHub := ms.federationHub
 		ms.federationHub = nil
@@ -698,21 +712,34 @@ func (ms *MCPServer) Stop() error {
 			stopErr = shutdownErr
 		}
 	}
+
 	return stopErr
 }
 
 // ListTools returns available tools.
 func (ms *MCPServer) ListTools() []MCPTool {
+	if ms == nil || ms.internal == nil {
+		return []MCPTool{}
+	}
 	return ms.internal.ListTools()
 }
 
 // GetStatus returns server status.
 func (ms *MCPServer) GetStatus() map[string]interface{} {
+	if ms == nil || ms.internal == nil {
+		return map[string]interface{}{
+			"running": false,
+			"error":   "mcp server is not initialized",
+		}
+	}
 	return ms.internal.GetStatus()
 }
 
 // RunStdio runs the MCP server using stdio transport (stdin/stdout).
 func (ms *MCPServer) RunStdio(ctx context.Context, reader io.Reader, writer io.Writer) error {
+	if ms == nil || ms.internal == nil {
+		return fmt.Errorf("mcp server is not initialized")
+	}
 	transport := mcp.NewStdioTransport(ms.internal, reader, writer)
 	return transport.Run(ctx)
 }

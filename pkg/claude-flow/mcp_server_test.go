@@ -1,6 +1,8 @@
 package claudeflow
 
 import (
+	"bytes"
+	"context"
 	"math"
 	"reflect"
 	"testing"
@@ -111,6 +113,58 @@ func TestMCPServer_StopShutsDownFederationHub(t *testing.T) {
 	}
 	if err.Error() != "federation hub is shut down" {
 		t.Fatalf("expected shutdown lifecycle error, got %q", err.Error())
+	}
+}
+
+func TestMCPServer_ZeroValueMethodsFailGracefully(t *testing.T) {
+	var server MCPServer
+
+	if err := server.Start(); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected start initialization error, got %v", err)
+	}
+	if err := server.Stop(); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected stop initialization error, got %v", err)
+	}
+
+	if tools := server.ListTools(); len(tools) != 0 {
+		t.Fatalf("expected zero-value server to expose no tools, got %d", len(tools))
+	}
+	status := server.GetStatus()
+	if running, ok := status["running"].(bool); !ok || running {
+		t.Fatalf("expected zero-value status running=false, got %v", status["running"])
+	}
+	if status["error"] != "mcp server is not initialized" {
+		t.Fatalf("expected zero-value status error, got %v", status["error"])
+	}
+
+	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected stdio initialization error, got %v", err)
+	}
+}
+
+func TestMCPServer_NilReceiverMethodsFailGracefully(t *testing.T) {
+	var server *MCPServer
+
+	if err := server.Start(); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected nil-receiver start error, got %v", err)
+	}
+	if err := server.Stop(); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected nil-receiver stop error, got %v", err)
+	}
+
+	if tools := server.ListTools(); len(tools) != 0 {
+		t.Fatalf("expected nil-receiver to expose no tools, got %d", len(tools))
+	}
+	status := server.GetStatus()
+	if running, ok := status["running"].(bool); !ok || running {
+		t.Fatalf("expected nil-receiver status running=false, got %v", status["running"])
+	}
+	if status["error"] != "mcp server is not initialized" {
+		t.Fatalf("expected nil-receiver status error, got %v", status["error"])
+	}
+
+	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected nil-receiver stdio error, got %v", err)
 	}
 }
 
