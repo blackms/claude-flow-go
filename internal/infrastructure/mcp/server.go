@@ -32,21 +32,21 @@ type Server struct {
 	httpServer   *http.Server
 
 	// MCP 2025-11-25 compliance components
-	resources   *resources.ResourceRegistry
-	prompts     *prompts.PromptRegistry
-	sampling    *sampling.SamplingManager
-	completion  *completion.CompletionHandler
-	logging     *logging.LogManager
+	resources    *resources.ResourceRegistry
+	prompts      *prompts.PromptRegistry
+	sampling     *sampling.SamplingManager
+	completion   *completion.CompletionHandler
+	logging      *logging.LogManager
 	capabilities *shared.MCPCapabilities
 
 	// Task management
-	tasks       *tasks.TaskManager
+	tasks *tasks.TaskManager
 
 	// Hooks system
-	hooks       *hooks.HooksManager
+	hooks *hooks.HooksManager
 
 	// Session management
-	sessions    *sessions.SessionManager
+	sessions *sessions.SessionManager
 }
 
 // Options holds configuration options for the MCP server.
@@ -59,6 +59,29 @@ type Options struct {
 	TaskManagerConfig   *shared.TaskManagerConfig
 	HooksConfig         *shared.HooksConfig
 	SessionConfig       *shared.SessionConfig
+}
+
+func (s *Server) isConfigured() bool {
+	if s == nil {
+		return false
+	}
+	if s.toolRegistry == nil {
+		return false
+	}
+	if s.resources == nil || s.prompts == nil || s.sampling == nil || s.completion == nil || s.logging == nil {
+		return false
+	}
+	if s.capabilities == nil || s.tasks == nil || s.hooks == nil || s.sessions == nil {
+		return false
+	}
+	return true
+}
+
+func (s *Server) configuredOrError() error {
+	if !s.isConfigured() {
+		return fmt.Errorf("mcp server is not initialized")
+	}
+	return nil
 }
 
 // NewServer creates a new MCP server.
@@ -166,6 +189,10 @@ func NewServer(opts Options) *Server {
 
 // Start starts the MCP server.
 func (s *Server) Start() error {
+	if err := s.configuredOrError(); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -229,6 +256,10 @@ func (s *Server) Start() error {
 
 // Stop stops the MCP server.
 func (s *Server) Stop() error {
+	if err := s.configuredOrError(); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -263,14 +294,25 @@ func (s *Server) Stop() error {
 
 // RegisterTool registers a tool.
 func (s *Server) RegisterTool(tool shared.MCPTool) {
+	if s == nil {
+		return
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.toolRegistry == nil {
+		s.toolRegistry = make(map[string]shared.MCPTool)
+	}
 	s.toolRegistry[tool.Name] = tool
 }
 
 // ListTools returns all available tools.
 func (s *Server) ListTools() []shared.MCPTool {
+	if s == nil {
+		return []shared.MCPTool{}
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -300,6 +342,16 @@ func (s *Server) ListTools() []shared.MCPTool {
 
 // HandleRequest handles an MCP request.
 func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) shared.MCPResponse {
+	if !s.isConfigured() {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32603,
+				Message: "mcp server is not initialized",
+			},
+		}
+	}
+
 	// Handle MCP protocol methods first
 	switch request.Method {
 	case "initialize":
@@ -738,6 +790,13 @@ func (s *Server) handleLoggingSetLevel(request shared.MCPRequest) shared.MCPResp
 
 // GetStatus returns the server status.
 func (s *Server) GetStatus() map[string]interface{} {
+	if !s.isConfigured() {
+		return map[string]interface{}{
+			"running": false,
+			"error":   "mcp server is not initialized",
+		}
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -751,9 +810,16 @@ func (s *Server) GetStatus() map[string]interface{} {
 
 // AddToolProvider adds a tool provider.
 func (s *Server) AddToolProvider(provider shared.MCPToolProvider) {
+	if s == nil || provider == nil {
+		return
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.toolRegistry == nil {
+		s.toolRegistry = make(map[string]shared.MCPTool)
+	}
 	s.tools = append(s.tools, provider)
 
 	// Register tools from the provider
@@ -890,31 +956,50 @@ func (t *StdioTransport) Run(ctx context.Context) error {
 
 // GetResources returns the resource registry.
 func (s *Server) GetResources() *resources.ResourceRegistry {
+	if s == nil {
+		return nil
+	}
 	return s.resources
 }
 
 // GetPrompts returns the prompt registry.
 func (s *Server) GetPrompts() *prompts.PromptRegistry {
+	if s == nil {
+		return nil
+	}
 	return s.prompts
 }
 
 // GetSampling returns the sampling manager.
 func (s *Server) GetSampling() *sampling.SamplingManager {
+	if s == nil {
+		return nil
+	}
 	return s.sampling
 }
 
 // GetCompletion returns the completion handler.
 func (s *Server) GetCompletion() *completion.CompletionHandler {
+	if s == nil {
+		return nil
+	}
 	return s.completion
 }
 
 // GetLogging returns the log manager.
 func (s *Server) GetLogging() *logging.LogManager {
+	if s == nil {
+		return nil
+	}
 	return s.logging
 }
 
 // GetCapabilities returns the server capabilities.
 func (s *Server) GetCapabilities() *shared.MCPCapabilities {
+	if s == nil {
+		return nil
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.capabilities
@@ -922,21 +1007,33 @@ func (s *Server) GetCapabilities() *shared.MCPCapabilities {
 
 // RegisterMockProvider registers a mock LLM provider for testing.
 func (s *Server) RegisterMockProvider() {
+	if s == nil || s.sampling == nil {
+		return
+	}
 	mockProvider := sampling.NewMockProviderWithDefaults()
 	s.sampling.RegisterProvider(mockProvider, true)
 }
 
 // GetTasks returns the task manager.
 func (s *Server) GetTasks() *tasks.TaskManager {
+	if s == nil {
+		return nil
+	}
 	return s.tasks
 }
 
 // GetHooks returns the hooks manager.
 func (s *Server) GetHooks() *hooks.HooksManager {
+	if s == nil {
+		return nil
+	}
 	return s.hooks
 }
 
 // GetSessions returns the session manager.
 func (s *Server) GetSessions() *sessions.SessionManager {
+	if s == nil {
+		return nil
+	}
 	return s.sessions
 }
