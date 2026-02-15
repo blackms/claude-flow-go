@@ -2,6 +2,7 @@ package resources
 
 import (
 	"testing"
+	"time"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
@@ -194,5 +195,48 @@ func TestResourceRegistry_RegisterTemplateClonesTemplateInput(t *testing.T) {
 	}
 	if templates[0].Name != "template-original" {
 		t.Fatalf("expected template name to remain unchanged after caller mutation, got %q", templates[0].Name)
+	}
+}
+
+func TestResourceRegistry_NotifyUpdateHandlesNilAndPanickingCallbacks(t *testing.T) {
+	registry := NewResourceRegistryWithDefaults()
+	uri := "resource://notify-safe"
+
+	err := registry.RegisterResource(&shared.MCPResource{
+		URI:  uri,
+		Name: "notify-safe",
+	}, func(uri string) (*shared.ResourceContent, error) {
+		return &shared.ResourceContent{
+			URI:  uri,
+			Text: "ok",
+		}, nil
+	})
+	if err != nil {
+		t.Fatalf("failed to register resource: %v", err)
+	}
+
+	_ = registry.Subscribe(uri, nil)
+	_ = registry.Subscribe(uri, func(uri string, content *shared.ResourceContent) {
+		panic("intentional callback panic")
+	})
+
+	received := make(chan string, 1)
+	_ = registry.Subscribe(uri, func(uri string, content *shared.ResourceContent) {
+		if content != nil {
+			received <- content.Text
+		} else {
+			received <- ""
+		}
+	})
+
+	registry.NotifyUpdate(uri)
+
+	select {
+	case text := <-received:
+		if text != "ok" {
+			t.Fatalf("expected successful callback content text, got %q", text)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected non-panicking callback to run despite nil/panicking subscribers")
 	}
 }

@@ -20,6 +20,18 @@ type Subscription struct {
 	Callback func(uri string, content *shared.ResourceContent)
 }
 
+func safeInvokeSubscriptionCallback(sub *Subscription, uri string, content *shared.ResourceContent) {
+	if sub == nil || sub.Callback == nil {
+		return
+	}
+
+	defer func() {
+		_ = recover()
+	}()
+
+	sub.Callback(uri, content)
+}
+
 // ResourceRegistry manages MCP resources.
 type ResourceRegistry struct {
 	mu            sync.RWMutex
@@ -322,7 +334,7 @@ func (rr *ResourceRegistry) NotifyUpdate(uri string) {
 	// Notify subscribers
 	for _, sub := range subs {
 		contentCopy := cloneResourceContent(content)
-		go sub.Callback(uri, contentCopy)
+		go safeInvokeSubscriptionCallback(sub, uri, contentCopy)
 	}
 }
 
