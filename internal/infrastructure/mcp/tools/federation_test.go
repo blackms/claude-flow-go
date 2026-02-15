@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
@@ -36,5 +37,39 @@ func TestFederationTools_Execute_UnknownTool(t *testing.T) {
 	}
 	if result.Error == "" {
 		t.Fatal("expected error message in tool result")
+	}
+}
+
+func TestFederationTools_Execute_Status(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	result, err := ft.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("expected status tool to succeed, got error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if !result.Success {
+		t.Fatalf("expected successful result, got error: %s", result.Error)
+	}
+
+	data, ok := result.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected status data map, got %T", result.Data)
+	}
+	if _, ok := data["federationId"]; !ok {
+		t.Fatal("expected federationId in status response")
+	}
+	if _, ok := data["stats"]; !ok {
+		t.Fatal("expected stats in status response")
 	}
 }
