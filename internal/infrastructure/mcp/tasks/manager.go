@@ -600,7 +600,7 @@ func (tm *TaskManager) executeTask(task *shared.ManagedTask) {
 			ID:          task.ID,
 			Type:        task.Type,
 			Description: task.Description,
-			Priority:    shared.TaskPriority(task.Priority),
+			Priority:    shared.IntToPriority(task.Priority),
 			Status:      shared.TaskStatusPending,
 			AssignedTo:  task.AssignedTo,
 			Metadata:    task.Metadata,
