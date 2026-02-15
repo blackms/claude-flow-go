@@ -480,6 +480,32 @@ func TestNewMCPServer_WithoutCoordinator_RegistersAllFederationTools(t *testing.
 	}
 }
 
+func TestNewMCPServer_WithoutMemory_RegistersNoMemoryTools(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	memoryTools := map[string]bool{
+		"memory_store":    true,
+		"memory_retrieve": true,
+		"memory_query":    true,
+		"memory_search":   true,
+		"memory_delete":   true,
+	}
+
+	for _, tool := range tools {
+		if memoryTools[tool.Name] {
+			t.Fatalf("expected memory tool %s to be absent without memory backend", tool.Name)
+		}
+	}
+}
+
 func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 	backend, err := NewSQLiteBackend(":memory:")
 	if err != nil {
@@ -585,6 +611,46 @@ func TestNewMCPServer_WithMemory_RegistersAllFederationTools(t *testing.T) {
 	}
 
 	for name := range expectedFederation {
+		if counts[name] != 1 {
+			t.Fatalf("expected exactly one %s tool in memory-only config, got %d", name, counts[name])
+		}
+	}
+}
+
+func TestNewMCPServer_WithMemory_RegistersAllMemoryTools(t *testing.T) {
+	backend, err := NewSQLiteBackend(":memory:")
+	if err != nil {
+		t.Fatalf("failed to initialize sqlite backend: %v", err)
+	}
+
+	server := NewMCPServer(MCPServerConfig{
+		Memory: backend,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	expectedMemoryTools := map[string]bool{
+		"memory_store":    true,
+		"memory_retrieve": true,
+		"memory_query":    true,
+		"memory_search":   true,
+		"memory_delete":   true,
+	}
+
+	counts := make(map[string]int, len(expectedMemoryTools))
+	for _, tool := range tools {
+		if expectedMemoryTools[tool.Name] {
+			counts[tool.Name]++
+		}
+	}
+
+	for name := range expectedMemoryTools {
 		if counts[name] != 1 {
 			t.Fatalf("expected exactly one %s tool in memory-only config, got %d", name, counts[name])
 		}
@@ -874,6 +940,57 @@ func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllCoordinatorTools(t *t
 	}
 
 	for name := range expectedCoordinatorTools {
+		if counts[name] != 1 {
+			t.Fatalf("expected exactly one %s tool in coordinator+memory config, got %d", name, counts[name])
+		}
+	}
+}
+
+func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllMemoryTools(t *testing.T) {
+	coord, err := NewSwarmCoordinator(SwarmConfig{
+		Topology: TopologyMesh,
+	})
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = coord.Shutdown()
+	})
+
+	backend, err := NewSQLiteBackend(":memory:")
+	if err != nil {
+		t.Fatalf("failed to initialize sqlite backend: %v", err)
+	}
+
+	server := NewMCPServer(MCPServerConfig{
+		Coordinator: coord,
+		Memory:      backend,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	expectedMemoryTools := map[string]bool{
+		"memory_store":    true,
+		"memory_retrieve": true,
+		"memory_query":    true,
+		"memory_search":   true,
+		"memory_delete":   true,
+	}
+
+	counts := make(map[string]int, len(expectedMemoryTools))
+	for _, tool := range tools {
+		if expectedMemoryTools[tool.Name] {
+			counts[tool.Name]++
+		}
+	}
+
+	for name := range expectedMemoryTools {
 		if counts[name] != 1 {
 			t.Fatalf("expected exactly one %s tool in coordinator+memory config, got %d", name, counts[name])
 		}
