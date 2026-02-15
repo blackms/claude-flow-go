@@ -209,19 +209,19 @@ func (t *FederationTools) GetTools() []shared.MCPTool {
 
 // Execute executes a federation tool using MCPToolProvider signature.
 func (t *FederationTools) Execute(ctx context.Context, toolName string, params map[string]interface{}) (*shared.MCPToolResult, error) {
-	if t.hub == nil {
-		result := shared.MCPToolResult{
-			Success: false,
-			Error:   "federation hub is not configured",
-		}
-		return &result, fmt.Errorf("federation hub is not configured")
-	}
 	result, err := t.ExecuteTool(ctx, toolName, params)
 	return &result, err
 }
 
 // ExecuteTool executes a federation tool.
 func (t *FederationTools) ExecuteTool(ctx context.Context, name string, args map[string]interface{}) (shared.MCPToolResult, error) {
+	if !isFederationToolName(name) {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("unknown tool: %s", name),
+		}, fmt.Errorf("unknown tool: %s", name)
+	}
+
 	if t.hub == nil {
 		return shared.MCPToolResult{
 			Success: false,
@@ -246,11 +246,27 @@ func (t *FederationTools) ExecuteTool(ctx context.Context, name string, args map
 		return t.propose(ctx, args)
 	case "federation/vote":
 		return t.vote(ctx, args)
+	}
+
+	return shared.MCPToolResult{
+		Success: false,
+		Error:   fmt.Sprintf("unknown tool: %s", name),
+	}, fmt.Errorf("unknown tool: %s", name)
+}
+
+func isFederationToolName(name string) bool {
+	switch name {
+	case "federation/status",
+		"federation/spawn-ephemeral",
+		"federation/terminate-ephemeral",
+		"federation/list-ephemeral",
+		"federation/register-swarm",
+		"federation/broadcast",
+		"federation/propose",
+		"federation/vote":
+		return true
 	default:
-		return shared.MCPToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("unknown tool: %s", name),
-		}, fmt.Errorf("unknown tool: %s", name)
+		return false
 	}
 }
 

@@ -5142,6 +5142,19 @@ func TestFederationTools_ExecuteAndExecuteTool_UnknownToolParity(t *testing.T) {
 	if execResult.Error != directResult.Error {
 		t.Fatalf("expected error message parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
 	}
+	expectedErr := "unknown tool: federation/unknown-tool"
+	if execErr.Error() != expectedErr {
+		t.Fatalf("expected Execute unknown-tool error %q, got %q", expectedErr, execErr.Error())
+	}
+	if directErr.Error() != expectedErr {
+		t.Fatalf("expected ExecuteTool unknown-tool error %q, got %q", expectedErr, directErr.Error())
+	}
+	if execResult.Error != expectedErr {
+		t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
+	}
+	if directResult.Error != expectedErr {
+		t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
+	}
 }
 
 func TestFederationTools_ExecuteAndExecuteTool_NilArgsSafety(t *testing.T) {
