@@ -143,6 +143,23 @@ func TestMCPServer_StopHandlesMalformedFederationHubGracefully(t *testing.T) {
 	}
 }
 
+func TestMCPServer_StopZeroValueWithMalformedFederationHubKeepsPrimaryError(t *testing.T) {
+	server := MCPServer{
+		federationHub: &federation.FederationHub{},
+	}
+
+	err := server.Stop()
+	if err == nil {
+		t.Fatal("expected stop to fail for zero-value server")
+	}
+	if err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected primary stop error, got %q", err.Error())
+	}
+	if server.federationHub != nil {
+		t.Fatal("expected stop to clear malformed federation hub reference")
+	}
+}
+
 func TestMCPServer_ZeroValueMethodsFailGracefully(t *testing.T) {
 	var server MCPServer
 
