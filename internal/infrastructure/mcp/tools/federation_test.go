@@ -3384,6 +3384,55 @@ func TestFederationTools_ExecuteAndExecuteTool_VoteDuplicateRejectedParity(t *te
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ProposeInvalidQuorumConfigParity(t *testing.T) {
+	config := shared.DefaultFederationConfig()
+	config.ConsensusQuorum = math.NaN()
+	hub := federation.NewFederationHub(config)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{
+		"proposerId":   "swarm-proposer",
+		"proposalType": "policy-update",
+		"value":        map[string]interface{}{"mode": "safe"},
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/propose", args)
+	if execErr == nil {
+		t.Fatal("expected Execute propose error for invalid quorum config")
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/propose", args)
+	if directErr == nil {
+		t.Fatal("expected ExecuteTool propose error for invalid quorum config")
+	}
+
+	const expectedErr = "consensus quorum must be between 0 and 1"
+	if execErr.Error() != expectedErr {
+		t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
+	}
+	if directErr.Error() != expectedErr {
+		t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
+	}
+	if execResult.Error != expectedErr {
+		t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
+	}
+	if directResult.Error != expectedErr {
+		t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
+	}
+	if execResult.Success || directResult.Success {
+		t.Fatalf("expected failure parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+}
+
 func TestFederationTools_ProposeAndVoteReturnDefensiveProposalCopies(t *testing.T) {
 	config := shared.DefaultFederationConfig()
 	config.ConsensusQuorum = 1.0
