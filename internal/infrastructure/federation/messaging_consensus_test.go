@@ -307,6 +307,9 @@ func TestFederationHub_ProposeRejectsInvalidConsensusQuorumConfiguration(t *test
 		{name: "zero quorum", quorum: 0},
 		{name: "negative quorum", quorum: -0.1},
 		{name: "greater than one quorum", quorum: 1.1},
+		{name: "nan quorum", quorum: math.NaN()},
+		{name: "positive infinity quorum", quorum: math.Inf(1)},
+		{name: "negative infinity quorum", quorum: math.Inf(-1)},
 	}
 
 	for _, tc := range invalidQuorumConfigs {

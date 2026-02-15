@@ -33,7 +33,8 @@ func (fh *FederationHub) Propose(proposerID, proposalType string, value interfac
 	if value == nil {
 		return nil, fmt.Errorf("value is required")
 	}
-	if fh.config.ConsensusQuorum <= 0 || fh.config.ConsensusQuorum > 1 {
+	if math.IsNaN(fh.config.ConsensusQuorum) || math.IsInf(fh.config.ConsensusQuorum, 0) ||
+		fh.config.ConsensusQuorum <= 0 || fh.config.ConsensusQuorum > 1 {
 		return nil, fmt.Errorf("consensus quorum must be between 0 and 1")
 	}
 	if fh.config.ProposalTimeout <= 0 {
