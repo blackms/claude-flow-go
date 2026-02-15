@@ -2607,6 +2607,14 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "broadcast non-string sourceSwarmId",
+			toolName: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": float64(1),
+				"payload":       map[string]interface{}{"event": "x"},
+			},
+		},
+		{
 			name:     "propose missing proposerId",
 			toolName: "federation/propose",
 			args: map[string]interface{}{
@@ -2619,6 +2627,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			toolName: "federation/propose",
 			args: map[string]interface{}{
 				"proposerId":   "   ",
+				"proposalType": "scaling",
+				"value":        map[string]interface{}{"maxAgents": 10},
+			},
+		},
+		{
+			name:     "propose non-string proposerId",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   float64(1),
 				"proposalType": "scaling",
 				"value":        map[string]interface{}{"maxAgents": 10},
 			},
@@ -2637,6 +2654,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			args: map[string]interface{}{
 				"proposerId":   "swarm-1",
 				"proposalType": "   ",
+				"value":        map[string]interface{}{"maxAgents": 10},
+			},
+		},
+		{
+			name:     "propose non-string proposalType",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "swarm-1",
+				"proposalType": true,
 				"value":        map[string]interface{}{"maxAgents": 10},
 			},
 		},
@@ -2675,6 +2701,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "vote non-string voterId",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    float64(1),
+				"proposalId": "p-1",
+				"approve":    true,
+			},
+		},
+		{
 			name:     "vote missing proposalId",
 			toolName: "federation/vote",
 			args: map[string]interface{}{
@@ -2692,11 +2727,29 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "vote non-string proposalId",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "swarm-1",
+				"proposalId": float64(1),
+				"approve":    true,
+			},
+		},
+		{
 			name:     "vote missing approve flag",
 			toolName: "federation/vote",
 			args: map[string]interface{}{
 				"voterId":    "swarm-1",
 				"proposalId": "p-1",
+			},
+		},
+		{
+			name:     "vote non-boolean approve",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "swarm-1",
+				"proposalId": "p-1",
+				"approve":    "true",
 			},
 		},
 		{
@@ -2812,6 +2865,13 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			toolName: "federation/terminate-ephemeral",
 			args: map[string]interface{}{
 				"agentId": "   ",
+			},
+		},
+		{
+			name:     "terminate non-string agentId",
+			toolName: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": float64(1),
 			},
 		},
 	}

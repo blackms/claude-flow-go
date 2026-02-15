@@ -376,9 +376,22 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 
 // terminateEphemeral terminates an ephemeral agent.
 func (t *FederationTools) terminateEphemeral(ctx context.Context, args map[string]interface{}) (shared.MCPToolResult, error) {
-	agentID, ok := args["agentId"].(string)
+	rawAgentID, hasAgentID := args["agentId"]
+	if !hasAgentID {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "agentId is required",
+		}, fmt.Errorf("agentId is required")
+	}
+	agentID, ok := rawAgentID.(string)
+	if !ok {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "agentId must be a string",
+		}, fmt.Errorf("agentId must be a string")
+	}
 	agentID = strings.TrimSpace(agentID)
-	if !ok || agentID == "" {
+	if agentID == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "agentId is required",
@@ -602,9 +615,22 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 
 // broadcast broadcasts a message.
 func (t *FederationTools) broadcast(ctx context.Context, args map[string]interface{}) (shared.MCPToolResult, error) {
-	sourceSwarmID, ok := args["sourceSwarmId"].(string)
+	rawSourceSwarmID, hasSourceSwarmID := args["sourceSwarmId"]
+	if !hasSourceSwarmID {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "sourceSwarmId is required",
+		}, fmt.Errorf("sourceSwarmId is required")
+	}
+	sourceSwarmID, ok := rawSourceSwarmID.(string)
+	if !ok {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "sourceSwarmId must be a string",
+		}, fmt.Errorf("sourceSwarmId must be a string")
+	}
 	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
-	if !ok || sourceSwarmID == "" {
+	if sourceSwarmID == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "sourceSwarmId is required",
@@ -642,18 +668,44 @@ func (t *FederationTools) broadcast(ctx context.Context, args map[string]interfa
 
 // propose creates a proposal.
 func (t *FederationTools) propose(ctx context.Context, args map[string]interface{}) (shared.MCPToolResult, error) {
-	proposerID, ok := args["proposerId"].(string)
+	rawProposerID, hasProposerID := args["proposerId"]
+	if !hasProposerID {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "proposerId is required",
+		}, fmt.Errorf("proposerId is required")
+	}
+	proposerID, ok := rawProposerID.(string)
+	if !ok {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "proposerId must be a string",
+		}, fmt.Errorf("proposerId must be a string")
+	}
 	proposerID = strings.TrimSpace(proposerID)
-	if !ok || proposerID == "" {
+	if proposerID == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "proposerId is required",
 		}, fmt.Errorf("proposerId is required")
 	}
 
-	proposalType, ok := args["proposalType"].(string)
+	rawProposalType, hasProposalType := args["proposalType"]
+	if !hasProposalType {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "proposalType is required",
+		}, fmt.Errorf("proposalType is required")
+	}
+	proposalType, ok := rawProposalType.(string)
+	if !ok {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "proposalType must be a string",
+		}, fmt.Errorf("proposalType must be a string")
+	}
 	proposalType = strings.TrimSpace(proposalType)
-	if !ok || proposalType == "" {
+	if proposalType == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "proposalType is required",
@@ -691,30 +743,63 @@ func (t *FederationTools) propose(ctx context.Context, args map[string]interface
 
 // vote votes on a proposal.
 func (t *FederationTools) vote(ctx context.Context, args map[string]interface{}) (shared.MCPToolResult, error) {
-	voterID, ok := args["voterId"].(string)
+	rawVoterID, hasVoterID := args["voterId"]
+	if !hasVoterID {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "voterId is required",
+		}, fmt.Errorf("voterId is required")
+	}
+	voterID, ok := rawVoterID.(string)
+	if !ok {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "voterId must be a string",
+		}, fmt.Errorf("voterId must be a string")
+	}
 	voterID = strings.TrimSpace(voterID)
-	if !ok || voterID == "" {
+	if voterID == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "voterId is required",
 		}, fmt.Errorf("voterId is required")
 	}
 
-	proposalID, ok := args["proposalId"].(string)
+	rawProposalID, hasProposalID := args["proposalId"]
+	if !hasProposalID {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "proposalId is required",
+		}, fmt.Errorf("proposalId is required")
+	}
+	proposalID, ok := rawProposalID.(string)
+	if !ok {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "proposalId must be a string",
+		}, fmt.Errorf("proposalId must be a string")
+	}
 	proposalID = strings.TrimSpace(proposalID)
-	if !ok || proposalID == "" {
+	if proposalID == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "proposalId is required",
 		}, fmt.Errorf("proposalId is required")
 	}
 
-	approve, ok := args["approve"].(bool)
-	if !ok {
+	rawApprove, hasApprove := args["approve"]
+	if !hasApprove {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "approve is required",
 		}, fmt.Errorf("approve is required")
+	}
+	approve, ok := rawApprove.(bool)
+	if !ok {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "approve must be a boolean",
+		}, fmt.Errorf("approve must be a boolean")
 	}
 
 	err := t.hub.Vote(voterID, proposalID, approve)
