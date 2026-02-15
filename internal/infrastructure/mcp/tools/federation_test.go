@@ -362,6 +362,72 @@ func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmValidationParity(t *
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	tests := []struct {
+		name     string
+		toolName string
+		args     map[string]interface{}
+	}{
+		{
+			name:     "broadcast missing sourceSwarmId",
+			toolName: "federation/broadcast",
+			args: map[string]interface{}{
+				"payload": map[string]interface{}{"event": "x"},
+			},
+		},
+		{
+			name:     "propose missing proposerId",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposalType": "scaling",
+				"value":        map[string]interface{}{"maxAgents": 10},
+			},
+		},
+		{
+			name:     "vote missing voterId",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"proposalId": "p-1",
+				"approve":    true,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			execResult, execErr := ft.Execute(context.Background(), tc.toolName, tc.args)
+			if execErr == nil {
+				t.Fatalf("expected Execute validation error for %s", tc.toolName)
+			}
+			if execResult == nil {
+				t.Fatalf("expected Execute result for %s", tc.toolName)
+			}
+
+			directResult, directErr := ft.ExecuteTool(context.Background(), tc.toolName, tc.args)
+			if directErr == nil {
+				t.Fatalf("expected ExecuteTool validation error for %s", tc.toolName)
+			}
+
+			if execResult.Success != directResult.Success {
+				t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+			}
+			if execResult.Error != directResult.Error {
+				t.Fatalf("expected error parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
+			}
+		})
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_UnknownToolParity(t *testing.T) {
 	ft := &FederationTools{}
 
