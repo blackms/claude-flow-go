@@ -283,17 +283,7 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 		opts.TTL = ttl
 	}
 	if capsRaw, ok := args["capabilities"]; ok {
-		switch caps := capsRaw.(type) {
-		case []interface{}:
-			opts.Capabilities = make([]string, 0, len(caps))
-			for _, cap := range caps {
-				if s, ok := cap.(string); ok {
-					opts.Capabilities = append(opts.Capabilities, s)
-				}
-			}
-		case []string:
-			opts.Capabilities = append([]string(nil), caps...)
-		}
+		opts.Capabilities = normalizeCapabilities(capsRaw)
 	}
 
 	if strings.TrimSpace(opts.Type) == "" {
@@ -420,16 +410,7 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 		}, fmt.Errorf("maxAgents must be greater than 0")
 	}
 	if capsRaw, ok := args["capabilities"]; ok {
-		switch caps := capsRaw.(type) {
-		case []interface{}:
-			for _, cap := range caps {
-				if s, ok := cap.(string); ok {
-					swarm.Capabilities = append(swarm.Capabilities, s)
-				}
-			}
-		case []string:
-			swarm.Capabilities = append(swarm.Capabilities, caps...)
-		}
+		swarm.Capabilities = append(swarm.Capabilities, normalizeCapabilities(capsRaw)...)
 	}
 
 	err := t.hub.RegisterSwarm(swarm)
@@ -562,4 +543,30 @@ func (t *FederationTools) vote(ctx context.Context, args map[string]interface{})
 			"proposal": proposal,
 		},
 	}, nil
+}
+
+func normalizeCapabilities(raw interface{}) []string {
+	capabilities := make([]string, 0)
+	appendCapability := func(value string) {
+		cleaned := strings.TrimSpace(value)
+		if cleaned == "" {
+			return
+		}
+		capabilities = append(capabilities, cleaned)
+	}
+
+	switch caps := raw.(type) {
+	case []interface{}:
+		for _, cap := range caps {
+			if s, ok := cap.(string); ok {
+				appendCapability(s)
+			}
+		}
+	case []string:
+		for _, cap := range caps {
+			appendCapability(cap)
+		}
+	}
+
+	return capabilities
 }
