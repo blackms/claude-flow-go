@@ -3534,6 +3534,98 @@ func TestFederationTools_BroadcastAndProposeHandleCyclicPayloads(t *testing.T) {
 	}
 }
 
+func TestFederationTools_BroadcastAndProposeHandlePointerCycles(t *testing.T) {
+	type cyclicNode struct {
+		Name string
+		Next *cyclicNode
+	}
+
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	for _, swarmID := range []string{"pointer-cycle-source", "pointer-cycle-target", "pointer-cycle-proposer"} {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 5,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	broadcastNode := &cyclicNode{Name: "broadcast-root"}
+	broadcastNode.Next = broadcastNode
+
+	broadcastResult, broadcastErr := ft.Execute(context.Background(), "federation/broadcast", map[string]interface{}{
+		"sourceSwarmId": "pointer-cycle-source",
+		"payload":       map[string]interface{}{"node": broadcastNode},
+	})
+	if broadcastErr != nil {
+		t.Fatalf("Execute broadcast with pointer cycle should succeed, got %v", broadcastErr)
+	}
+	if broadcastResult == nil || !broadcastResult.Success {
+		t.Fatalf("expected Execute broadcast success, got %+v", broadcastResult)
+	}
+	broadcastMsg, ok := broadcastResult.Data.(*shared.FederationMessage)
+	if !ok {
+		t.Fatalf("expected Execute broadcast data type *shared.FederationMessage, got %T", broadcastResult.Data)
+	}
+	broadcastPayload, ok := broadcastMsg.Payload.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute broadcast payload map, got %T", broadcastMsg.Payload)
+	}
+	broadcastClone, ok := broadcastPayload["node"].(*cyclicNode)
+	if !ok {
+		t.Fatalf("expected Execute broadcast node type *cyclicNode, got %T", broadcastPayload["node"])
+	}
+	if broadcastClone == broadcastNode {
+		t.Fatal("expected Execute broadcast node clone to be detached from input pointer")
+	}
+	if broadcastClone.Next != broadcastClone {
+		t.Fatal("expected Execute broadcast node clone to preserve self-referential pointer cycle")
+	}
+
+	proposalNode := &cyclicNode{Name: "proposal-root"}
+	proposalNode.Next = proposalNode
+
+	proposalResult, proposalErr := ft.ExecuteTool(context.Background(), "federation/propose", map[string]interface{}{
+		"proposerId":   "pointer-cycle-proposer",
+		"proposalType": "pointer-cycle-check",
+		"value":        map[string]interface{}{"node": proposalNode},
+	})
+	if proposalErr != nil {
+		t.Fatalf("ExecuteTool propose with pointer cycle should succeed, got %v", proposalErr)
+	}
+	if !proposalResult.Success {
+		t.Fatalf("expected ExecuteTool propose success, got %+v", proposalResult)
+	}
+	proposalCopy, ok := proposalResult.Data.(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected ExecuteTool propose data type *shared.FederationProposal, got %T", proposalResult.Data)
+	}
+	proposalValue, ok := proposalCopy.Value.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool proposal value map, got %T", proposalCopy.Value)
+	}
+	proposalClone, ok := proposalValue["node"].(*cyclicNode)
+	if !ok {
+		t.Fatalf("expected ExecuteTool proposal node type *cyclicNode, got %T", proposalValue["node"])
+	}
+	if proposalClone == proposalNode {
+		t.Fatal("expected ExecuteTool proposal node clone to be detached from input pointer")
+	}
+	if proposalClone.Next != proposalClone {
+		t.Fatal("expected ExecuteTool proposal node clone to preserve self-referential pointer cycle")
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_ProposeSuccessParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
