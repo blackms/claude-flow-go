@@ -441,6 +441,83 @@ func TestFederationTools_ExecuteAndExecuteTool_NilArgsParity(t *testing.T) {
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_NilAndEmptyArgsEquivalent(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	testCases := []struct {
+		name string
+		tool string
+	}{
+		{
+			name: "status",
+			tool: "federation/status",
+		},
+		{
+			name: "list-ephemeral",
+			tool: "federation/list-ephemeral",
+		},
+		{
+			name: "register-swarm",
+			tool: "federation/register-swarm",
+		},
+		{
+			name: "spawn-ephemeral",
+			tool: "federation/spawn-ephemeral",
+		},
+		{
+			name: "terminate-ephemeral",
+			tool: "federation/terminate-ephemeral",
+		},
+		{
+			name: "broadcast",
+			tool: "federation/broadcast",
+		},
+		{
+			name: "propose",
+			tool: "federation/propose",
+		},
+		{
+			name: "vote",
+			tool: "federation/vote",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			nilResult, nilErr := ft.Execute(context.Background(), tc.tool, nil)
+			if nilResult == nil {
+				t.Fatalf("expected result for nil args on tool %s", tc.tool)
+			}
+
+			emptyResult, emptyErr := ft.Execute(context.Background(), tc.tool, map[string]interface{}{})
+			if emptyResult == nil {
+				t.Fatalf("expected result for empty args on tool %s", tc.tool)
+			}
+
+			if (nilErr == nil) != (emptyErr == nil) {
+				t.Fatalf("expected nil-vs-empty error parity for %s, got nilErr=%v emptyErr=%v", tc.tool, nilErr, emptyErr)
+			}
+			if nilErr != nil && emptyErr != nil && nilErr.Error() != emptyErr.Error() {
+				t.Fatalf("expected nil-vs-empty error text parity for %s, got nilErr=%q emptyErr=%q", tc.tool, nilErr.Error(), emptyErr.Error())
+			}
+			if nilResult.Success != emptyResult.Success {
+				t.Fatalf("expected nil-vs-empty success parity for %s, got nil=%v empty=%v", tc.tool, nilResult.Success, emptyResult.Success)
+			}
+			if nilResult.Error != emptyResult.Error {
+				t.Fatalf("expected nil-vs-empty result error parity for %s, got nil=%q empty=%q", tc.tool, nilResult.Error, emptyResult.Error)
+			}
+		})
+	}
+}
+
 func TestFederationTools_GetTools_HaveObjectSchemasAndRequiredFields(t *testing.T) {
 	ft := &FederationTools{}
 
