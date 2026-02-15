@@ -11,6 +11,14 @@ type snapshotTestAggregate struct {
 	setVersionCall   bool
 }
 
+type snapshotNoSetterAggregate struct {
+	id               string
+	aggregateType    string
+	version          int
+	appliedVersions  []int
+	fromSnapshotCall bool
+}
+
 func (a *snapshotTestAggregate) ID() string { return a.id }
 
 func (a *snapshotTestAggregate) Type() string { return a.aggregateType }
@@ -37,6 +45,29 @@ func (a *snapshotTestAggregate) FromSnapshot(data []byte) error {
 func (a *snapshotTestAggregate) SetVersion(version int) {
 	a.setVersionCall = true
 	a.version = version
+}
+
+func (a *snapshotNoSetterAggregate) ID() string { return a.id }
+
+func (a *snapshotNoSetterAggregate) Type() string { return a.aggregateType }
+
+func (a *snapshotNoSetterAggregate) Version() int { return a.version }
+
+func (a *snapshotNoSetterAggregate) ApplyEvent(event Event) error {
+	a.appliedVersions = append(a.appliedVersions, event.Version())
+	a.version = event.Version()
+	return nil
+}
+
+func (a *snapshotNoSetterAggregate) UncommittedEvents() []Event { return nil }
+
+func (a *snapshotNoSetterAggregate) ClearUncommittedEvents() {}
+
+func (a *snapshotNoSetterAggregate) ToSnapshot() ([]byte, error) { return []byte(`{"ok":true}`), nil }
+
+func (a *snapshotNoSetterAggregate) FromSnapshot(data []byte) error {
+	a.fromSnapshotCall = true
+	return nil
 }
 
 func TestRebuildFromSnapshot_UsesSetVersionCapability(t *testing.T) {
@@ -79,5 +110,39 @@ func TestRebuildFromSnapshot_UsesSetVersionCapability(t *testing.T) {
 
 	if agg.Version() != 7 {
 		t.Fatalf("expected final version 7, got %d", agg.Version())
+	}
+}
+
+func TestRebuildFromSnapshot_WithoutSetVersionCapability(t *testing.T) {
+	agg := &snapshotNoSetterAggregate{
+		id:            "agg-2",
+		aggregateType: "test-aggregate",
+	}
+
+	snapshot := &Snapshot{
+		AggregateID:   "agg-2",
+		AggregateType: "test-aggregate",
+		Version:       5,
+		State:         []byte(`{"state":"snapshot"}`),
+	}
+
+	events := []Event{
+		NewBaseEvent("evt-1", "agg-2", "test-aggregate", 6, map[string]interface{}{"k": "v"}),
+	}
+
+	if err := RebuildFromSnapshot(agg, snapshot, events); err != nil {
+		t.Fatalf("unexpected error rebuilding from snapshot: %v", err)
+	}
+
+	if !agg.fromSnapshotCall {
+		t.Fatal("expected snapshot restoration to be called")
+	}
+
+	if len(agg.appliedVersions) != 1 || agg.appliedVersions[0] != 6 {
+		t.Fatalf("expected event version 6 to be applied, got %v", agg.appliedVersions)
+	}
+
+	if agg.Version() != 6 {
+		t.Fatalf("expected final version 6, got %d", agg.Version())
 	}
 }
