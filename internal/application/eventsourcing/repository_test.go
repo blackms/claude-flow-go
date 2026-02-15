@@ -652,3 +652,25 @@ func TestAggregateRepository_Load_NilSnapshotValueIsIgnored(t *testing.T) {
 		t.Fatalf("expected replay of version [1], got %v", agg.appliedVersions)
 	}
 }
+
+func TestAggregateRepository_Load_NilSnapshotAndNoEventsReturnsNotFound(t *testing.T) {
+	ctx := context.Background()
+	aggregateID := "aggregate-nil-snapshot-no-events"
+
+	eventStore := infra.NewInMemoryEventStore()
+	serializer := infra.NewJSONEventSerializer()
+
+	repo := NewAggregateRepository(RepositoryConfig{
+		EventStore:    eventStore,
+		SnapshotStore: &nilSnapshotStore{},
+		Serializer:    serializer,
+		Factory: func(id string) domain.Aggregate {
+			return &repositoryTestAggregate{id: id}
+		},
+	})
+
+	_, err := repo.Load(ctx, aggregateID)
+	if !errors.Is(err, domain.ErrAggregateNotFound) {
+		t.Fatalf("expected ErrAggregateNotFound for nil snapshot with no events, got %v", err)
+	}
+}
