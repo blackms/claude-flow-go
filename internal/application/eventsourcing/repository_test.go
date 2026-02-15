@@ -1,0 +1,117 @@
+package eventsourcing
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	domain "github.com/anthropics/claude-flow-go/internal/domain/eventsourcing"
+	infra "github.com/anthropics/claude-flow-go/internal/infrastructure/eventsourcing"
+)
+
+type repositoryTestAggregate struct {
+	id               string
+	version          int
+	appliedVersions  []int
+	fromSnapshotCall bool
+	setVersionCall   bool
+	setVersionArg    int
+}
+
+func (a *repositoryTestAggregate) ID() string { return a.id }
+
+func (a *repositoryTestAggregate) Type() string { return "repository-test" }
+
+func (a *repositoryTestAggregate) Version() int { return a.version }
+
+func (a *repositoryTestAggregate) ApplyEvent(event domain.Event) error {
+	a.appliedVersions = append(a.appliedVersions, event.Version())
+	a.version = event.Version()
+	return nil
+}
+
+func (a *repositoryTestAggregate) UncommittedEvents() []domain.Event { return nil }
+
+func (a *repositoryTestAggregate) ClearUncommittedEvents() {}
+
+func (a *repositoryTestAggregate) ToSnapshot() ([]byte, error) { return []byte(`{"ok":true}`), nil }
+
+func (a *repositoryTestAggregate) FromSnapshot(data []byte) error {
+	a.fromSnapshotCall = true
+	return nil
+}
+
+func (a *repositoryTestAggregate) SetVersion(version int) {
+	a.setVersionCall = true
+	a.setVersionArg = version
+	a.version = version
+}
+
+func TestAggregateRepository_Load_UsesSetVersionCapability(t *testing.T) {
+	ctx := context.Background()
+	aggregateID := "aggregate-1"
+
+	eventStore := infra.NewInMemoryEventStore()
+	snapshotStore := infra.NewInMemorySnapshotStore()
+	serializer := infra.NewJSONEventSerializer()
+
+	for version := 1; version <= 6; version++ {
+		event := domain.NewBaseEvent("repo:event", aggregateID, "repository-test", version, map[string]interface{}{"version": version})
+		stored, err := serializer.Serialize(event)
+		if err != nil {
+			t.Fatalf("failed to serialize event version %d: %v", version, err)
+		}
+		if err := eventStore.Append(ctx, []*domain.StoredEvent{stored}); err != nil {
+			t.Fatalf("failed to append event version %d: %v", version, err)
+		}
+	}
+
+	if err := snapshotStore.Save(ctx, &domain.Snapshot{
+		AggregateID:   aggregateID,
+		AggregateType: "repository-test",
+		Version:       5,
+		State:         []byte(`{"restored":true}`),
+		CreatedAt:     time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("failed to save snapshot: %v", err)
+	}
+
+	repo := NewAggregateRepository(RepositoryConfig{
+		EventStore:    eventStore,
+		SnapshotStore: snapshotStore,
+		Serializer:    serializer,
+		Factory: func(id string) domain.Aggregate {
+			return &repositoryTestAggregate{id: id}
+		},
+	})
+
+	loaded, err := repo.Load(ctx, aggregateID)
+	if err != nil {
+		t.Fatalf("unexpected load error: %v", err)
+	}
+
+	agg, ok := loaded.(*repositoryTestAggregate)
+	if !ok {
+		t.Fatalf("expected *repositoryTestAggregate, got %T", loaded)
+	}
+
+	if !agg.fromSnapshotCall {
+		t.Fatal("expected aggregate snapshot restore to be called")
+	}
+
+	if !agg.setVersionCall {
+		t.Fatal("expected SetVersion capability to be called")
+	}
+
+	if agg.setVersionArg != 5 {
+		t.Fatalf("expected SetVersion(5), got SetVersion(%d)", agg.setVersionArg)
+	}
+
+	if len(agg.appliedVersions) != 1 || agg.appliedVersions[0] != 6 {
+		t.Fatalf("expected only post-snapshot event version 6 to be applied, got %v", agg.appliedVersions)
+	}
+
+	if agg.Version() != 6 {
+		t.Fatalf("expected final aggregate version 6, got %d", agg.Version())
+	}
+}
