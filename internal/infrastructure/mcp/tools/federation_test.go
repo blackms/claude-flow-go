@@ -2930,6 +2930,14 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 				"agentId": float64(1),
 			},
 		},
+		{
+			name:     "terminate non-string error",
+			toolName: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": "agent-1",
+				"error":   true,
+			},
+		},
 	}
 
 	for _, tc := range tests {

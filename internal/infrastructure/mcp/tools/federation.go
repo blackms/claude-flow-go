@@ -399,7 +399,14 @@ func (t *FederationTools) terminateEphemeral(ctx context.Context, args map[strin
 	}
 
 	errorMsg := ""
-	if e, ok := args["error"].(string); ok {
+	if rawError, exists := args["error"]; exists {
+		e, ok := rawError.(string)
+		if !ok {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "error must be a string",
+			}, fmt.Errorf("error must be a string")
+		}
 		errorMsg = strings.TrimSpace(e)
 	}
 
