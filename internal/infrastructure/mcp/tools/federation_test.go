@@ -348,16 +348,20 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 		"meta": map[string]interface{}{
 			"nested": map[string]interface{}{"k": "v"},
 			"tags":   map[string]string{"owner": "team-a"},
+			"flags":  map[string]bool{"featureA": true},
 		},
 		"items": []interface{}{
 			map[string]interface{}{"id": "a"},
-			[]interface{}{map[string]string{"kind": "x"}},
+			[]interface{}{map[string]string{"kind": "x"}, map[string]bool{"ready": true}},
 		},
 		"stringMaps": []map[string]string{
 			{"env": "prod"},
 		},
 		"ifaceMaps": []map[string]interface{}{
 			{"status": "active"},
+		},
+		"boolMaps": []map[string]bool{
+			{"enabled": true},
 		},
 	}
 
@@ -373,13 +377,16 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	clonedMeta := cloned["meta"].(map[string]interface{})
 	clonedMeta["nested"].(map[string]interface{})["k"] = "mutated"
 	clonedMeta["tags"].(map[string]string)["owner"] = "mutated-owner"
+	clonedMeta["flags"].(map[string]bool)["featureA"] = false
 
 	clonedItems := cloned["items"].([]interface{})
 	clonedItems[0].(map[string]interface{})["id"] = "mutated-id"
 	clonedItems[1].([]interface{})[0].(map[string]string)["kind"] = "mutated-kind"
+	clonedItems[1].([]interface{})[1].(map[string]bool)["ready"] = false
 
 	cloned["stringMaps"].([]map[string]string)[0]["env"] = "staging"
 	cloned["ifaceMaps"].([]map[string]interface{})[0]["status"] = "inactive"
+	cloned["boolMaps"].([]map[string]bool)[0]["enabled"] = false
 
 	origMeta := original["meta"].(map[string]interface{})
 	if origMeta["nested"].(map[string]interface{})["k"] != "v" {
@@ -387,6 +394,9 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	}
 	if origMeta["tags"].(map[string]string)["owner"] != "team-a" {
 		t.Fatalf("expected original typed tags map to remain unchanged, got %v", origMeta["tags"].(map[string]string)["owner"])
+	}
+	if origMeta["flags"].(map[string]bool)["featureA"] != true {
+		t.Fatalf("expected original typed flags map to remain unchanged, got %v", origMeta["flags"].(map[string]bool)["featureA"])
 	}
 
 	origItems := original["items"].([]interface{})
@@ -396,12 +406,18 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	if origItems[1].([]interface{})[0].(map[string]string)["kind"] != "x" {
 		t.Fatalf("expected original nested typed map in slice to remain unchanged, got %v", origItems[1].([]interface{})[0].(map[string]string)["kind"])
 	}
+	if origItems[1].([]interface{})[1].(map[string]bool)["ready"] != true {
+		t.Fatalf("expected original nested typed bool map in slice to remain unchanged, got %v", origItems[1].([]interface{})[1].(map[string]bool)["ready"])
+	}
 
 	if original["stringMaps"].([]map[string]string)[0]["env"] != "prod" {
 		t.Fatalf("expected original []map[string]string entry to remain unchanged, got %v", original["stringMaps"].([]map[string]string)[0]["env"])
 	}
 	if original["ifaceMaps"].([]map[string]interface{})[0]["status"] != "active" {
 		t.Fatalf("expected original []map[string]interface{} entry to remain unchanged, got %v", original["ifaceMaps"].([]map[string]interface{})[0]["status"])
+	}
+	if original["boolMaps"].([]map[string]bool)[0]["enabled"] != true {
+		t.Fatalf("expected original []map[string]bool entry to remain unchanged, got %v", original["boolMaps"].([]map[string]bool)[0]["enabled"])
 	}
 }
 
@@ -414,6 +430,7 @@ func TestCloneFederationMessage_DeepCopiesPayload(t *testing.T) {
 			"event": "created",
 			"meta":  map[string]interface{}{"v": "1"},
 			"tags":  map[string]string{"env": "prod"},
+			"flags": map[string]bool{"enabled": true},
 		},
 	}
 
@@ -432,6 +449,7 @@ func TestCloneFederationMessage_DeepCopiesPayload(t *testing.T) {
 	clonedPayload["event"] = "mutated"
 	clonedPayload["meta"].(map[string]interface{})["v"] = "2"
 	clonedPayload["tags"].(map[string]string)["env"] = "staging"
+	clonedPayload["flags"].(map[string]bool)["enabled"] = false
 
 	origPayload := original.Payload.(map[string]interface{})
 	if origPayload["event"] != "created" {
@@ -443,6 +461,9 @@ func TestCloneFederationMessage_DeepCopiesPayload(t *testing.T) {
 	if origPayload["tags"].(map[string]string)["env"] != "prod" {
 		t.Fatalf("expected original typed tags unchanged, got %v", origPayload["tags"].(map[string]string)["env"])
 	}
+	if origPayload["flags"].(map[string]bool)["enabled"] != true {
+		t.Fatalf("expected original typed flags unchanged, got %v", origPayload["flags"].(map[string]bool)["enabled"])
+	}
 }
 
 func TestCloneFederationProposal_DeepCopiesValueAndVotes(t *testing.T) {
@@ -453,6 +474,7 @@ func TestCloneFederationProposal_DeepCopiesValueAndVotes(t *testing.T) {
 		Value: map[string]interface{}{
 			"config": map[string]interface{}{"maxAgents": float64(5)},
 			"tags":   map[string]string{"priority": "high"},
+			"flags":  map[string]bool{"allowScale": true},
 		},
 		Votes: map[string]bool{
 			"swarm-a": true,
@@ -474,6 +496,7 @@ func TestCloneFederationProposal_DeepCopiesValueAndVotes(t *testing.T) {
 	clonedValue := cloned.Value.(map[string]interface{})
 	clonedValue["config"].(map[string]interface{})["maxAgents"] = float64(99)
 	clonedValue["tags"].(map[string]string)["priority"] = "low"
+	clonedValue["flags"].(map[string]bool)["allowScale"] = false
 	cloned.Votes["swarm-b"] = false
 
 	origValue := original.Value.(map[string]interface{})
@@ -482,6 +505,9 @@ func TestCloneFederationProposal_DeepCopiesValueAndVotes(t *testing.T) {
 	}
 	if origValue["tags"].(map[string]string)["priority"] != "high" {
 		t.Fatalf("expected original typed tags unchanged, got %v", origValue["tags"].(map[string]string)["priority"])
+	}
+	if origValue["flags"].(map[string]bool)["allowScale"] != true {
+		t.Fatalf("expected original typed flags unchanged, got %v", origValue["flags"].(map[string]bool)["allowScale"])
 	}
 	if _, exists := original.Votes["swarm-b"]; exists {
 		t.Fatal("expected original votes map unchanged")
