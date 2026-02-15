@@ -368,6 +368,69 @@ func TestNewFederationTools_WithShutdownHubPreservesLifecycleContracts(t *testin
 	}
 }
 
+func TestNewFederationTools_WithUninitializedHubPreservesLifecycleContracts(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if hub == nil {
+		t.Fatal("expected federation hub wrapper")
+	}
+
+	fedTools := NewFederationTools(hub)
+	if fedTools == nil {
+		t.Fatal("expected federation tools wrapper for uninitialized hub")
+	}
+
+	statusResult, statusErr := fedTools.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if statusErr != nil {
+		t.Fatalf("expected status read to succeed before initialize, got %v", statusErr)
+	}
+	if statusResult == nil {
+		t.Fatal("expected status result before initialize")
+	}
+	if !statusResult.Success {
+		t.Fatalf("expected status success before initialize, got %+v", statusResult)
+	}
+
+	registerResult, registerErr := fedTools.Execute(context.Background(), "federation/register-swarm", map[string]interface{}{
+		"swarmId":   "uninit-tools-blocked",
+		"name":      "Uninit Tools Blocked",
+		"maxAgents": 1,
+	})
+	if registerErr == nil {
+		t.Fatal("expected register-swarm to fail before initialize")
+	}
+	if registerResult == nil {
+		t.Fatal("expected register-swarm result before initialize")
+	}
+	const expectedErr = "federation hub is not initialized"
+	if registerErr.Error() != expectedErr {
+		t.Fatalf("expected pre-init error %q, got %q", expectedErr, registerErr.Error())
+	}
+	if registerResult.Error != expectedErr {
+		t.Fatalf("expected register result error %q, got %q", expectedErr, registerResult.Error)
+	}
+	if registerResult.Success {
+		t.Fatal("expected register-swarm failure before initialize")
+	}
+
+	unknownResult, unknownErr := fedTools.Execute(context.Background(), "federation/not-real", map[string]interface{}{})
+	if unknownErr == nil {
+		t.Fatal("expected unknown-tool error before initialize")
+	}
+	if unknownResult == nil {
+		t.Fatal("expected unknown-tool result before initialize")
+	}
+	const expectedUnknownErr = "unknown tool: federation/not-real"
+	if unknownErr.Error() != expectedUnknownErr {
+		t.Fatalf("expected unknown-tool error %q, got %q", expectedUnknownErr, unknownErr.Error())
+	}
+	if unknownResult.Error != expectedUnknownErr {
+		t.Fatalf("expected unknown-tool result error %q, got %q", expectedUnknownErr, unknownResult.Error)
+	}
+	if unknownResult.Success {
+		t.Fatal("expected unknown-tool failure before initialize")
+	}
+}
+
 func TestFederationHub_PublicLifecycleReadsAvailableBeforeInitialize(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 
