@@ -273,6 +273,31 @@ func TestNormalizeCapabilities(t *testing.T) {
 	}
 }
 
+func TestValidateCapabilitiesInput(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     interface{}
+		shouldErr bool
+	}{
+		{name: "string slice", input: []string{"go", "docker"}, shouldErr: false},
+		{name: "interface string slice", input: []interface{}{"go", "docker"}, shouldErr: false},
+		{name: "non-array", input: "go", shouldErr: true},
+		{name: "interface slice with non-string", input: []interface{}{"go", 1}, shouldErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateCapabilitiesInput(tt.input)
+			if tt.shouldErr && err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			if !tt.shouldErr && err != nil {
+				t.Fatalf("expected validation success, got error: %v", err)
+			}
+		})
+	}
+}
+
 func TestParseEphemeralAgentStatus(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -1330,7 +1355,7 @@ func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmInterfaceSliceCapabi
 		"swarmId":      "swarm-cap-iface-exec",
 		"name":         "Interface Caps Execute",
 		"maxAgents":    float64(4),
-		"capabilities": []interface{}{"go", " ", 123, "docker"},
+		"capabilities": []interface{}{"go", " ", "docker", "go"},
 	})
 	if execErr != nil {
 		t.Fatalf("Execute should accept []interface{} capabilities, got error: %v", execErr)
@@ -1343,7 +1368,7 @@ func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmInterfaceSliceCapabi
 		"swarmId":      "swarm-cap-iface-direct",
 		"name":         "Interface Caps Direct",
 		"maxAgents":    float64(3),
-		"capabilities": []interface{}{"security", nil, "", 42},
+		"capabilities": []interface{}{"security", "", "security"},
 	})
 	if directErr != nil {
 		t.Fatalf("ExecuteTool should accept []interface{} capabilities, got error: %v", directErr)
@@ -1784,7 +1809,7 @@ func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralInterfaceSliceCapab
 	args := map[string]interface{}{
 		"type":         "analyst",
 		"task":         "run model scoring",
-		"capabilities": []interface{}{"ml", " ", 123, nil},
+		"capabilities": []interface{}{"ml", " ", ""},
 	}
 
 	execResult, execErr := ft.Execute(context.Background(), "federation/spawn-ephemeral", args)
@@ -2682,6 +2707,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "spawn capabilities with non-string entry",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type":         "coder",
+				"task":         "implement feature",
+				"capabilities": []interface{}{"go", 1},
+			},
+		},
+		{
 			name:     "list non-string swarmId",
 			toolName: "federation/list-ephemeral",
 			args: map[string]interface{}{
@@ -2968,6 +3002,16 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 				"name":         "swarm-one",
 				"maxAgents":    float64(5),
 				"capabilities": "go",
+			},
+		},
+		{
+			name:     "register swarm capabilities with non-string entry",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":      "swarm-1",
+				"name":         "swarm-one",
+				"maxAgents":    float64(5),
+				"capabilities": []interface{}{"go", true},
 			},
 		},
 		{

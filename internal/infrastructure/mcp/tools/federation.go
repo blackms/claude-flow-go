@@ -335,13 +335,11 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 		}
 	}
 	if capsRaw, ok := args["capabilities"]; ok {
-		switch capsRaw.(type) {
-		case []interface{}, []string:
-		default:
+		if err := validateCapabilitiesInput(capsRaw); err != nil {
 			return shared.MCPToolResult{
 				Success: false,
-				Error:   "capabilities must be an array of strings",
-			}, fmt.Errorf("capabilities must be an array of strings")
+				Error:   err.Error(),
+			}, err
 		}
 		opts.Capabilities = normalizeCapabilities(capsRaw)
 	}
@@ -595,13 +593,11 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 		}, fmt.Errorf("maxAgents must be greater than 0")
 	}
 	if capsRaw, ok := args["capabilities"]; ok {
-		switch capsRaw.(type) {
-		case []interface{}, []string:
-		default:
+		if err := validateCapabilitiesInput(capsRaw); err != nil {
 			return shared.MCPToolResult{
 				Success: false,
-				Error:   "capabilities must be an array of strings",
-			}, fmt.Errorf("capabilities must be an array of strings")
+				Error:   err.Error(),
+			}, err
 		}
 		swarm.Capabilities = append(swarm.Capabilities, normalizeCapabilities(capsRaw)...)
 	}
@@ -858,6 +854,22 @@ func normalizeCapabilities(raw interface{}) []string {
 	}
 
 	return capabilities
+}
+
+func validateCapabilitiesInput(raw interface{}) error {
+	switch caps := raw.(type) {
+	case []string:
+		return nil
+	case []interface{}:
+		for _, cap := range caps {
+			if _, ok := cap.(string); !ok {
+				return fmt.Errorf("capabilities must contain only strings")
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("capabilities must be an array of strings")
+	}
 }
 
 func parseEphemeralAgentStatus(raw string) (shared.EphemeralAgentStatus, bool) {
