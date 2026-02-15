@@ -273,6 +273,7 @@ func (fh *FederationHub) GetProposals() []*shared.FederationProposal {
 	for _, proposal := range fh.proposals {
 		proposals = append(proposals, cloneFederationProposal(proposal))
 	}
+	sortFederationProposalsByID(proposals)
 	return proposals
 }
 
@@ -287,6 +288,7 @@ func (fh *FederationHub) GetPendingProposals() []*shared.FederationProposal {
 			proposals = append(proposals, cloneFederationProposal(proposal))
 		}
 	}
+	sortFederationProposalsByID(proposals)
 	return proposals
 }
 
@@ -301,6 +303,7 @@ func (fh *FederationHub) GetProposalsByStatus(status shared.FederationProposalSt
 			proposals = append(proposals, cloneFederationProposal(proposal))
 		}
 	}
+	sortFederationProposalsByID(proposals)
 	return proposals
 }
 

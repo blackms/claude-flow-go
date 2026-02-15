@@ -302,6 +302,7 @@ func (fh *FederationHub) GetAgents() []*shared.EphemeralAgent {
 	for _, agent := range fh.ephemeralAgents {
 		agents = append(agents, cloneEphemeralAgent(agent))
 	}
+	sortEphemeralAgentsByID(agents)
 	return agents
 }
 
@@ -316,6 +317,7 @@ func (fh *FederationHub) GetActiveAgents() []*shared.EphemeralAgent {
 			agents = append(agents, cloneEphemeralAgent(agent))
 		}
 	}
+	sortEphemeralAgentsByID(agents)
 	return agents
 }
 
@@ -337,6 +339,7 @@ func (fh *FederationHub) GetAgentsBySwarm(swarmID string) []*shared.EphemeralAge
 			}
 		}
 	}
+	sortEphemeralAgentsByID(agents)
 	return agents
 }
 
@@ -353,6 +356,7 @@ func (fh *FederationHub) GetAgentsByStatus(status shared.EphemeralAgentStatus) [
 			}
 		}
 	}
+	sortEphemeralAgentsByID(agents)
 	return agents
 }
 

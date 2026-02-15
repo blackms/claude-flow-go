@@ -266,6 +266,7 @@ func (fh *FederationHub) GetSwarms() []*shared.SwarmRegistration {
 	for _, swarm := range fh.swarms {
 		swarms = append(swarms, cloneSwarmRegistration(swarm))
 	}
+	sortSwarmRegistrationsByID(swarms)
 	return swarms
 }
 
@@ -280,6 +281,7 @@ func (fh *FederationHub) GetActiveSwarms() []*shared.SwarmRegistration {
 			swarms = append(swarms, cloneSwarmRegistration(swarm))
 		}
 	}
+	sortSwarmRegistrationsByID(swarms)
 	return swarms
 }
 
