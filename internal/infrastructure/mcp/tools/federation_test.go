@@ -548,6 +548,79 @@ func TestFederationTools_ExecuteAndExecuteTool_NilAndEmptyArgsEquivalent(t *test
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_NilContextParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	testCases := []struct {
+		name string
+		tool string
+		args map[string]interface{}
+	}{
+		{
+			name: "status success",
+			tool: "federation/status",
+			args: map[string]interface{}{},
+		},
+		{
+			name: "unknown tool error",
+			tool: "federation/not-real",
+			args: map[string]interface{}{},
+		},
+		{
+			name: "validation error",
+			tool: "federation/register-swarm",
+			args: map[string]interface{}{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			nilExecResult, nilExecErr := ft.Execute(nil, tc.tool, tc.args)
+			bgExecResult, bgExecErr := ft.Execute(context.Background(), tc.tool, tc.args)
+
+			if nilExecResult == nil || bgExecResult == nil {
+				t.Fatalf("expected Execute results for tool %s", tc.tool)
+			}
+			if (nilExecErr == nil) != (bgExecErr == nil) {
+				t.Fatalf("expected Execute nil-context parity for %s, got nilErr=%v bgErr=%v", tc.tool, nilExecErr, bgExecErr)
+			}
+			if nilExecErr != nil && bgExecErr != nil && nilExecErr.Error() != bgExecErr.Error() {
+				t.Fatalf("expected Execute nil-context error text parity for %s, got nil=%q bg=%q", tc.tool, nilExecErr.Error(), bgExecErr.Error())
+			}
+			if nilExecResult.Success != bgExecResult.Success {
+				t.Fatalf("expected Execute nil-context success parity for %s, got nil=%v bg=%v", tc.tool, nilExecResult.Success, bgExecResult.Success)
+			}
+			if nilExecResult.Error != bgExecResult.Error {
+				t.Fatalf("expected Execute nil-context result error parity for %s, got nil=%q bg=%q", tc.tool, nilExecResult.Error, bgExecResult.Error)
+			}
+
+			nilDirectResult, nilDirectErr := ft.ExecuteTool(nil, tc.tool, tc.args)
+			bgDirectResult, bgDirectErr := ft.ExecuteTool(context.Background(), tc.tool, tc.args)
+
+			if (nilDirectErr == nil) != (bgDirectErr == nil) {
+				t.Fatalf("expected ExecuteTool nil-context parity for %s, got nilErr=%v bgErr=%v", tc.tool, nilDirectErr, bgDirectErr)
+			}
+			if nilDirectErr != nil && bgDirectErr != nil && nilDirectErr.Error() != bgDirectErr.Error() {
+				t.Fatalf("expected ExecuteTool nil-context error text parity for %s, got nil=%q bg=%q", tc.tool, nilDirectErr.Error(), bgDirectErr.Error())
+			}
+			if nilDirectResult.Success != bgDirectResult.Success {
+				t.Fatalf("expected ExecuteTool nil-context success parity for %s, got nil=%v bg=%v", tc.tool, nilDirectResult.Success, bgDirectResult.Success)
+			}
+			if nilDirectResult.Error != bgDirectResult.Error {
+				t.Fatalf("expected ExecuteTool nil-context result error parity for %s, got nil=%q bg=%q", tc.tool, nilDirectResult.Error, bgDirectResult.Error)
+			}
+		})
+	}
+}
+
 func TestFederationTools_GetTools_HaveObjectSchemasAndRequiredFields(t *testing.T) {
 	ft := &FederationTools{}
 
