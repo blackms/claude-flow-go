@@ -314,3 +314,72 @@ func TestAggregateRepository_Load_SnapshotRestoreFailureFallsBackToFullReplay(t 
 		t.Fatalf("expected final aggregate version 3, got %d", agg.Version())
 	}
 }
+
+func TestAggregateRepository_Load_ExpiredSnapshotIsIgnored(t *testing.T) {
+	ctx := context.Background()
+	aggregateID := "aggregate-expired"
+
+	eventStore := infra.NewInMemoryEventStore()
+	snapshotStore := infra.NewInMemorySnapshotStore()
+	serializer := infra.NewJSONEventSerializer()
+
+	for version := 1; version <= 3; version++ {
+		event := domain.NewBaseEvent("repo:event", aggregateID, "repository-test", version, map[string]interface{}{"version": version})
+		stored, err := serializer.Serialize(event)
+		if err != nil {
+			t.Fatalf("failed to serialize event version %d: %v", version, err)
+		}
+		if err := eventStore.Append(ctx, []*domain.StoredEvent{stored}); err != nil {
+			t.Fatalf("failed to append event version %d: %v", version, err)
+		}
+	}
+
+	// Snapshot is intentionally old so SnapshotConfig marks it as expired.
+	if err := snapshotStore.Save(ctx, &domain.Snapshot{
+		AggregateID:   aggregateID,
+		AggregateType: "repository-test",
+		Version:       2,
+		State:         []byte(`{"restored":true}`),
+		CreatedAt:     time.Now().Add(-time.Hour).UnixMilli(),
+	}); err != nil {
+		t.Fatalf("failed to save snapshot: %v", err)
+	}
+
+	repo := NewAggregateRepository(RepositoryConfig{
+		EventStore:    eventStore,
+		SnapshotStore: snapshotStore,
+		Serializer:    serializer,
+		SnapshotConfig: infra.SnapshotConfig{
+			MaxAgeMs: 1,
+		},
+		Factory: func(id string) domain.Aggregate {
+			return &repositoryTestAggregate{id: id}
+		},
+	})
+
+	loaded, err := repo.Load(ctx, aggregateID)
+	if err != nil {
+		t.Fatalf("unexpected load error: %v", err)
+	}
+
+	agg, ok := loaded.(*repositoryTestAggregate)
+	if !ok {
+		t.Fatalf("expected *repositoryTestAggregate, got %T", loaded)
+	}
+
+	if agg.fromSnapshotCall {
+		t.Fatal("expired snapshot should not be restored")
+	}
+
+	if agg.setVersionCall {
+		t.Fatal("setVersion should not be called for expired snapshot")
+	}
+
+	if len(agg.appliedVersions) != 3 || agg.appliedVersions[0] != 1 || agg.appliedVersions[1] != 2 || agg.appliedVersions[2] != 3 {
+		t.Fatalf("expected full replay of versions [1 2 3], got %v", agg.appliedVersions)
+	}
+
+	if agg.Version() != 3 {
+		t.Fatalf("expected final aggregate version 3, got %d", agg.Version())
+	}
+}
