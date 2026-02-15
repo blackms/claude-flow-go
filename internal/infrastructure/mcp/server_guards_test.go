@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"reflect"
@@ -474,6 +475,22 @@ func TestServer_ParsePageSizeSupportsIntegralTypes(t *testing.T) {
 	if len(promptResult.Prompts) != 2 {
 		t.Fatalf("expected int64 pageSize to return 2 prompts, got %d", len(promptResult.Prompts))
 	}
+
+	jsonNumberResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "resources-json-number-page-size",
+		Method: "resources/list",
+		Params: map[string]interface{}{"pageSize": json.Number("2")},
+	})
+	if jsonNumberResp.Error != nil {
+		t.Fatalf("expected resources/list success with json.Number pageSize, got %v", jsonNumberResp.Error)
+	}
+	jsonNumberResult, ok := jsonNumberResp.Result.(*shared.ResourceListResult)
+	if !ok {
+		t.Fatalf("expected resources/list result type for json.Number pageSize, got %T", jsonNumberResp.Result)
+	}
+	if len(jsonNumberResult.Resources) != 2 {
+		t.Fatalf("expected json.Number pageSize to return 2 resources, got %d", len(jsonNumberResult.Resources))
+	}
 }
 
 func TestServer_ParsePageSizeRejectsInvalidValuesWithFallback(t *testing.T) {
@@ -512,6 +529,22 @@ func TestServer_ParsePageSizeRejectsInvalidValuesWithFallback(t *testing.T) {
 	// fallback is 100, so all 3 registered resources should be returned.
 	if len(result.Resources) != 3 {
 		t.Fatalf("expected fallback pageSize to return all resources, got %d", len(result.Resources))
+	}
+
+	invalidJSONNumberResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "resources-invalid-json-number-page-size",
+		Method: "resources/list",
+		Params: map[string]interface{}{"pageSize": json.Number("abc")},
+	})
+	if invalidJSONNumberResp.Error != nil {
+		t.Fatalf("expected resources/list success with invalid json.Number fallback, got %v", invalidJSONNumberResp.Error)
+	}
+	invalidJSONNumberResult, ok := invalidJSONNumberResp.Result.(*shared.ResourceListResult)
+	if !ok {
+		t.Fatalf("expected resources/list result type for invalid json.Number pageSize, got %T", invalidJSONNumberResp.Result)
+	}
+	if len(invalidJSONNumberResult.Resources) != 3 {
+		t.Fatalf("expected invalid json.Number fallback page size to return all resources, got %d", len(invalidJSONNumberResult.Resources))
 	}
 }
 
