@@ -49,6 +49,9 @@ func TestFederationHub_RegisterSwarmRejectsDuplicateIDs(t *testing.T) {
 	if stats.TotalSwarms != 1 {
 		t.Fatalf("expected total swarms to remain 1 after duplicate attempt, got %d", stats.TotalSwarms)
 	}
+	if stats.ActiveSwarms != 1 {
+		t.Fatalf("expected active swarms to remain 1 after duplicate attempt, got %d", stats.ActiveSwarms)
+	}
 }
 
 func TestFederationHub_RegisterSwarmRejectsTrimmedDuplicateIDs(t *testing.T) {
@@ -91,6 +94,9 @@ func TestFederationHub_RegisterSwarmRejectsTrimmedDuplicateIDs(t *testing.T) {
 	stats := hub.GetStats()
 	if stats.TotalSwarms != 1 {
 		t.Fatalf("expected total swarms to remain 1 after duplicate trimmed attempt, got %d", stats.TotalSwarms)
+	}
+	if stats.ActiveSwarms != 1 {
+		t.Fatalf("expected active swarms to remain 1 after duplicate trimmed attempt, got %d", stats.ActiveSwarms)
 	}
 }
 
@@ -308,6 +314,44 @@ func TestFederationHub_SpawnEphemeralTrimsStringInputs(t *testing.T) {
 	}
 }
 
+func TestFederationHub_SpawnEphemeralFailureDoesNotMutateAgentStats(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "spawn-stats-swarm",
+		Name:      "Spawn Stats Swarm",
+		MaxAgents: 3,
+	}); err != nil {
+		t.Fatalf("failed to register swarm: %v", err)
+	}
+
+	_, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "spawn-stats-swarm",
+		Type:    "coder",
+		Task:    "   ", // invalid, blank after trim
+	})
+	if err == nil {
+		t.Fatal("expected spawn to fail for blank task")
+	}
+
+	stats := hub.GetStats()
+	if stats.TotalAgents != 0 {
+		t.Fatalf("expected total agents to remain 0 after failed spawn, got %d", stats.TotalAgents)
+	}
+	if stats.ActiveAgents != 0 {
+		t.Fatalf("expected active agents to remain 0 after failed spawn, got %d", stats.ActiveAgents)
+	}
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected no agents to exist after failed spawn, got %d", len(agents))
+	}
+}
+
 func TestFederationHub_RegisterSwarmRejectsInvalidInputs(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
@@ -366,6 +410,9 @@ func TestFederationHub_RegisterSwarmRejectsInvalidInputs(t *testing.T) {
 	stats := hub.GetStats()
 	if stats.TotalSwarms != 0 {
 		t.Fatalf("expected no swarms to be registered after invalid inputs, got %d", stats.TotalSwarms)
+	}
+	if stats.ActiveSwarms != 0 {
+		t.Fatalf("expected no active swarms after invalid inputs, got %d", stats.ActiveSwarms)
 	}
 }
 
