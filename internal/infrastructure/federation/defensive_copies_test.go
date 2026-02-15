@@ -290,6 +290,167 @@ func TestFederationHub_CommandResultsReturnDefensiveCopies(t *testing.T) {
 	}
 }
 
+func TestFederationHub_InputMutationsAfterCallsDoNotAffectStoredState(t *testing.T) {
+	cfg := shared.DefaultFederationConfig()
+	cfg.ConsensusQuorum = 1.0
+
+	hub := NewFederationHub(cfg)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	swarmMetadata := map[string]interface{}{
+		"owner": "team-a",
+		"nested": map[string]interface{}{
+			"tier": "gold",
+		},
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-ingress-source",
+		Name:      "Ingress Source",
+		MaxAgents: 4,
+		Metadata:  swarmMetadata,
+	}); err != nil {
+		t.Fatalf("failed to register source swarm: %v", err)
+	}
+	registerTestSwarm(t, hub, "swarm-ingress-target", "Ingress Target")
+
+	agentMetadata := map[string]interface{}{
+		"trace": "initial",
+		"nested": map[string]interface{}{
+			"attempt": 1,
+		},
+	}
+	spawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID:   "swarm-ingress-source",
+		Type:      "coder",
+		Task:      "ingress-mutation-test",
+		Metadata:  agentMetadata,
+		TTL:       60000,
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn agent: %v", err)
+	}
+
+	directPayload := map[string]interface{}{
+		"payload": map[string]interface{}{"count": 10},
+	}
+	directMsg, err := hub.SendMessage("swarm-ingress-source", "swarm-ingress-target", directPayload)
+	if err != nil {
+		t.Fatalf("failed to send direct message: %v", err)
+	}
+
+	broadcastPayload := map[string]interface{}{
+		"payload": map[string]interface{}{"count": 20},
+	}
+	broadcastMsg, err := hub.Broadcast("swarm-ingress-source", broadcastPayload)
+	if err != nil {
+		t.Fatalf("failed to send broadcast message: %v", err)
+	}
+
+	proposalValue := map[string]interface{}{
+		"plan": map[string]interface{}{"step": "ship"},
+	}
+	proposal, err := hub.Propose("swarm-ingress-source", "deploy", proposalValue)
+	if err != nil {
+		t.Fatalf("failed to propose value: %v", err)
+	}
+
+	completionResult := map[string]interface{}{
+		"status": "ok",
+		"nested": map[string]interface{}{
+			"attempt": 1,
+		},
+	}
+	if err := hub.CompleteAgent(spawn.AgentID, completionResult); err != nil {
+		t.Fatalf("failed to complete agent: %v", err)
+	}
+
+	swarmMetadata["owner"] = "tampered-owner"
+	requireMap(t, swarmMetadata["nested"], "mutated swarm metadata nested")["tier"] = "bronze"
+	agentMetadata["trace"] = "tampered-trace"
+	requireMap(t, agentMetadata["nested"], "mutated agent metadata nested")["attempt"] = 99
+	requireMap(t, directPayload["payload"], "mutated direct payload nested")["count"] = 999
+	requireMap(t, broadcastPayload["payload"], "mutated broadcast payload nested")["count"] = 999
+	requireMap(t, proposalValue["plan"], "mutated proposal value nested")["step"] = "tampered-step"
+	completionResult["status"] = "tampered-status"
+	requireMap(t, completionResult["nested"], "mutated completion result nested")["attempt"] = 999
+
+	storedSwarm, ok := hub.GetSwarm("swarm-ingress-source")
+	if !ok {
+		t.Fatal("expected source swarm to exist")
+	}
+	if requireMap(t, storedSwarm.Metadata, "stored source swarm metadata")["owner"] != "team-a" {
+		t.Fatalf("expected stored swarm owner to remain team-a, got %v", storedSwarm.Metadata["owner"])
+	}
+	if requireMap(t, requireMap(t, storedSwarm.Metadata, "stored source swarm metadata root")["nested"], "stored source swarm metadata nested")["tier"] != "gold" {
+		t.Fatalf("expected stored swarm nested tier to remain gold, got %v", storedSwarm.Metadata["nested"])
+	}
+
+	storedAgent, ok := hub.GetAgent(spawn.AgentID)
+	if !ok {
+		t.Fatal("expected spawned agent to exist")
+	}
+	if requireMap(t, storedAgent.Metadata, "stored agent metadata")["trace"] != "initial" {
+		t.Fatalf("expected stored agent trace to remain initial, got %v", storedAgent.Metadata["trace"])
+	}
+	if requireMap(t, requireMap(t, storedAgent.Metadata, "stored agent metadata root")["nested"], "stored agent metadata nested")["attempt"] != 1 {
+		t.Fatalf("expected stored agent nested attempt to remain 1, got %v", storedAgent.Metadata["nested"])
+	}
+	if requireMap(t, storedAgent.Result, "stored agent result")["status"] != "ok" {
+		t.Fatalf("expected stored agent result status to remain ok, got %v", storedAgent.Result)
+	}
+	if requireMap(t, requireMap(t, storedAgent.Result, "stored agent result root")["nested"], "stored agent result nested")["attempt"] != 1 {
+		t.Fatalf("expected stored agent result nested attempt to remain 1, got %v", storedAgent.Result)
+	}
+
+	storedDirect, ok := hub.GetMessage(directMsg.ID)
+	if !ok {
+		t.Fatal("expected stored direct message to exist")
+	}
+	if requireMap(t, requireMap(t, storedDirect.Payload, "stored direct payload")["payload"], "stored direct payload nested")["count"] != 10 {
+		t.Fatalf("expected stored direct message payload to remain unchanged, got %v", storedDirect.Payload)
+	}
+
+	storedBroadcast, ok := hub.GetMessage(broadcastMsg.ID)
+	if !ok {
+		t.Fatal("expected stored broadcast message to exist")
+	}
+	if requireMap(t, requireMap(t, storedBroadcast.Payload, "stored broadcast payload")["payload"], "stored broadcast payload nested")["count"] != 20 {
+		t.Fatalf("expected stored broadcast payload to remain unchanged, got %v", storedBroadcast.Payload)
+	}
+
+	storedProposal, ok := hub.GetProposal(proposal.ID)
+	if !ok {
+		t.Fatal("expected stored proposal to exist")
+	}
+	if requireMap(t, requireMap(t, storedProposal.Value, "stored proposal value")["plan"], "stored proposal value nested")["step"] != "ship" {
+		t.Fatalf("expected stored proposal nested value to remain unchanged, got %v", storedProposal.Value)
+	}
+
+	events := hub.GetEvents(0)
+	foundCompletedEvent := false
+	for _, event := range events {
+		if event == nil || event.Type != shared.FederationEventAgentCompleted || event.AgentID != spawn.AgentID {
+			continue
+		}
+		eventData := requireMap(t, event.Data, "agent completed event data")
+		if eventData["status"] == "ok" {
+			if requireMap(t, eventData["nested"], "agent completed event nested data")["attempt"] != 1 {
+				t.Fatalf("expected event nested attempt to remain 1, got %v", eventData["nested"])
+			}
+			foundCompletedEvent = true
+			break
+		}
+	}
+	if !foundCompletedEvent {
+		t.Fatal("expected completed event with immutable original result payload")
+	}
+}
+
 func requireMap(t *testing.T, value interface{}, context string) map[string]interface{} {
 	t.Helper()
 	mapped, ok := value.(map[string]interface{})

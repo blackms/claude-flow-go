@@ -104,7 +104,7 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 		TTL:       opts.TTL,
 		CreatedAt: now,
 		ExpiresAt: now + opts.TTL,
-		Metadata:  opts.Metadata,
+		Metadata:  cloneStringInterfaceMap(opts.Metadata),
 	}
 
 	// Add to indexes
@@ -190,7 +190,7 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 	fh.agentsByStatus[shared.EphemeralStatusCompleting][agentID] = true
 
 	agent.Status = shared.EphemeralStatusCompleting
-	agent.Result = result
+	agent.Result = cloneInterfaceValue(result)
 	agent.CompletedAt = now
 
 	// Emit event
@@ -198,7 +198,7 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 		Type:      shared.FederationEventAgentCompleted,
 		SwarmID:   agent.SwarmID,
 		AgentID:   agentID,
-		Data:      result,
+		Data:      cloneInterfaceValue(result),
 		Timestamp: now,
 	})
 

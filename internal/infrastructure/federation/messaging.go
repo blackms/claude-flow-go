@@ -55,7 +55,7 @@ func (fh *FederationHub) SendMessage(sourceSwarmID, targetSwarmID string, payloa
 		Type:          shared.FederationMsgDirect,
 		SourceSwarmID: sourceSwarmID,
 		TargetSwarmID: targetSwarmID,
-		Payload:       payload,
+		Payload:       cloneInterfaceValue(payload),
 		Timestamp:     now,
 	}
 
@@ -117,7 +117,7 @@ func (fh *FederationHub) Broadcast(sourceSwarmID string, payload interface{}) (*
 		Type:          shared.FederationMsgBroadcast,
 		SourceSwarmID: sourceSwarmID,
 		TargetSwarmID: "", // Empty for broadcast
-		Payload:       payload,
+		Payload:       cloneInterfaceValue(payload),
 		Timestamp:     now,
 	}
 
@@ -248,7 +248,7 @@ func (fh *FederationHub) SendConsensusMessage(sourceSwarmID string, payload inte
 		Type:          shared.FederationMsgConsensus,
 		SourceSwarmID: sourceSwarmID,
 		TargetSwarmID: targetSwarmID,
-		Payload:       payload,
+		Payload:       cloneInterfaceValue(payload),
 		Timestamp:     now,
 	}
 
@@ -262,7 +262,7 @@ func (fh *FederationHub) SendConsensusMessage(sourceSwarmID string, payload inte
 
 // addMessage adds a message to the history.
 func (fh *FederationHub) addMessage(msg *shared.FederationMessage) {
-	fh.messages = append(fh.messages, msg)
+	fh.messages = append(fh.messages, cloneFederationMessage(msg))
 
 	// Limit message history
 	if len(fh.messages) > fh.config.MaxMessageHistory {

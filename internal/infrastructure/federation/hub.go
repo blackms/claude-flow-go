@@ -151,6 +151,7 @@ func (fh *FederationHub) RegisterSwarm(swarm shared.SwarmRegistration) error {
 	swarm.Name = name
 	swarm.Endpoint = strings.TrimSpace(swarm.Endpoint)
 	swarm.Capabilities = normalizeStringValues(swarm.Capabilities)
+	swarm.Metadata = cloneStringInterfaceMap(swarm.Metadata)
 
 	if _, exists := fh.swarms[swarm.SwarmID]; exists {
 		return fmt.Errorf("swarm %s already exists", swarm.SwarmID)
@@ -371,6 +372,7 @@ func (fh *FederationHub) SetEventHandler(handler EventHandler) {
 
 // emitEvent emits a federation event.
 func (fh *FederationHub) emitEvent(event shared.FederationEvent) {
+	event.Data = cloneInterfaceValue(event.Data)
 	fh.events = append(fh.events, &event)
 
 	// Limit event history
