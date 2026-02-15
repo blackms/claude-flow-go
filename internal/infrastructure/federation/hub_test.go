@@ -86,3 +86,86 @@ func TestFederationHub_SpawnEphemeralRejectsTTLOverflow(t *testing.T) {
 		t.Fatalf("expected no agents to be created on ttl overflow, got %d", len(agents))
 	}
 }
+
+func TestFederationHub_RegisterSwarmRejectsInvalidInputs(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	tests := []struct {
+		name         string
+		registration shared.SwarmRegistration
+		expectedErr  string
+	}{
+		{
+			name: "blank swarm id",
+			registration: shared.SwarmRegistration{
+				SwarmID:   "   ",
+				Name:      "blank-id",
+				MaxAgents: 1,
+			},
+			expectedErr: "swarmId is required",
+		},
+		{
+			name: "non-positive maxAgents",
+			registration: shared.SwarmRegistration{
+				SwarmID:   "swarm-invalid-capacity",
+				Name:      "invalid-capacity",
+				MaxAgents: 0,
+			},
+			expectedErr: "maxAgents must be greater than 0",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := hub.RegisterSwarm(tc.registration)
+			if err == nil {
+				t.Fatalf("expected registration error %q", tc.expectedErr)
+			}
+			if err.Error() != tc.expectedErr {
+				t.Fatalf("expected error %q, got %q", tc.expectedErr, err.Error())
+			}
+		})
+	}
+
+	stats := hub.GetStats()
+	if stats.TotalSwarms != 0 {
+		t.Fatalf("expected no swarms to be registered after invalid inputs, got %d", stats.TotalSwarms)
+	}
+}
+
+func TestFederationHub_RegisterSwarmTrimsFields(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "  swarm-trim  ",
+		Name:      "  Trimmed Name  ",
+		Endpoint:  "  http://example.local  ",
+		MaxAgents: 3,
+	})
+	if err != nil {
+		t.Fatalf("expected trimmed registration to succeed, got %v", err)
+	}
+
+	swarm, ok := hub.GetSwarm("swarm-trim")
+	if !ok {
+		t.Fatal("expected trimmed swarm ID to be used as key")
+	}
+	if swarm.Name != "Trimmed Name" {
+		t.Fatalf("expected trimmed swarm name, got %q", swarm.Name)
+	}
+	if swarm.Endpoint != "http://example.local" {
+		t.Fatalf("expected trimmed endpoint, got %q", swarm.Endpoint)
+	}
+}

@@ -4,6 +4,7 @@ package federation
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -133,6 +134,18 @@ func (fh *FederationHub) Shutdown() error {
 func (fh *FederationHub) RegisterSwarm(swarm shared.SwarmRegistration) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+
+	swarmID := strings.TrimSpace(swarm.SwarmID)
+	if swarmID == "" {
+		return fmt.Errorf("swarmId is required")
+	}
+	if swarm.MaxAgents <= 0 {
+		return fmt.Errorf("maxAgents must be greater than 0")
+	}
+
+	swarm.SwarmID = swarmID
+	swarm.Name = strings.TrimSpace(swarm.Name)
+	swarm.Endpoint = strings.TrimSpace(swarm.Endpoint)
 
 	if _, exists := fh.swarms[swarm.SwarmID]; exists {
 		return fmt.Errorf("swarm %s already exists", swarm.SwarmID)
