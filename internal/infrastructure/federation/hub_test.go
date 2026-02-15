@@ -314,6 +314,53 @@ func TestFederationHub_SpawnEphemeralTrimsStringInputs(t *testing.T) {
 	}
 }
 
+func TestFederationHub_SpawnEphemeralNormalizesRequiredCapabilities(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:       "swarm-cap-target",
+		Name:          "Capability Target",
+		MaxAgents:     2,
+		Capabilities:  []string{"code"},
+	}); err != nil {
+		t.Fatalf("failed to register capability target swarm: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:      "swarm-cap-other",
+		Name:         "Capability Other",
+		MaxAgents:    2,
+		Capabilities: []string{"review"},
+	}); err != nil {
+		t.Fatalf("failed to register capability other swarm: %v", err)
+	}
+
+	result, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		Type: "coder",
+		Task: "match normalized capabilities",
+		Capabilities: []string{
+			"  code  ",
+			"",
+			"code",
+			"   ",
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected spawn with normalized required capabilities to succeed, got %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected spawn result")
+	}
+	if result.SwarmID != "swarm-cap-target" {
+		t.Fatalf("expected capability-matched swarm swarm-cap-target, got %q", result.SwarmID)
+	}
+}
+
 func TestFederationHub_SpawnEphemeralFailureDoesNotMutateAgentStats(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {

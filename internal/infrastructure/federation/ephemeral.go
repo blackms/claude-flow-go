@@ -24,6 +24,7 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 	opts.SwarmID = strings.TrimSpace(opts.SwarmID)
 	opts.Type = strings.TrimSpace(opts.Type)
 	opts.Task = strings.TrimSpace(opts.Task)
+	opts.Capabilities = normalizeStringValues(opts.Capabilities)
 	if opts.Type == "" {
 		return &shared.SpawnResult{
 			Status: "failed",
