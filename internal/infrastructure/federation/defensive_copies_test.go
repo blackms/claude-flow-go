@@ -11,6 +11,10 @@ type cyclicNode struct {
 	Next  *cyclicNode
 }
 
+type pointerKeyNode struct {
+	Name string
+}
+
 func TestFederationHub_GettersReturnDefensiveCopies(t *testing.T) {
 	cfg := shared.DefaultFederationConfig()
 	cfg.ConsensusQuorum = 1.0
@@ -589,6 +593,58 @@ func TestFederationHub_CloningHandlesPointerCycles(t *testing.T) {
 	}
 	if storedProposalNode.Next != storedProposalNode {
 		t.Fatal("expected stored proposal node cycle to be preserved")
+	}
+}
+
+func TestFederationHub_CloningDetachesPointerMapKeys(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	registerTestSwarm(t, hub, "swarm-pointer-key-source", "Pointer Key Source")
+	registerTestSwarm(t, hub, "swarm-pointer-key-target", "Pointer Key Target")
+
+	originalKey := &pointerKeyNode{Name: "original-key"}
+	keyedPayload := map[*pointerKeyNode]string{
+		originalKey: "payload-value",
+	}
+
+	message, err := hub.SendMessage("swarm-pointer-key-source", "swarm-pointer-key-target", map[string]interface{}{
+		"keyed": keyedPayload,
+	})
+	if err != nil {
+		t.Fatalf("failed to send message with pointer-keyed map payload: %v", err)
+	}
+
+	originalKey.Name = "mutated-key"
+
+	storedMessage, ok := hub.GetMessage(message.ID)
+	if !ok {
+		t.Fatal("expected stored message")
+	}
+
+	storedPayload := requireMap(t, storedMessage.Payload, "stored pointer-key payload")
+	keyedStored, ok := storedPayload["keyed"].(map[*pointerKeyNode]string)
+	if !ok {
+		t.Fatalf("expected stored keyed payload to be map[*pointerKeyNode]string, got %T", storedPayload["keyed"])
+	}
+	if len(keyedStored) != 1 {
+		t.Fatalf("expected one keyed entry, got %d", len(keyedStored))
+	}
+	for keyPtr, value := range keyedStored {
+		if keyPtr == originalKey {
+			t.Fatal("expected stored keyed map to use cloned pointer key")
+		}
+		if keyPtr.Name != "original-key" {
+			t.Fatalf("expected cloned key name to remain original-key, got %q", keyPtr.Name)
+		}
+		if value != "payload-value" {
+			t.Fatalf("expected keyed payload value to remain payload-value, got %q", value)
+		}
 	}
 }
 

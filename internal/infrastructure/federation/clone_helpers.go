@@ -111,7 +111,8 @@ func cloneReflectValue(value reflect.Value, seen map[cloneVisit]reflect.Value) r
 		clonedMap := reflect.MakeMapWithSize(value.Type(), value.Len())
 		seen[visit] = clonedMap
 		for _, key := range value.MapKeys() {
-			clonedMap.SetMapIndex(key, cloneReflectValue(value.MapIndex(key), seen))
+			clonedKey := cloneReflectValue(key, seen)
+			clonedMap.SetMapIndex(clonedKey, cloneReflectValue(value.MapIndex(key), seen))
 		}
 		return clonedMap
 
