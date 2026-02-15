@@ -232,3 +232,70 @@ func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 		t.Fatalf("expected federation/hooks tools to remain registered; got federation=%v hooks=%v", hasFederationStatus, hasHooksList)
 	}
 }
+
+func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllToolFamilies(t *testing.T) {
+	coord, err := NewSwarmCoordinator(SwarmConfig{
+		Topology: TopologyMesh,
+	})
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = coord.Shutdown()
+	})
+
+	backend, err := NewSQLiteBackend(":memory:")
+	if err != nil {
+		t.Fatalf("failed to initialize sqlite backend: %v", err)
+	}
+
+	server := NewMCPServer(MCPServerConfig{
+		Coordinator: coord,
+		Memory:      backend,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	seen := make(map[string]bool, len(tools))
+	hasAgentSpawn := false
+	hasConfigGet := false
+	hasOrchestratePlan := false
+	hasMemoryStore := false
+	hasFederationStatus := false
+	hasHooksList := false
+
+	for _, tool := range tools {
+		if seen[tool.Name] {
+			t.Fatalf("duplicate tool name found: %s", tool.Name)
+		}
+		seen[tool.Name] = true
+
+		switch tool.Name {
+		case "agent_spawn":
+			hasAgentSpawn = true
+		case "config_get":
+			hasConfigGet = true
+		case "orchestrate_plan":
+			hasOrchestratePlan = true
+		case "memory_store":
+			hasMemoryStore = true
+		case "federation/status":
+			hasFederationStatus = true
+		case "hooks/list":
+			hasHooksList = true
+		}
+	}
+
+	if !hasAgentSpawn || !hasConfigGet || !hasOrchestratePlan || !hasMemoryStore || !hasFederationStatus || !hasHooksList {
+		t.Fatalf(
+			"expected coordinator+memory+federation+hooks tools; got agent=%v config=%v orchestrate=%v memory=%v federation=%v hooks=%v",
+			hasAgentSpawn, hasConfigGet, hasOrchestratePlan, hasMemoryStore, hasFederationStatus, hasHooksList,
+		)
+	}
+}
