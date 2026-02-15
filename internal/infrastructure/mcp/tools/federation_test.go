@@ -64,6 +64,67 @@ func TestFederationTools_GetTools_ExpectedUniqueNames(t *testing.T) {
 	}
 }
 
+func TestFederationTools_GetTools_HaveObjectSchemasAndRequiredFields(t *testing.T) {
+	ft := &FederationTools{}
+
+	tools := ft.GetTools()
+	if len(tools) == 0 {
+		t.Fatal("expected federation tools to be registered")
+	}
+
+	type requiredExpectation struct {
+		fields map[string]bool
+	}
+	expectedRequired := map[string]requiredExpectation{
+		"federation/spawn-ephemeral":     {fields: map[string]bool{"type": true, "task": true}},
+		"federation/terminate-ephemeral": {fields: map[string]bool{"agentId": true}},
+		"federation/register-swarm":      {fields: map[string]bool{"swarmId": true, "name": true, "maxAgents": true}},
+		"federation/broadcast":           {fields: map[string]bool{"sourceSwarmId": true, "payload": true}},
+		"federation/propose":             {fields: map[string]bool{"proposerId": true, "proposalType": true, "value": true}},
+		"federation/vote":                {fields: map[string]bool{"voterId": true, "proposalId": true, "approve": true}},
+	}
+
+	for _, tool := range tools {
+		if tool.Description == "" {
+			t.Fatalf("tool %s should have a non-empty description", tool.Name)
+		}
+
+		if tool.Parameters["type"] != "object" {
+			t.Fatalf("tool %s should use an object schema, got %v", tool.Name, tool.Parameters["type"])
+		}
+
+		expectation, needsRequired := expectedRequired[tool.Name]
+		if !needsRequired {
+			continue
+		}
+
+		rawRequired, ok := tool.Parameters["required"]
+		if !ok {
+			t.Fatalf("tool %s should define required fields", tool.Name)
+		}
+
+		requiredList, ok := rawRequired.([]string)
+		if !ok {
+			t.Fatalf("tool %s required fields should be []string, got %T", tool.Name, rawRequired)
+		}
+
+		if len(requiredList) != len(expectation.fields) {
+			t.Fatalf("tool %s expected %d required fields, got %d", tool.Name, len(expectation.fields), len(requiredList))
+		}
+
+		seen := make(map[string]bool, len(requiredList))
+		for _, field := range requiredList {
+			seen[field] = true
+		}
+
+		for field := range expectation.fields {
+			if !seen[field] {
+				t.Fatalf("tool %s missing required field %q", tool.Name, field)
+			}
+		}
+	}
+}
+
 func TestFederationTools_Execute_UnknownTool(t *testing.T) {
 	ft := &FederationTools{}
 
