@@ -6,6 +6,11 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
+type cloneVisit struct {
+	typ reflect.Type
+	ptr uintptr
+}
+
 func cloneSwarmRegistration(swarm *shared.SwarmRegistration) *shared.SwarmRegistration {
 	if swarm == nil {
 		return nil
@@ -80,10 +85,14 @@ func cloneInterfaceValue(value interface{}) interface{} {
 	if value == nil {
 		return nil
 	}
-	return cloneReflectValue(reflect.ValueOf(value)).Interface()
+	cloned := cloneReflectValue(reflect.ValueOf(value), make(map[cloneVisit]reflect.Value))
+	if !cloned.IsValid() {
+		return nil
+	}
+	return cloned.Interface()
 }
 
-func cloneReflectValue(value reflect.Value) reflect.Value {
+func cloneReflectValue(value reflect.Value, seen map[cloneVisit]reflect.Value) reflect.Value {
 	if !value.IsValid() {
 		return value
 	}
@@ -93,9 +102,16 @@ func cloneReflectValue(value reflect.Value) reflect.Value {
 		if value.IsNil() {
 			return reflect.Zero(value.Type())
 		}
+
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if cached, ok := seen[visit]; ok {
+			return cached
+		}
+
 		clonedMap := reflect.MakeMapWithSize(value.Type(), value.Len())
+		seen[visit] = clonedMap
 		for _, key := range value.MapKeys() {
-			clonedMap.SetMapIndex(key, cloneReflectValue(value.MapIndex(key)))
+			clonedMap.SetMapIndex(key, cloneReflectValue(value.MapIndex(key), seen))
 		}
 		return clonedMap
 
@@ -103,16 +119,27 @@ func cloneReflectValue(value reflect.Value) reflect.Value {
 		if value.IsNil() {
 			return reflect.Zero(value.Type())
 		}
+
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if visit.ptr != 0 {
+			if cached, ok := seen[visit]; ok {
+				return cached
+			}
+		}
+
 		clonedSlice := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+		if visit.ptr != 0 {
+			seen[visit] = clonedSlice
+		}
 		for i := 0; i < value.Len(); i++ {
-			clonedSlice.Index(i).Set(cloneReflectValue(value.Index(i)))
+			clonedSlice.Index(i).Set(cloneReflectValue(value.Index(i), seen))
 		}
 		return clonedSlice
 
 	case reflect.Array:
 		clonedArray := reflect.New(value.Type()).Elem()
 		for i := 0; i < value.Len(); i++ {
-			clonedArray.Index(i).Set(cloneReflectValue(value.Index(i)))
+			clonedArray.Index(i).Set(cloneReflectValue(value.Index(i), seen))
 		}
 		return clonedArray
 
@@ -120,15 +147,22 @@ func cloneReflectValue(value reflect.Value) reflect.Value {
 		if value.IsNil() {
 			return reflect.Zero(value.Type())
 		}
+
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if cached, ok := seen[visit]; ok {
+			return cached
+		}
+
 		clonedPointer := reflect.New(value.Type().Elem())
-		clonedPointer.Elem().Set(cloneReflectValue(value.Elem()))
+		seen[visit] = clonedPointer
+		clonedPointer.Elem().Set(cloneReflectValue(value.Elem(), seen))
 		return clonedPointer
 
 	case reflect.Interface:
 		if value.IsNil() {
 			return reflect.Zero(value.Type())
 		}
-		return cloneReflectValue(value.Elem())
+		return cloneReflectValue(value.Elem(), seen)
 
 	case reflect.Struct:
 		clonedStruct := reflect.New(value.Type()).Elem()
@@ -139,7 +173,7 @@ func cloneReflectValue(value reflect.Value) reflect.Value {
 				continue
 			}
 
-			clonedField := cloneReflectValue(value.Field(i))
+			clonedField := cloneReflectValue(value.Field(i), seen)
 			if !clonedField.IsValid() {
 				continue
 			}

@@ -451,6 +451,71 @@ func TestFederationHub_InputMutationsAfterCallsDoNotAffectStoredState(t *testing
 	}
 }
 
+func TestFederationHub_CloningHandlesCyclicInputPayloads(t *testing.T) {
+	cfg := shared.DefaultFederationConfig()
+	cfg.ConsensusQuorum = 1.0
+
+	hub := NewFederationHub(cfg)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	registerTestSwarm(t, hub, "swarm-cycle-source", "Cycle Source")
+	registerTestSwarm(t, hub, "swarm-cycle-target", "Cycle Target")
+
+	cyclicPayload := map[string]interface{}{"kind": "cycle"}
+	cyclicPayload["self"] = cyclicPayload
+
+	sentMessage, err := hub.SendMessage("swarm-cycle-source", "swarm-cycle-target", cyclicPayload)
+	if err != nil {
+		t.Fatalf("expected send message with cyclic payload to succeed, got %v", err)
+	}
+	if sentMessage == nil {
+		t.Fatal("expected sent message")
+	}
+
+	cyclicProposalValue := map[string]interface{}{"mode": "proposal-cycle"}
+	cyclicProposalValue["self"] = cyclicProposalValue
+
+	proposal, err := hub.Propose("swarm-cycle-source", "cyclic", cyclicProposalValue)
+	if err != nil {
+		t.Fatalf("expected propose with cyclic value to succeed, got %v", err)
+	}
+	if proposal == nil {
+		t.Fatal("expected proposal")
+	}
+
+	cyclicPayload["kind"] = "tampered"
+	cyclicProposalValue["mode"] = "tampered"
+
+	storedMessage, ok := hub.GetMessage(sentMessage.ID)
+	if !ok {
+		t.Fatal("expected stored message")
+	}
+	storedMessagePayload := requireMap(t, storedMessage.Payload, "stored cyclic message payload")
+	if storedMessagePayload["kind"] != "cycle" {
+		t.Fatalf("expected stored cyclic message payload to remain unchanged, got %v", storedMessagePayload["kind"])
+	}
+	if nestedSelf := requireMap(t, storedMessagePayload["self"], "stored cyclic message self reference"); nestedSelf["kind"] != "cycle" {
+		t.Fatalf("expected stored cyclic message self reference to be cloned, got %v", nestedSelf["kind"])
+	}
+
+	storedProposal, ok := hub.GetProposal(proposal.ID)
+	if !ok {
+		t.Fatal("expected stored proposal")
+	}
+	storedProposalValue := requireMap(t, storedProposal.Value, "stored cyclic proposal value")
+	if storedProposalValue["mode"] != "proposal-cycle" {
+		t.Fatalf("expected stored cyclic proposal value to remain unchanged, got %v", storedProposalValue["mode"])
+	}
+	if nestedSelf := requireMap(t, storedProposalValue["self"], "stored cyclic proposal self reference"); nestedSelf["mode"] != "proposal-cycle" {
+		t.Fatalf("expected stored cyclic proposal self reference to be cloned, got %v", nestedSelf["mode"])
+	}
+}
+
 func requireMap(t *testing.T, value interface{}, context string) map[string]interface{} {
 	t.Helper()
 	mapped, ok := value.(map[string]interface{})
