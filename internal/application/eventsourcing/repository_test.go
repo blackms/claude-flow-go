@@ -526,3 +526,69 @@ func TestAggregateRepository_Load_SnapshotOnlyAggregate(t *testing.T) {
 		t.Fatalf("expected final aggregate version 3, got %d", agg.Version())
 	}
 }
+
+func TestAggregateRepository_Load_SnapshotRestoreFailureWithoutEventsReturnsNotFound(t *testing.T) {
+	ctx := context.Background()
+	aggregateID := "aggregate-snapshot-fail-no-events"
+
+	eventStore := infra.NewInMemoryEventStore()
+	snapshotStore := infra.NewInMemorySnapshotStore()
+	serializer := infra.NewJSONEventSerializer()
+
+	if err := snapshotStore.Save(ctx, &domain.Snapshot{
+		AggregateID:   aggregateID,
+		AggregateType: "repository-test",
+		Version:       2,
+		State:         []byte(`{"restored":true}`),
+		CreatedAt:     time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("failed to save snapshot: %v", err)
+	}
+
+	repo := NewAggregateRepository(RepositoryConfig{
+		EventStore:    eventStore,
+		SnapshotStore: snapshotStore,
+		Serializer:    serializer,
+		Factory: func(id string) domain.Aggregate {
+			return &repositorySnapshotFailAggregate{id: id}
+		},
+	})
+
+	_, err := repo.Load(ctx, aggregateID)
+	if !errors.Is(err, domain.ErrAggregateNotFound) {
+		t.Fatalf("expected ErrAggregateNotFound after snapshot restore failure with no events, got %v", err)
+	}
+}
+
+func TestAggregateRepository_Load_NonStatefulSnapshotWithoutEventsReturnsNotFound(t *testing.T) {
+	ctx := context.Background()
+	aggregateID := "aggregate-non-stateful-no-events"
+
+	eventStore := infra.NewInMemoryEventStore()
+	snapshotStore := infra.NewInMemorySnapshotStore()
+	serializer := infra.NewJSONEventSerializer()
+
+	if err := snapshotStore.Save(ctx, &domain.Snapshot{
+		AggregateID:   aggregateID,
+		AggregateType: "repository-test",
+		Version:       2,
+		State:         []byte(`{"restored":true}`),
+		CreatedAt:     time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("failed to save snapshot: %v", err)
+	}
+
+	repo := NewAggregateRepository(RepositoryConfig{
+		EventStore:    eventStore,
+		SnapshotStore: snapshotStore,
+		Serializer:    serializer,
+		Factory: func(id string) domain.Aggregate {
+			return &repositorySetterOnlyAggregate{id: id}
+		},
+	})
+
+	_, err := repo.Load(ctx, aggregateID)
+	if !errors.Is(err, domain.ErrAggregateNotFound) {
+		t.Fatalf("expected ErrAggregateNotFound for non-stateful aggregate with snapshot-only history, got %v", err)
+	}
+}
