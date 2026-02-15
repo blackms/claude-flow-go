@@ -854,6 +854,22 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 				"proposalId": "p-1",
 			},
 		},
+		{
+			name:     "register swarm missing name",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"maxAgents": float64(5),
+			},
+		},
+		{
+			name:     "register swarm missing maxAgents",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId": "swarm-1",
+				"name":    "swarm-one",
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -936,6 +952,15 @@ func TestFederationTools_ExecuteAndExecuteTool_RuntimeErrorParity(t *testing.T) 
 				"voterId":    "missing-voter",
 				"proposalId": "missing-proposal",
 				"approve":    true,
+			},
+		},
+		{
+			name:     "register swarm with non-positive capacity",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      "swarm-one",
+				"maxAgents": float64(0),
 			},
 		},
 	}

@@ -4,6 +4,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
 	"github.com/anthropics/claude-flow-go/internal/shared"
@@ -362,14 +363,37 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 		}, fmt.Errorf("swarmId is required")
 	}
 
-	if name, ok := args["name"].(string); ok {
+	if name, ok := args["name"].(string); ok && strings.TrimSpace(name) != "" {
 		swarm.Name = name
+	} else {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "name is required",
+		}, fmt.Errorf("name is required")
 	}
 	if endpoint, ok := args["endpoint"].(string); ok {
 		swarm.Endpoint = endpoint
 	}
-	if maxAgents, ok := args["maxAgents"].(float64); ok {
+
+	switch maxAgents := args["maxAgents"].(type) {
+	case float64:
 		swarm.MaxAgents = int(maxAgents)
+	case int:
+		swarm.MaxAgents = maxAgents
+	case int64:
+		swarm.MaxAgents = int(maxAgents)
+	default:
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "maxAgents is required",
+		}, fmt.Errorf("maxAgents is required")
+	}
+
+	if swarm.MaxAgents <= 0 {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "maxAgents must be greater than 0",
+		}, fmt.Errorf("maxAgents must be greater than 0")
 	}
 	if caps, ok := args["capabilities"].([]interface{}); ok {
 		for _, cap := range caps {
