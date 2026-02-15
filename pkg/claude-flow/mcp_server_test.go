@@ -284,6 +284,13 @@ func TestMCPServer_RunStdioRejectsNilContext(t *testing.T) {
 	if err.Error() != "context is required" {
 		t.Fatalf("expected context-required error, got %q", err.Error())
 	}
+
+	if err := server.RunStdio(nil, nil, bytes.NewBuffer(nil)); err == nil || err.Error() != "context is required" {
+		t.Fatalf("expected context-required precedence with nil reader, got %v", err)
+	}
+	if err := server.RunStdio(nil, bytes.NewBuffer(nil), nil); err == nil || err.Error() != "context is required" {
+		t.Fatalf("expected context-required precedence with nil writer, got %v", err)
+	}
 }
 
 func TestMCPServer_RunStdioRejectsNilReaderOrWriter(t *testing.T) {
