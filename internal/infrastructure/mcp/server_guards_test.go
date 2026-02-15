@@ -240,3 +240,43 @@ func TestServer_HandleRequestToolsListIncludesSortedToolNames(t *testing.T) {
 		t.Fatalf("expected custom registered tools in list, sawAAA=%v sawZZZ=%v", sawAAA, sawZZZ)
 	}
 }
+
+func TestServer_OptionsAndLoopsIgnoreNilProviders(t *testing.T) {
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			nil,
+			guardTestProvider{},
+		},
+	})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected ListTools to succeed with nil provider present")
+	}
+
+	var sawGuardProvider bool
+	for _, tool := range tools {
+		if tool.Name == "guard/provider-tool" {
+			sawGuardProvider = true
+			break
+		}
+	}
+	if !sawGuardProvider {
+		t.Fatalf("expected guard provider tool in list, got %+v", tools)
+	}
+
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "nil-provider-dispatch",
+		Method: "guard/provider-tool",
+		Params: map[string]interface{}{},
+	})
+	if resp.Error != nil {
+		t.Fatalf("expected request dispatch to skip nil provider and succeed, got %v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Fatal("expected non-nil result when non-nil provider handles request")
+	}
+}

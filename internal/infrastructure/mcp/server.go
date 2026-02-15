@@ -168,8 +168,14 @@ func NewServer(opts Options) *Server {
 
 	// Combine user-provided tools with built-in tools
 	allTools := make([]shared.MCPToolProvider, 0, len(opts.Tools)+1)
-	allTools = append(allTools, opts.Tools...)
-	allTools = append(allTools, hooksTools)
+	for _, provider := range opts.Tools {
+		if provider != nil {
+			allTools = append(allTools, provider)
+		}
+	}
+	if hooksTools != nil {
+		allTools = append(allTools, hooksTools)
+	}
 
 	return &Server{
 		tools:        allTools,
@@ -224,6 +230,9 @@ func (s *Server) Start() error {
 
 	// Build tool registry
 	for _, provider := range s.tools {
+		if provider == nil {
+			continue
+		}
 		for _, tool := range provider.GetTools() {
 			s.toolRegistry[tool.Name] = tool
 		}
@@ -330,6 +339,9 @@ func (s *Server) ListTools() []shared.MCPTool {
 
 	// Add tools from providers
 	for _, provider := range s.tools {
+		if provider == nil {
+			continue
+		}
 		for _, tool := range provider.GetTools() {
 			if !seen[tool.Name] {
 				result = append(result, tool)
@@ -393,6 +405,9 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 
 	// Find the tool provider that can handle this request
 	for _, provider := range providers {
+		if provider == nil {
+			continue // Ignore malformed provider entries
+		}
 		result, err := provider.Execute(ctx, request.Method, request.Params)
 		if err != nil {
 			continue // Try next provider
@@ -478,6 +493,9 @@ func (s *Server) handleToolsCall(ctx context.Context, request shared.MCPRequest)
 	s.mu.RUnlock()
 
 	for _, provider := range providers {
+		if provider == nil {
+			continue
+		}
 		result, err := provider.Execute(ctx, toolName, arguments)
 		if err != nil {
 			continue
