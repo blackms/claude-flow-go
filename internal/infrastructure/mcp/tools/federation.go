@@ -517,8 +517,15 @@ func (t *FederationTools) broadcast(ctx context.Context, args map[string]interfa
 			Error:   "payload is required",
 		}, fmt.Errorf("payload is required")
 	}
+	payloadMap, ok := payload.(map[string]interface{})
+	if !ok {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "payload must be an object",
+		}, fmt.Errorf("payload must be an object")
+	}
 
-	msg, err := t.hub.Broadcast(sourceSwarmID, payload)
+	msg, err := t.hub.Broadcast(sourceSwarmID, payloadMap)
 	if err != nil {
 		return shared.MCPToolResult{
 			Success: false,
@@ -559,8 +566,15 @@ func (t *FederationTools) propose(ctx context.Context, args map[string]interface
 			Error:   "value is required",
 		}, fmt.Errorf("value is required")
 	}
+	valueMap, ok := value.(map[string]interface{})
+	if !ok {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "value must be an object",
+		}, fmt.Errorf("value must be an object")
+	}
 
-	proposal, err := t.hub.Propose(proposerID, proposalType, value)
+	proposal, err := t.hub.Propose(proposerID, proposalType, valueMap)
 	if err != nil {
 		return shared.MCPToolResult{
 			Success: false,

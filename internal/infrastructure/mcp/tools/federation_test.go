@@ -2101,6 +2101,14 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "broadcast non-object payload",
+			toolName: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": "swarm-1",
+				"payload":       "not-an-object",
+			},
+		},
+		{
 			name:     "broadcast blank sourceSwarmId",
 			toolName: "federation/broadcast",
 			args: map[string]interface{}{
@@ -2148,6 +2156,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			args: map[string]interface{}{
 				"proposerId":   "swarm-1",
 				"proposalType": "scaling",
+			},
+		},
+		{
+			name:     "propose non-object value",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "swarm-1",
+				"proposalType": "scaling",
+				"value":        "not-an-object",
 			},
 		},
 		{
