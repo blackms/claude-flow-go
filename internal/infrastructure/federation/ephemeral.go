@@ -376,6 +376,9 @@ func (fh *FederationHub) GetAgentsByStatus(status shared.EphemeralAgentStatus) [
 func (fh *FederationHub) cleanupExpiredAgents() {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return
+	}
 
 	now := shared.Now()
 	expiredAgents := make([]string, 0)

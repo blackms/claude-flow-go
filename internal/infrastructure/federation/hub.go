@@ -371,6 +371,9 @@ func (fh *FederationHub) cleanupLoop() {
 func (fh *FederationHub) syncFederation() {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return
+	}
 
 	now := shared.Now()
 	heartbeatThreshold := fh.config.HeartbeatInterval * 3 // 3x heartbeat = degraded

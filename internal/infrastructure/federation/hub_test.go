@@ -317,6 +317,51 @@ func TestFederationHub_MutatingOperationsRejectAfterShutdown(t *testing.T) {
 	}
 }
 
+func TestFederationHub_BackgroundMaintenanceNoOpsAfterShutdown(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "maintenance-swarm",
+		Name:      "Maintenance Swarm",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register swarm: %v", err)
+	}
+
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("failed to shutdown federation hub: %v", err)
+	}
+
+	eventsBefore := hub.GetEvents(0)
+	syncsBefore := 0
+	for _, event := range eventsBefore {
+		if event != nil && event.Type == shared.FederationEventSynced {
+			syncsBefore++
+		}
+	}
+
+	hub.syncFederation()
+	hub.cleanupExpiredAgents()
+
+	eventsAfter := hub.GetEvents(0)
+	syncsAfter := 0
+	for _, event := range eventsAfter {
+		if event != nil && event.Type == shared.FederationEventSynced {
+			syncsAfter++
+		}
+	}
+
+	if len(eventsAfter) != len(eventsBefore) {
+		t.Fatalf("expected maintenance calls after shutdown to avoid appending events, before=%d after=%d", len(eventsBefore), len(eventsAfter))
+	}
+	if syncsAfter != syncsBefore {
+		t.Fatalf("expected no additional synced events after shutdown maintenance calls, before=%d after=%d", syncsBefore, syncsAfter)
+	}
+}
+
 func TestFederationHub_RegisterSwarmRejectsTrimmedDuplicateIDs(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
