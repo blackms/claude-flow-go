@@ -3183,3 +3183,68 @@ func TestFederationTools_ExecuteAndExecuteTool_UnknownToolParity(t *testing.T) {
 		t.Fatalf("expected error message parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
 	}
 }
+
+func TestFederationTools_ExecuteAndExecuteTool_NilArgsSafety(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	tests := []struct {
+		name          string
+		toolName      string
+		expectSuccess bool
+		expectError   bool
+	}{
+		{name: "status with nil args", toolName: "federation/status", expectSuccess: true, expectError: false},
+		{name: "list with nil args", toolName: "federation/list-ephemeral", expectSuccess: true, expectError: false},
+		{name: "spawn with nil args", toolName: "federation/spawn-ephemeral", expectSuccess: false, expectError: true},
+		{name: "terminate with nil args", toolName: "federation/terminate-ephemeral", expectSuccess: false, expectError: true},
+		{name: "register with nil args", toolName: "federation/register-swarm", expectSuccess: false, expectError: true},
+		{name: "broadcast with nil args", toolName: "federation/broadcast", expectSuccess: false, expectError: true},
+		{name: "propose with nil args", toolName: "federation/propose", expectSuccess: false, expectError: true},
+		{name: "vote with nil args", toolName: "federation/vote", expectSuccess: false, expectError: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			execResult, execErr := ft.Execute(context.Background(), tc.toolName, nil)
+			directResult, directErr := ft.ExecuteTool(context.Background(), tc.toolName, nil)
+
+			if tc.expectError {
+				if execErr == nil {
+					t.Fatalf("expected Execute to return error for %s", tc.toolName)
+				}
+				if directErr == nil {
+					t.Fatalf("expected ExecuteTool to return error for %s", tc.toolName)
+				}
+			} else {
+				if execErr != nil {
+					t.Fatalf("expected Execute success for %s, got error: %v", tc.toolName, execErr)
+				}
+				if directErr != nil {
+					t.Fatalf("expected ExecuteTool success for %s, got error: %v", tc.toolName, directErr)
+				}
+			}
+
+			if execResult == nil {
+				t.Fatalf("expected Execute result for %s", tc.toolName)
+			}
+			if execResult.Success != tc.expectSuccess {
+				t.Fatalf("expected Execute success=%v for %s, got %v", tc.expectSuccess, tc.toolName, execResult.Success)
+			}
+
+			if execResult.Success != directResult.Success {
+				t.Fatalf("expected success parity for %s, got Execute=%v ExecuteTool=%v", tc.toolName, execResult.Success, directResult.Success)
+			}
+			if execResult.Error != directResult.Error {
+				t.Fatalf("expected error parity for %s, got Execute=%q ExecuteTool=%q", tc.toolName, execResult.Error, directResult.Error)
+			}
+		})
+	}
+}
