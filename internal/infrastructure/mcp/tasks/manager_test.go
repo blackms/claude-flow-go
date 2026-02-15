@@ -30,3 +30,16 @@ func TestManagedPriorityToTaskPriority(t *testing.T) {
 		})
 	}
 }
+
+func TestManagedPriorityToTaskPriority_MatchesSharedMapping(t *testing.T) {
+	for priority := -5; priority <= 15; priority++ {
+		got := managedPriorityToTaskPriority(priority)
+		expected := shared.IntToPriority(priority)
+		if got != expected {
+			t.Fatalf(
+				"priority %d mismatch: manager mapping=%q shared mapping=%q",
+				priority, got, expected,
+			)
+		}
+	}
+}
