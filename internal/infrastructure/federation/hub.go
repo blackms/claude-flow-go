@@ -432,8 +432,9 @@ func (fh *FederationHub) SetEventHandler(handler EventHandler) {
 
 // emitEvent emits a federation event.
 func (fh *FederationHub) emitEvent(event shared.FederationEvent) {
-	event.Data = cloneInterfaceValue(event.Data)
-	fh.events = append(fh.events, &event)
+	historyEvent := event
+	historyEvent.Data = cloneInterfaceValue(event.Data)
+	fh.events = append(fh.events, &historyEvent)
 
 	// Limit event history
 	if len(fh.events) > fh.config.MaxMessageHistory {
@@ -441,7 +442,9 @@ func (fh *FederationHub) emitEvent(event shared.FederationEvent) {
 	}
 
 	if fh.eventHandler != nil {
-		go fh.eventHandler(event)
+		handlerEvent := historyEvent
+		handlerEvent.Data = cloneInterfaceValue(historyEvent.Data)
+		go fh.eventHandler(handlerEvent)
 	}
 }
 

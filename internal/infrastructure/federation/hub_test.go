@@ -257,6 +257,76 @@ func TestFederationHub_SetEventHandlerSupportsUpdateAndClear(t *testing.T) {
 	}
 }
 
+func TestFederationHub_EventHandlerMutationDoesNotCorruptEventHistory(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "event-history-source",
+		Name:      "Event History Source",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register source swarm: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "event-history-target",
+		Name:      "Event History Target",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register target swarm: %v", err)
+	}
+
+	handlerCalled := make(chan struct{}, 1)
+	hub.SetEventHandler(func(event shared.FederationEvent) {
+		if event.Type != shared.FederationEventMessageSent {
+			return
+		}
+		if data, ok := event.Data.(map[string]interface{}); ok {
+			data["target"] = "tampered-target"
+			data["messageId"] = "tampered-message"
+		}
+		select {
+		case handlerCalled <- struct{}{}:
+		default:
+		}
+	})
+
+	if _, err := hub.SendMessage("event-history-source", "event-history-target", map[string]interface{}{"ok": true}); err != nil {
+		t.Fatalf("failed to send message: %v", err)
+	}
+
+	select {
+	case <-handlerCalled:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for event handler invocation")
+	}
+
+	events := hub.GetEvents(0)
+	foundMessageSent := false
+	for _, event := range events {
+		if event == nil || event.Type != shared.FederationEventMessageSent {
+			continue
+		}
+		data := requireMapData(t, event.Data, "message sent event data")
+		if data["target"] != "event-history-target" {
+			t.Fatalf("expected event history target to remain event-history-target, got %v", data["target"])
+		}
+		if data["messageId"] == "tampered-message" {
+			t.Fatalf("expected event history messageId to remain immutable, got %v", data["messageId"])
+		}
+		foundMessageSent = true
+		break
+	}
+	if !foundMessageSent {
+		t.Fatal("expected message sent event in event history")
+	}
+}
+
 func TestFederationHub_MutatingOperationsRejectAfterShutdown(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
@@ -901,6 +971,16 @@ func TestFederationHub_RegisterSwarmTrimsFields(t *testing.T) {
 			t.Fatalf("expected capability %q at index %d, got %q", capability, i, swarm.Capabilities[i])
 		}
 	}
+}
+
+func requireMapData(t *testing.T, value interface{}, context string) map[string]interface{} {
+	t.Helper()
+
+	mapped, ok := value.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected %s to be map[string]interface{}, got %T", context, value)
+	}
+	return mapped
 }
 
 func TestFederationHub_SwarmOperationsTrimIdentifiers(t *testing.T) {
