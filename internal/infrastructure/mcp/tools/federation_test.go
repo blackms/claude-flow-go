@@ -321,6 +321,72 @@ func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmSuccessParity(t *tes
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_BroadcastSuccessParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-source",
+		Name:      "Source Swarm",
+		MaxAgents: 10,
+	}); err != nil {
+		t.Fatalf("failed to register source swarm: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-target",
+		Name:      "Target Swarm",
+		MaxAgents: 10,
+	}); err != nil {
+		t.Fatalf("failed to register target swarm: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{
+		"sourceSwarmId": "swarm-source",
+		"payload": map[string]interface{}{
+			"event": "deployment",
+		},
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/broadcast", args)
+	if execErr != nil {
+		t.Fatalf("Execute should succeed, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result to be non-nil")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/broadcast", args)
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execMsg, ok := execResult.Data.(*shared.FederationMessage)
+	if !ok {
+		t.Fatalf("expected Execute data type *shared.FederationMessage, got %T", execResult.Data)
+	}
+	directMsg, ok := directResult.Data.(*shared.FederationMessage)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type *shared.FederationMessage, got %T", directResult.Data)
+	}
+
+	if execMsg.Type != directMsg.Type {
+		t.Fatalf("expected message type parity, got Execute=%v ExecuteTool=%v", execMsg.Type, directMsg.Type)
+	}
+	if execMsg.SourceSwarmID != "swarm-source" || directMsg.SourceSwarmID != "swarm-source" {
+		t.Fatalf("expected both messages to use source swarm-source, got Execute=%s ExecuteTool=%s", execMsg.SourceSwarmID, directMsg.SourceSwarmID)
+	}
+}
+
 func TestFederationTools_Execute_ValidationErrorPropagation(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
