@@ -179,3 +179,28 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationErrorParity(t *testing.
 		t.Fatalf("expected error message parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
 	}
 }
+
+func TestFederationTools_ExecuteAndExecuteTool_UnknownToolParity(t *testing.T) {
+	ft := &FederationTools{}
+
+	args := map[string]interface{}{}
+	execResult, execErr := ft.Execute(context.Background(), "federation/unknown-tool", args)
+	if execErr == nil {
+		t.Fatal("expected Execute error for unknown tool")
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result for unknown tool")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/unknown-tool", args)
+	if directErr == nil {
+		t.Fatal("expected ExecuteTool error for unknown tool")
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+	if execResult.Error != directResult.Error {
+		t.Fatalf("expected error message parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
+	}
+}
