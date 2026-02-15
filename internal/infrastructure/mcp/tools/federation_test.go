@@ -404,6 +404,89 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	}
 }
 
+func TestCloneFederationMessage_DeepCopiesPayload(t *testing.T) {
+	original := &shared.FederationMessage{
+		ID:            "msg-1",
+		Type:          shared.FederationMsgBroadcast,
+		SourceSwarmID: "swarm-a",
+		Payload: map[string]interface{}{
+			"event": "created",
+			"meta":  map[string]interface{}{"v": "1"},
+			"tags":  map[string]string{"env": "prod"},
+		},
+	}
+
+	cloned := cloneFederationMessage(original)
+	if cloned == nil {
+		t.Fatal("expected cloned message")
+	}
+	if cloned == original {
+		t.Fatal("expected cloned message pointer to differ from original")
+	}
+	if !reflect.DeepEqual(cloned, original) {
+		t.Fatalf("expected cloned message to equal original before mutation; original=%v cloned=%v", original, cloned)
+	}
+
+	clonedPayload := cloned.Payload.(map[string]interface{})
+	clonedPayload["event"] = "mutated"
+	clonedPayload["meta"].(map[string]interface{})["v"] = "2"
+	clonedPayload["tags"].(map[string]string)["env"] = "staging"
+
+	origPayload := original.Payload.(map[string]interface{})
+	if origPayload["event"] != "created" {
+		t.Fatalf("expected original payload event unchanged, got %v", origPayload["event"])
+	}
+	if origPayload["meta"].(map[string]interface{})["v"] != "1" {
+		t.Fatalf("expected original nested payload unchanged, got %v", origPayload["meta"].(map[string]interface{})["v"])
+	}
+	if origPayload["tags"].(map[string]string)["env"] != "prod" {
+		t.Fatalf("expected original typed tags unchanged, got %v", origPayload["tags"].(map[string]string)["env"])
+	}
+}
+
+func TestCloneFederationProposal_DeepCopiesValueAndVotes(t *testing.T) {
+	original := &shared.FederationProposal{
+		ID:         "proposal-1",
+		ProposerID: "swarm-a",
+		Type:       "scale",
+		Value: map[string]interface{}{
+			"config": map[string]interface{}{"maxAgents": float64(5)},
+			"tags":   map[string]string{"priority": "high"},
+		},
+		Votes: map[string]bool{
+			"swarm-a": true,
+		},
+		Status: shared.FederationProposalPending,
+	}
+
+	cloned := cloneFederationProposal(original)
+	if cloned == nil {
+		t.Fatal("expected cloned proposal")
+	}
+	if cloned == original {
+		t.Fatal("expected cloned proposal pointer to differ from original")
+	}
+	if !reflect.DeepEqual(cloned, original) {
+		t.Fatalf("expected cloned proposal to equal original before mutation; original=%v cloned=%v", original, cloned)
+	}
+
+	clonedValue := cloned.Value.(map[string]interface{})
+	clonedValue["config"].(map[string]interface{})["maxAgents"] = float64(99)
+	clonedValue["tags"].(map[string]string)["priority"] = "low"
+	cloned.Votes["swarm-b"] = false
+
+	origValue := original.Value.(map[string]interface{})
+	if origValue["config"].(map[string]interface{})["maxAgents"] != float64(5) {
+		t.Fatalf("expected original config unchanged, got %v", origValue["config"].(map[string]interface{})["maxAgents"])
+	}
+	if origValue["tags"].(map[string]string)["priority"] != "high" {
+		t.Fatalf("expected original typed tags unchanged, got %v", origValue["tags"].(map[string]string)["priority"])
+	}
+	if _, exists := original.Votes["swarm-b"]; exists {
+		t.Fatal("expected original votes map unchanged")
+	}
+}
+
 func TestFederationTools_Execute_UnknownTool(t *testing.T) {
 	ft := &FederationTools{}
 
