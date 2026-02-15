@@ -92,6 +92,86 @@ func TestNewMCPServer_RegistersFederationTools(t *testing.T) {
 	}
 }
 
+func TestMCPServer_ListToolsReturnsSortedNames(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server")
+	}
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected non-empty tool list")
+	}
+
+	prev := ""
+	for i, tool := range tools {
+		if tool.Name == "" {
+			t.Fatalf("expected non-empty tool name at index %d", i)
+		}
+		if prev != "" && prev > tool.Name {
+			t.Fatalf("expected sorted tool names, got %q before %q", prev, tool.Name)
+		}
+		prev = tool.Name
+	}
+}
+
+func TestMCPServer_ListToolsReturnsDefensiveCopies(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server")
+	}
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+
+	extractSpawnSchema := func(tools []MCPTool) map[string]interface{} {
+		for _, tool := range tools {
+			if tool.Name == "federation/spawn-ephemeral" {
+				return tool.Parameters
+			}
+		}
+		return nil
+	}
+
+	firstSchema := extractSpawnSchema(server.ListTools())
+	if firstSchema == nil {
+		t.Fatal("expected federation/spawn-ephemeral schema")
+	}
+
+	firstProperties, ok := firstSchema["properties"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected properties map, got %T", firstSchema["properties"])
+	}
+	firstTTL, ok := firstProperties["ttl"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ttl map, got %T", firstProperties["ttl"])
+	}
+	firstTTL["minimum"] = float64(-99)
+	firstSchema["externallyMutated"] = true
+
+	secondSchema := extractSpawnSchema(server.ListTools())
+	if secondSchema == nil {
+		t.Fatal("expected federation/spawn-ephemeral schema on second read")
+	}
+	if _, ok := secondSchema["externallyMutated"]; ok {
+		t.Fatalf("expected schema mutation to be isolated, got %v", secondSchema["externallyMutated"])
+	}
+	secondProperties, ok := secondSchema["properties"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected second properties map, got %T", secondSchema["properties"])
+	}
+	secondTTL, ok := secondProperties["ttl"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected second ttl map, got %T", secondProperties["ttl"])
+	}
+	if secondTTL["minimum"] == float64(-99) {
+		t.Fatalf("expected ttl minimum mutation to be isolated, got %v", secondTTL["minimum"])
+	}
+}
+
 func TestMCPServer_StopShutsDownFederationHub(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
 	if server == nil {
