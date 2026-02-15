@@ -1208,6 +1208,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) writeResponse(w http.ResponseWriter, response shared.MCPResponse) {
+	if w == nil {
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }

@@ -72,6 +72,19 @@ func TestServer_HTTPHandlersIgnoreNilRequestOrWriter(t *testing.T) {
 	})
 }
 
+func TestServer_HTTPWriteHelpersIgnoreNilWriter(t *testing.T) {
+	server := NewServer(Options{})
+
+	assertNoPanic(t, func() {
+		server.writeResponse(nil, shared.MCPResponse{
+			ID: "nil-writer-response",
+		})
+	})
+	assertNoPanic(t, func() {
+		server.writeError(nil, "nil-writer-error", -32000, "error")
+	})
+}
+
 func TestServer_HTTPHandleRequestReturnsParseErrorForInvalidJSON(t *testing.T) {
 	server := NewServer(Options{})
 	recorder := httptest.NewRecorder()
