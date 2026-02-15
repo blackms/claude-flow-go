@@ -176,6 +176,18 @@ func TestServer_HTTPHandleListToolsReturnsSortedTools(t *testing.T) {
 	}
 }
 
+func TestServer_HTTPHandleListToolsRejectsNonGET(t *testing.T) {
+	server := NewServer(Options{})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/tools", nil)
+
+	server.handleListTools(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 for non-GET /tools request, got %d", recorder.Code)
+	}
+}
+
 func TestServer_HTTPHandleHealthRejectsNonGET(t *testing.T) {
 	server := NewServer(Options{})
 	recorder := httptest.NewRecorder()
