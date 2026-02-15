@@ -3,7 +3,9 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"net"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -339,6 +341,41 @@ func TestServer_StartRejectsInvalidPortAndHost(t *testing.T) {
 	malformedHostServer.host = "   "
 	if err := malformedHostServer.Start(); err == nil || err.Error() != "host is required" {
 		t.Fatalf("expected host-required start error, got %v", err)
+	}
+}
+
+func TestServer_StartReturnsBindErrorWhenPortInUse(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to reserve local test port: %v", err)
+	}
+	defer listener.Close()
+
+	_, portRaw, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to parse reserved listener address: %v", err)
+	}
+	port, err := strconv.Atoi(portRaw)
+	if err != nil {
+		t.Fatalf("failed to convert reserved listener port: %v", err)
+	}
+
+	server := NewServer(Options{
+		Host: "127.0.0.1",
+		Port: port,
+	})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	startErr := server.Start()
+	if startErr == nil {
+		t.Fatal("expected start to fail when port is already in use")
+	}
+
+	status := server.GetStatus()
+	if running, ok := status["running"].(bool); !ok || running {
+		t.Fatalf("expected running=false after bind failure, got %v", status["running"])
 	}
 }
 

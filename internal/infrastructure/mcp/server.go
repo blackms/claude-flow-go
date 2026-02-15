@@ -497,11 +497,16 @@ func (s *Server) Start() error {
 		Handler: mux,
 	}
 
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+
 	s.running = true
 
 	// Start server in goroutine
 	go func() {
-		if err := s.httpServer.ListenAndServe(); err != http.ErrServerClosed {
+		if err := s.httpServer.Serve(listener); err != http.ErrServerClosed {
 			s.mu.Lock()
 			s.running = false
 			s.mu.Unlock()

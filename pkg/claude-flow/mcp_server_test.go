@@ -7,7 +7,9 @@ import (
 	"errors"
 	"io"
 	"math"
+	"net"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -413,6 +415,38 @@ func TestMCPServer_StartRejectsInvalidPort(t *testing.T) {
 	})
 	if err := overflowPortServer.Start(); err == nil || err.Error() != "invalid port: 70000" {
 		t.Fatalf("expected overflow-port start error, got %v", err)
+	}
+}
+
+func TestMCPServer_StartReturnsBindErrorWhenPortInUse(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to reserve local test port: %v", err)
+	}
+	defer listener.Close()
+
+	_, portRaw, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to parse reserved listener address: %v", err)
+	}
+	port, err := strconv.Atoi(portRaw)
+	if err != nil {
+		t.Fatalf("failed to convert reserved listener port: %v", err)
+	}
+
+	server := NewMCPServer(MCPServerConfig{
+		Host: "127.0.0.1",
+		Port: port,
+	})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+
+	if err := server.Start(); err == nil {
+		t.Fatal("expected bind error when port already in use")
 	}
 }
 
