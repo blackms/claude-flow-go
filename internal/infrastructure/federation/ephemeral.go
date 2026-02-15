@@ -41,6 +41,12 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 	if opts.TTL <= 0 {
 		opts.TTL = fh.config.DefaultAgentTTL
 	}
+	if opts.TTL <= 0 {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  "ttl must be greater than 0",
+		}, fmt.Errorf("ttl must be greater than 0")
+	}
 
 	// Select optimal swarm if not specified
 	var swarmID string

@@ -167,6 +167,43 @@ func TestFederationHub_SpawnEphemeralRejectsOverflowDefaultTTL(t *testing.T) {
 	}
 }
 
+func TestFederationHub_SpawnEphemeralRejectsNonPositiveDefaultTTL(t *testing.T) {
+	config := shared.DefaultFederationConfig()
+	config.DefaultAgentTTL = 0
+
+	hub := NewFederationHub(config)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-default-ttl-non-positive",
+		Name:      "Default TTL Non Positive Swarm",
+		MaxAgents: 3,
+	}); err != nil {
+		t.Fatalf("failed to register swarm: %v", err)
+	}
+
+	_, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-default-ttl-non-positive",
+		Type:    "coder",
+		Task:    "invalid default ttl",
+		TTL:     0, // trigger default TTL
+	})
+	if err == nil {
+		t.Fatal("expected spawn to fail when default ttl is non-positive")
+	}
+	if err.Error() != "ttl must be greater than 0" {
+		t.Fatalf("expected non-positive ttl error %q, got %q", "ttl must be greater than 0", err.Error())
+	}
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected no agents to be created when default ttl is non-positive, got %d", len(agents))
+	}
+}
+
 func TestFederationHub_SpawnEphemeralRejectsBlankTypeOrTask(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
