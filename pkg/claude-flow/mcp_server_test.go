@@ -109,6 +109,7 @@ func TestNewMCPServer_WithCoordinator_RegistersCoordinatorTools(t *testing.T) {
 	hasConfigGet := false
 	hasOrchestratePlan := false
 	hasMemoryStore := false
+	hasMemoryRetrieve := false
 	hasFederationStatus := false
 	hasHooksList := false
 
@@ -127,6 +128,8 @@ func TestNewMCPServer_WithCoordinator_RegistersCoordinatorTools(t *testing.T) {
 			hasOrchestratePlan = true
 		case "memory_store":
 			hasMemoryStore = true
+		case "memory_retrieve":
+			hasMemoryRetrieve = true
 		case "federation/status":
 			hasFederationStatus = true
 		case "hooks/list":
@@ -134,8 +137,8 @@ func TestNewMCPServer_WithCoordinator_RegistersCoordinatorTools(t *testing.T) {
 		}
 	}
 
-	if hasMemoryStore {
-		t.Fatal("expected memory_store to be absent when memory backend is not configured")
+	if hasMemoryStore || hasMemoryRetrieve {
+		t.Fatalf("expected memory tools to be absent when memory backend is not configured; got store=%v retrieve=%v", hasMemoryStore, hasMemoryRetrieve)
 	}
 
 	if !hasAgentSpawn || !hasConfigGet || !hasOrchestratePlan || !hasFederationStatus || !hasHooksList {
@@ -161,6 +164,7 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 	hasConfigGet := false
 	hasOrchestratePlan := false
 	hasMemoryStore := false
+	hasMemoryRetrieve := false
 	hasFederationStatus := false
 	hasHooksList := false
 
@@ -174,6 +178,8 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 			hasOrchestratePlan = true
 		case "memory_store":
 			hasMemoryStore = true
+		case "memory_retrieve":
+			hasMemoryRetrieve = true
 		case "federation/status":
 			hasFederationStatus = true
 		case "hooks/list":
@@ -181,10 +187,10 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 		}
 	}
 
-	if hasAgentSpawn || hasConfigGet || hasOrchestratePlan || hasMemoryStore {
+	if hasAgentSpawn || hasConfigGet || hasOrchestratePlan || hasMemoryStore || hasMemoryRetrieve {
 		t.Fatalf(
-			"expected coordinator/memory tools to be absent; got agent=%v config=%v orchestrate=%v memory=%v",
-			hasAgentSpawn, hasConfigGet, hasOrchestratePlan, hasMemoryStore,
+			"expected coordinator/memory tools to be absent; got agent=%v config=%v orchestrate=%v memoryStore=%v memoryRetrieve=%v",
+			hasAgentSpawn, hasConfigGet, hasOrchestratePlan, hasMemoryStore, hasMemoryRetrieve,
 		)
 	}
 
