@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -131,6 +133,10 @@ func cloneCapabilities(c *shared.MCPCapabilities) *shared.MCPCapabilities {
 
 func normalizeToolName(name string) string {
 	return strings.TrimSpace(name)
+}
+
+func buildListenAddress(host string, port int) string {
+	return net.JoinHostPort(host, strconv.Itoa(port))
 }
 
 func cloneInterfaceValue(value interface{}) interface{} {
@@ -322,7 +328,7 @@ func NewServer(opts Options) *Server {
 	if port == 0 {
 		port = 3000
 	}
-	host := opts.Host
+	host := strings.TrimSpace(opts.Host)
 	if host == "" {
 		host = "localhost"
 	}
@@ -430,10 +436,13 @@ func (s *Server) Start() error {
 	if err := s.configuredOrError(); err != nil {
 		return err
 	}
+
 	if s.port <= 0 || s.port > 65535 {
 		return fmt.Errorf("invalid port: %d", s.port)
 	}
-	if strings.TrimSpace(s.host) == "" {
+
+	trimmedHost := strings.TrimSpace(s.host)
+	if trimmedHost == "" {
 		return fmt.Errorf("host is required")
 	}
 
@@ -482,7 +491,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/tools", s.handleListTools)
 	mux.HandleFunc("/health", s.handleHealth)
 
-	addr := fmt.Sprintf("%s:%d", s.host, s.port)
+	addr := buildListenAddress(trimmedHost, s.port)
 	s.httpServer = &http.Server{
 		Addr:    addr,
 		Handler: mux,

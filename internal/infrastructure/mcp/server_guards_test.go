@@ -303,12 +303,40 @@ func TestServer_StartRejectsInvalidPortAndHost(t *testing.T) {
 		t.Fatalf("expected overflow-port start error, got %v", err)
 	}
 
+	malformedHostServer := NewServer(Options{})
+	if malformedHostServer == nil {
+		t.Fatal("expected server for malformed-host test")
+	}
+	malformedHostServer.host = "   "
+	if err := malformedHostServer.Start(); err == nil || err.Error() != "host is required" {
+		t.Fatalf("expected host-required start error, got %v", err)
+	}
+}
+
+func TestServer_NewServerNormalizesHostInput(t *testing.T) {
 	blankHostServer := NewServer(Options{Host: "   "})
 	if blankHostServer == nil {
-		t.Fatal("expected server with blank host to be constructed")
+		t.Fatal("expected server with blank host options")
 	}
-	if err := blankHostServer.Start(); err == nil || err.Error() != "host is required" {
-		t.Fatalf("expected host-required start error, got %v", err)
+	if blankHostServer.host != "localhost" {
+		t.Fatalf("expected blank host to default to localhost, got %q", blankHostServer.host)
+	}
+
+	trimmedHostServer := NewServer(Options{Host: " 127.0.0.1 "})
+	if trimmedHostServer == nil {
+		t.Fatal("expected server with padded host options")
+	}
+	if trimmedHostServer.host != "127.0.0.1" {
+		t.Fatalf("expected host trimming, got %q", trimmedHostServer.host)
+	}
+}
+
+func TestServer_BuildListenAddressSupportsIPv6(t *testing.T) {
+	if got := buildListenAddress("localhost", 3000); got != "localhost:3000" {
+		t.Fatalf("expected localhost listen address, got %q", got)
+	}
+	if got := buildListenAddress("::1", 3000); got != "[::1]:3000" {
+		t.Fatalf("expected IPv6 listen address with brackets, got %q", got)
 	}
 }
 
