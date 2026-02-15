@@ -4,6 +4,8 @@ import (
 	"context"
 	"reflect"
 	"testing"
+
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
 )
 
 func TestFederationHub_PublicLifecycleInitializeGuards(t *testing.T) {
@@ -167,6 +169,31 @@ func TestNewFederationTools_AllowsZeroValueHubWrapperAndFailsGracefully(t *testi
 	}
 	if result.Success {
 		t.Fatal("expected failed Execute result for zero-value hub wrapper")
+	}
+}
+
+func TestNewFederationTools_AllowsWrapperWithZeroValueInternalHubAndFailsGracefully(t *testing.T) {
+	hub := &FederationHub{internal: &federation.FederationHub{}}
+	fedTools := NewFederationTools(hub)
+	if fedTools == nil {
+		t.Fatal("expected federation tools wrapper for wrapper with zero-value internal hub")
+	}
+
+	result, err := fedTools.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if err == nil {
+		t.Fatal("expected Execute to fail for wrapper with zero-value internal hub")
+	}
+	if result == nil {
+		t.Fatal("expected Execute result for wrapper with zero-value internal hub")
+	}
+	if err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected configured-hub error, got %q", err.Error())
+	}
+	if result.Error != "federation hub is not configured" {
+		t.Fatalf("expected result configured-hub error, got %q", result.Error)
+	}
+	if result.Success {
+		t.Fatal("expected failed Execute result for wrapper with zero-value internal hub")
 	}
 }
 
