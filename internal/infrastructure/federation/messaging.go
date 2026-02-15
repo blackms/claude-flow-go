@@ -300,6 +300,9 @@ func (fh *FederationHub) GetMessagesBySwarm(swarmID string, limit int) []*shared
 	if limit <= 0 || limit > len(fh.messages) {
 		limit = len(fh.messages)
 	}
+	if _, exists := fh.swarms[swarmID]; !exists {
+		return []*shared.FederationMessage{}
+	}
 
 	result := make([]*shared.FederationMessage, 0)
 

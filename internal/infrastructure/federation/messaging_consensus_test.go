@@ -65,6 +65,9 @@ func TestFederationHub_MessagingOperationsTrimIdentifiersAndValidateInputs(t *te
 	if len(sourceMessages) != 4 {
 		t.Fatalf("expected all source messages when limit=0, got %d", len(sourceMessages))
 	}
+	if unknownMessages := hub.GetMessagesBySwarm("unknown-swarm", 0); len(unknownMessages) != 0 {
+		t.Fatalf("expected unknown swarm message lookup to return none, got %d", len(unknownMessages))
+	}
 	if blankSourceMessages := hub.GetMessagesBySwarm("   ", 10); len(blankSourceMessages) != 0 {
 		t.Fatalf("expected blank swarm message lookup to return none, got %d", len(blankSourceMessages))
 	}
