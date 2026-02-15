@@ -672,11 +672,43 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "propose missing proposalType",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId": "swarm-1",
+				"value":      map[string]interface{}{"maxAgents": 10},
+			},
+		},
+		{
+			name:     "propose missing value",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "swarm-1",
+				"proposalType": "scaling",
+			},
+		},
+		{
 			name:     "vote missing voterId",
 			toolName: "federation/vote",
 			args: map[string]interface{}{
 				"proposalId": "p-1",
 				"approve":    true,
+			},
+		},
+		{
+			name:     "vote missing proposalId",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId": "swarm-1",
+				"approve": true,
+			},
+		},
+		{
+			name:     "vote missing approve flag",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "swarm-1",
+				"proposalId": "p-1",
 			},
 		},
 	}
