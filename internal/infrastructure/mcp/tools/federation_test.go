@@ -2520,6 +2520,49 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "spawn non-string swarmId",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"swarmId": float64(1),
+				"type":    "coder",
+				"task":    "implement feature",
+			},
+		},
+		{
+			name:     "spawn non-string type",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": float64(1),
+				"task": "implement feature",
+			},
+		},
+		{
+			name:     "spawn non-string task",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": true,
+			},
+		},
+		{
+			name:     "spawn non-integer ttl type",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  "1000",
+			},
+		},
+		{
+			name:     "spawn non-array capabilities",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type":         "coder",
+				"task":         "implement feature",
+				"capabilities": "go",
+			},
+		},
+		{
 			name:     "list non-string swarmId",
 			toolName: "federation/list-ephemeral",
 			args: map[string]interface{}{
@@ -2682,6 +2725,34 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "register swarm non-string swarmId",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   float64(1),
+				"name":      "swarm-one",
+				"maxAgents": float64(5),
+			},
+		},
+		{
+			name:     "register swarm non-string name",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      float64(1),
+				"maxAgents": float64(5),
+			},
+		},
+		{
+			name:     "register swarm non-string endpoint",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      "swarm-one",
+				"endpoint":  true,
+				"maxAgents": float64(5),
+			},
+		},
+		{
 			name:     "register swarm non-integer maxAgents",
 			toolName: "federation/register-swarm",
 			args: map[string]interface{}{
@@ -2706,6 +2777,25 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 				"swarmId":   "swarm-1",
 				"name":      "swarm-one",
 				"maxAgents": float64(math.MaxInt) + 1024,
+			},
+		},
+		{
+			name:     "register swarm non-integer maxAgents type",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      "swarm-one",
+				"maxAgents": "5",
+			},
+		},
+		{
+			name:     "register swarm non-array capabilities",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":      "swarm-1",
+				"name":         "swarm-one",
+				"maxAgents":    float64(5),
+				"capabilities": "go",
 			},
 		},
 		{

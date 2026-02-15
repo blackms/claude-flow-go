@@ -271,42 +271,78 @@ func (t *FederationTools) getStatus(ctx context.Context, args map[string]interfa
 func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]interface{}) (shared.MCPToolResult, error) {
 	opts := shared.SpawnEphemeralOptions{}
 
-	if swarmID, ok := args["swarmId"].(string); ok {
-		opts.SwarmID = strings.TrimSpace(swarmID)
-	}
-	if agentType, ok := args["type"].(string); ok {
-		opts.Type = strings.TrimSpace(agentType)
-	}
-	if task, ok := args["task"].(string); ok {
-		opts.Task = strings.TrimSpace(task)
-	}
-	switch ttl := args["ttl"].(type) {
-	case float64:
-		if math.IsNaN(ttl) || math.IsInf(ttl, 0) {
+	if rawSwarmID, exists := args["swarmId"]; exists {
+		swarmID, ok := rawSwarmID.(string)
+		if !ok {
 			return shared.MCPToolResult{
 				Success: false,
-				Error:   "ttl must be a finite integer",
-			}, fmt.Errorf("ttl must be a finite integer")
+				Error:   "swarmId must be a string",
+			}, fmt.Errorf("swarmId must be a string")
 		}
-		if math.Trunc(ttl) != ttl {
+		opts.SwarmID = strings.TrimSpace(swarmID)
+	}
+	if rawType, exists := args["type"]; exists {
+		agentType, ok := rawType.(string)
+		if !ok {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "type must be a string",
+			}, fmt.Errorf("type must be a string")
+		}
+		opts.Type = strings.TrimSpace(agentType)
+	}
+	if rawTask, exists := args["task"]; exists {
+		task, ok := rawTask.(string)
+		if !ok {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "task must be a string",
+			}, fmt.Errorf("task must be a string")
+		}
+		opts.Task = strings.TrimSpace(task)
+	}
+	if rawTTL, exists := args["ttl"]; exists {
+		switch ttl := rawTTL.(type) {
+		case float64:
+			if math.IsNaN(ttl) || math.IsInf(ttl, 0) {
+				return shared.MCPToolResult{
+					Success: false,
+					Error:   "ttl must be a finite integer",
+				}, fmt.Errorf("ttl must be a finite integer")
+			}
+			if math.Trunc(ttl) != ttl {
+				return shared.MCPToolResult{
+					Success: false,
+					Error:   "ttl must be an integer",
+				}, fmt.Errorf("ttl must be an integer")
+			}
+			if ttl < float64(math.MinInt64) || ttl > float64(math.MaxInt64) {
+				return shared.MCPToolResult{
+					Success: false,
+					Error:   "ttl is out of range",
+				}, fmt.Errorf("ttl is out of range")
+			}
+			opts.TTL = int64(ttl)
+		case int:
+			opts.TTL = int64(ttl)
+		case int64:
+			opts.TTL = ttl
+		default:
 			return shared.MCPToolResult{
 				Success: false,
 				Error:   "ttl must be an integer",
 			}, fmt.Errorf("ttl must be an integer")
 		}
-		if ttl < float64(math.MinInt64) || ttl > float64(math.MaxInt64) {
-			return shared.MCPToolResult{
-				Success: false,
-				Error:   "ttl is out of range",
-			}, fmt.Errorf("ttl is out of range")
-		}
-		opts.TTL = int64(ttl)
-	case int:
-		opts.TTL = int64(ttl)
-	case int64:
-		opts.TTL = ttl
 	}
 	if capsRaw, ok := args["capabilities"]; ok {
+		switch capsRaw.(type) {
+		case []interface{}, []string:
+		default:
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "capabilities must be an array of strings",
+			}, fmt.Errorf("capabilities must be an array of strings")
+		}
 		opts.Capabilities = normalizeCapabilities(capsRaw)
 	}
 
@@ -438,28 +474,69 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 		Capabilities: []string{},
 	}
 
-	if swarmID, ok := args["swarmId"].(string); ok && strings.TrimSpace(swarmID) != "" {
-		swarm.SwarmID = strings.TrimSpace(swarmID)
-	} else {
+	rawSwarmID, hasSwarmID := args["swarmId"]
+	if !hasSwarmID {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "swarmId is required",
 		}, fmt.Errorf("swarmId is required")
 	}
+	swarmID, ok := rawSwarmID.(string)
+	if !ok {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "swarmId must be a string",
+		}, fmt.Errorf("swarmId must be a string")
+	}
+	if strings.TrimSpace(swarmID) == "" {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "swarmId is required",
+		}, fmt.Errorf("swarmId is required")
+	}
+	swarm.SwarmID = strings.TrimSpace(swarmID)
 
-	if name, ok := args["name"].(string); ok && strings.TrimSpace(name) != "" {
-		swarm.Name = strings.TrimSpace(name)
-	} else {
+	rawName, hasName := args["name"]
+	if !hasName {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "name is required",
 		}, fmt.Errorf("name is required")
 	}
-	if endpoint, ok := args["endpoint"].(string); ok {
+	name, ok := rawName.(string)
+	if !ok {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "name must be a string",
+		}, fmt.Errorf("name must be a string")
+	}
+	if strings.TrimSpace(name) == "" {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "name is required",
+		}, fmt.Errorf("name is required")
+	}
+	swarm.Name = strings.TrimSpace(name)
+
+	if rawEndpoint, exists := args["endpoint"]; exists {
+		endpoint, ok := rawEndpoint.(string)
+		if !ok {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "endpoint must be a string",
+			}, fmt.Errorf("endpoint must be a string")
+		}
 		swarm.Endpoint = strings.TrimSpace(endpoint)
 	}
 
-	switch maxAgents := args["maxAgents"].(type) {
+	rawMaxAgents, hasMaxAgents := args["maxAgents"]
+	if !hasMaxAgents {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "maxAgents is required",
+		}, fmt.Errorf("maxAgents is required")
+	}
+	switch maxAgents := rawMaxAgents.(type) {
 	case float64:
 		if math.IsNaN(maxAgents) || math.IsInf(maxAgents, 0) {
 			return shared.MCPToolResult{
@@ -487,8 +564,8 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 	default:
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "maxAgents is required",
-		}, fmt.Errorf("maxAgents is required")
+			Error:   "maxAgents must be an integer",
+		}, fmt.Errorf("maxAgents must be an integer")
 	}
 
 	if swarm.MaxAgents <= 0 {
@@ -498,6 +575,14 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 		}, fmt.Errorf("maxAgents must be greater than 0")
 	}
 	if capsRaw, ok := args["capabilities"]; ok {
+		switch capsRaw.(type) {
+		case []interface{}, []string:
+		default:
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "capabilities must be an array of strings",
+			}, fmt.Errorf("capabilities must be an array of strings")
+		}
 		swarm.Capabilities = append(swarm.Capabilities, normalizeCapabilities(capsRaw)...)
 	}
 
