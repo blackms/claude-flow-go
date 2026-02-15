@@ -943,6 +943,24 @@ func cloneInterfaceValue(value interface{}) interface{} {
 			cloned[key] = val
 		}
 		return cloned
+	case map[string]int:
+		cloned := make(map[string]int, len(typed))
+		for key, val := range typed {
+			cloned[key] = val
+		}
+		return cloned
+	case map[string]int64:
+		cloned := make(map[string]int64, len(typed))
+		for key, val := range typed {
+			cloned[key] = val
+		}
+		return cloned
+	case map[string]float64:
+		cloned := make(map[string]float64, len(typed))
+		for key, val := range typed {
+			cloned[key] = val
+		}
+		return cloned
 	case []interface{}:
 		cloned := make([]interface{}, len(typed))
 		for i := range typed {
@@ -975,8 +993,44 @@ func cloneInterfaceValue(value interface{}) interface{} {
 			cloned[i] = item
 		}
 		return cloned
+	case []map[string]int:
+		cloned := make([]map[string]int, len(typed))
+		for i := range typed {
+			item := make(map[string]int, len(typed[i]))
+			for key, val := range typed[i] {
+				item[key] = val
+			}
+			cloned[i] = item
+		}
+		return cloned
+	case []map[string]float64:
+		cloned := make([]map[string]float64, len(typed))
+		for i := range typed {
+			item := make(map[string]float64, len(typed[i]))
+			for key, val := range typed[i] {
+				item[key] = val
+			}
+			cloned[i] = item
+		}
+		return cloned
 	case []string:
 		cloned := make([]string, len(typed))
+		copy(cloned, typed)
+		return cloned
+	case []bool:
+		cloned := make([]bool, len(typed))
+		copy(cloned, typed)
+		return cloned
+	case []int:
+		cloned := make([]int, len(typed))
+		copy(cloned, typed)
+		return cloned
+	case []int64:
+		cloned := make([]int64, len(typed))
+		copy(cloned, typed)
+		return cloned
+	case []float64:
+		cloned := make([]float64, len(typed))
 		copy(cloned, typed)
 		return cloned
 	default:

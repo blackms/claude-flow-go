@@ -349,11 +349,14 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 			"nested": map[string]interface{}{"k": "v"},
 			"tags":   map[string]string{"owner": "team-a"},
 			"flags":  map[string]bool{"featureA": true},
+			"limits": map[string]int{"max": 10},
 		},
 		"items": []interface{}{
 			map[string]interface{}{"id": "a"},
 			[]interface{}{map[string]string{"kind": "x"}, map[string]bool{"ready": true}},
 		},
+		"counts": []int{1, 2, 3},
+		"ratios": []float64{0.5, 0.75},
 		"stringMaps": []map[string]string{
 			{"env": "prod"},
 		},
@@ -362,6 +365,9 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 		},
 		"boolMaps": []map[string]bool{
 			{"enabled": true},
+		},
+		"intMaps": []map[string]int{
+			{"max": 10},
 		},
 	}
 
@@ -378,15 +384,19 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	clonedMeta["nested"].(map[string]interface{})["k"] = "mutated"
 	clonedMeta["tags"].(map[string]string)["owner"] = "mutated-owner"
 	clonedMeta["flags"].(map[string]bool)["featureA"] = false
+	clonedMeta["limits"].(map[string]int)["max"] = 999
 
 	clonedItems := cloned["items"].([]interface{})
 	clonedItems[0].(map[string]interface{})["id"] = "mutated-id"
 	clonedItems[1].([]interface{})[0].(map[string]string)["kind"] = "mutated-kind"
 	clonedItems[1].([]interface{})[1].(map[string]bool)["ready"] = false
 
+	cloned["counts"].([]int)[0] = 100
+	cloned["ratios"].([]float64)[0] = 9.9
 	cloned["stringMaps"].([]map[string]string)[0]["env"] = "staging"
 	cloned["ifaceMaps"].([]map[string]interface{})[0]["status"] = "inactive"
 	cloned["boolMaps"].([]map[string]bool)[0]["enabled"] = false
+	cloned["intMaps"].([]map[string]int)[0]["max"] = 999
 
 	origMeta := original["meta"].(map[string]interface{})
 	if origMeta["nested"].(map[string]interface{})["k"] != "v" {
@@ -397,6 +407,9 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	}
 	if origMeta["flags"].(map[string]bool)["featureA"] != true {
 		t.Fatalf("expected original typed flags map to remain unchanged, got %v", origMeta["flags"].(map[string]bool)["featureA"])
+	}
+	if origMeta["limits"].(map[string]int)["max"] != 10 {
+		t.Fatalf("expected original typed limits map to remain unchanged, got %v", origMeta["limits"].(map[string]int)["max"])
 	}
 
 	origItems := original["items"].([]interface{})
@@ -418,6 +431,15 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	}
 	if original["boolMaps"].([]map[string]bool)[0]["enabled"] != true {
 		t.Fatalf("expected original []map[string]bool entry to remain unchanged, got %v", original["boolMaps"].([]map[string]bool)[0]["enabled"])
+	}
+	if original["counts"].([]int)[0] != 1 {
+		t.Fatalf("expected original []int entry to remain unchanged, got %v", original["counts"].([]int)[0])
+	}
+	if original["ratios"].([]float64)[0] != 0.5 {
+		t.Fatalf("expected original []float64 entry to remain unchanged, got %v", original["ratios"].([]float64)[0])
+	}
+	if original["intMaps"].([]map[string]int)[0]["max"] != 10 {
+		t.Fatalf("expected original []map[string]int entry to remain unchanged, got %v", original["intMaps"].([]map[string]int)[0]["max"])
 	}
 }
 
