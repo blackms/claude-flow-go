@@ -609,8 +609,8 @@ func TestPatternStore_CalculateSimilarity(t *testing.T) {
 
 func TestPattern_GetSuccessRate(t *testing.T) {
 	tests := []struct {
-		success  int
-		failure  int
+		success  int64
+		failure  int64
 		expected float64
 	}{
 		{10, 0, 1.0},
