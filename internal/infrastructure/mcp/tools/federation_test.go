@@ -3228,6 +3228,16 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 			expectedError: "capabilities must contain only strings",
 		},
 		{
+			name:     "spawn capabilities nil",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type":         "coder",
+				"task":         "implement feature",
+				"capabilities": nil,
+			},
+			expectedError: "capabilities must be an array of strings",
+		},
+		{
 			name:     "register endpoint wrong type",
 			toolName: "federation/register-swarm",
 			args: map[string]interface{}{
@@ -3237,6 +3247,17 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 				"maxAgents": float64(5),
 			},
 			expectedError: "endpoint must be a string",
+		},
+		{
+			name:     "register capabilities nil",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":      "swarm-1",
+				"name":         "swarm-one",
+				"maxAgents":    float64(5),
+				"capabilities": nil,
+			},
+			expectedError: "capabilities must be an array of strings",
 		},
 		{
 			name:     "vote approve wrong type",
@@ -3257,11 +3278,28 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 			expectedError: "status must be a string",
 		},
 		{
+			name:     "list status nil",
+			toolName: "federation/list-ephemeral",
+			args: map[string]interface{}{
+				"status": nil,
+			},
+			expectedError: "status must be a string",
+		},
+		{
 			name:     "terminate error wrong type",
 			toolName: "federation/terminate-ephemeral",
 			args: map[string]interface{}{
 				"agentId": "agent-1",
 				"error":   true,
+			},
+			expectedError: "error must be a string",
+		},
+		{
+			name:     "terminate error nil",
+			toolName: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": "agent-1",
+				"error":   nil,
 			},
 			expectedError: "error must be a string",
 		},
