@@ -662,6 +662,32 @@ func TestSortEphemeralAgents_HandlesNilEntries(t *testing.T) {
 	}
 }
 
+func TestSortSwarmRegistrations_HandlesNilEntries(t *testing.T) {
+	swarms := []*shared.SwarmRegistration{
+		nil,
+		{SwarmID: "swarm-b", Name: "B"},
+		nil,
+		{SwarmID: "swarm-a", Name: "A"},
+	}
+
+	sortSwarmRegistrations(swarms)
+
+	expectedOrder := []string{"swarm-a", "swarm-b"}
+	for i, expectedID := range expectedOrder {
+		if swarms[i] == nil {
+			t.Fatalf("expected non-nil swarm at index %d", i)
+		}
+		if swarms[i].SwarmID != expectedID {
+			t.Fatalf("expected swarm ID %q at index %d, got %q", expectedID, i, swarms[i].SwarmID)
+		}
+	}
+	for i := len(expectedOrder); i < len(swarms); i++ {
+		if swarms[i] != nil {
+			t.Fatalf("expected nil swarm entries to be sorted to tail, found non-nil at index %d: %v", i, swarms[i])
+		}
+	}
+}
+
 func TestFederationTools_Execute_UnknownTool(t *testing.T) {
 	ft := &FederationTools{}
 

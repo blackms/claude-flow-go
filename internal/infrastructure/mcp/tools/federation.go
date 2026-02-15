@@ -246,18 +246,19 @@ func (t *FederationTools) getStatus(ctx context.Context, args map[string]interfa
 	config := t.hub.GetConfig()
 
 	swarms := t.hub.GetSwarms()
-	sort.Slice(swarms, func(i, j int) bool {
-		return swarms[i].SwarmID < swarms[j].SwarmID
-	})
-	swarmInfos := make([]map[string]interface{}, len(swarms))
-	for i, swarm := range swarms {
-		swarmInfos[i] = map[string]interface{}{
+	sortSwarmRegistrations(swarms)
+	swarmInfos := make([]map[string]interface{}, 0, len(swarms))
+	for _, swarm := range swarms {
+		if swarm == nil {
+			continue
+		}
+		swarmInfos = append(swarmInfos, map[string]interface{}{
 			"swarmId":       swarm.SwarmID,
 			"name":          swarm.Name,
 			"status":        swarm.Status,
 			"currentAgents": swarm.CurrentAgents,
 			"maxAgents":     swarm.MaxAgents,
-		}
+		})
 	}
 
 	return shared.MCPToolResult{
@@ -916,6 +917,20 @@ func sortEphemeralAgents(agents []*shared.EphemeralAgent) {
 			return left.ID < right.ID
 		}
 		return left.CreatedAt < right.CreatedAt
+	})
+}
+
+func sortSwarmRegistrations(swarms []*shared.SwarmRegistration) {
+	sort.Slice(swarms, func(i, j int) bool {
+		left := swarms[i]
+		right := swarms[j]
+		if left == nil || right == nil {
+			if left == nil && right == nil {
+				return false
+			}
+			return left != nil
+		}
+		return left.SwarmID < right.SwarmID
 	})
 }
 
