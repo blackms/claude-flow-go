@@ -743,6 +743,12 @@ func (ms *MCPServer) RunStdio(ctx context.Context, reader io.Reader, writer io.W
 	if ctx == nil {
 		return fmt.Errorf("context is required")
 	}
+	if reader == nil {
+		return fmt.Errorf("reader is required")
+	}
+	if writer == nil {
+		return fmt.Errorf("writer is required")
+	}
 	transport := mcp.NewStdioTransport(ms.internal, reader, writer)
 	return transport.Run(ctx)
 }

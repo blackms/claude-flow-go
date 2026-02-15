@@ -274,6 +274,23 @@ func TestMCPServer_RunStdioRejectsNilContext(t *testing.T) {
 	}
 }
 
+func TestMCPServer_RunStdioRejectsNilReaderOrWriter(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server")
+	}
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+
+	if err := server.RunStdio(context.Background(), nil, bytes.NewBuffer(nil)); err == nil || err.Error() != "reader is required" {
+		t.Fatalf("expected reader-required error, got %v", err)
+	}
+	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), nil); err == nil || err.Error() != "writer is required" {
+		t.Fatalf("expected writer-required error, got %v", err)
+	}
+}
+
 func TestNewMCPServer_InitializesFederationHubLifecycle(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
 	if server == nil {
