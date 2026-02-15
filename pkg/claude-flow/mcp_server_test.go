@@ -4,6 +4,8 @@ import (
 	"math"
 	"reflect"
 	"testing"
+
+	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
 func requireFederationSchemaNumericConstraint(
@@ -76,6 +78,35 @@ func TestNewMCPServer_RegistersFederationTools(t *testing.T) {
 	}
 	if !hasFederationSpawn {
 		t.Fatal("expected federation/spawn-ephemeral tool to be registered")
+	}
+}
+
+func TestMCPServer_StopShutsDownFederationHub(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+	if server.federationHub == nil {
+		t.Fatal("expected MCP server to retain federation hub reference")
+	}
+
+	if err := server.Stop(); err != nil {
+		t.Fatalf("expected first stop to succeed, got %v", err)
+	}
+	if err := server.Stop(); err != nil {
+		t.Fatalf("expected second stop to remain idempotent, got %v", err)
+	}
+
+	err := server.federationHub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "stopped-server-swarm",
+		Name:      "Stopped Server Swarm",
+		MaxAgents: 1,
+	})
+	if err == nil {
+		t.Fatal("expected federation hub to reject mutations after server stop")
+	}
+	if err.Error() != "federation hub is shut down" {
+		t.Fatalf("expected shutdown lifecycle error, got %q", err.Error())
 	}
 }
 

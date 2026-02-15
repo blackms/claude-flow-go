@@ -617,7 +617,8 @@ func (we *WorkflowEngine) Shutdown() error {
 
 // MCPServer wraps the internal MCP server for public use.
 type MCPServer struct {
-	internal *mcp.Server
+	internal       *mcp.Server
+	federationHub *federation.FederationHub
 }
 
 // MCPServerConfig holds configuration for creating an MCP server.
@@ -665,7 +666,7 @@ func NewMCPServer(config MCPServerConfig) *MCPServer {
 
 	// Register federation tools
 	fedHub := federation.NewFederationHubWithDefaults()
-	fedHub.Initialize()
+	_ = fedHub.Initialize()
 	providers = append(providers, tools.NewFederationTools(fedHub))
 
 	opts := mcp.Options{
@@ -674,7 +675,10 @@ func NewMCPServer(config MCPServerConfig) *MCPServer {
 		Host:  config.Host,
 	}
 
-	return &MCPServer{internal: mcp.NewServer(opts)}
+	return &MCPServer{
+		internal:       mcp.NewServer(opts),
+		federationHub: fedHub,
+	}
 }
 
 // Start starts the MCP server.
@@ -684,7 +688,13 @@ func (ms *MCPServer) Start() error {
 
 // Stop stops the MCP server.
 func (ms *MCPServer) Stop() error {
-	return ms.internal.Stop()
+	stopErr := ms.internal.Stop()
+	if ms.federationHub != nil {
+		if shutdownErr := ms.federationHub.Shutdown(); stopErr == nil {
+			stopErr = shutdownErr
+		}
+	}
+	return stopErr
 }
 
 // ListTools returns available tools.
