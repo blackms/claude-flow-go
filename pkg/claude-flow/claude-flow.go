@@ -666,7 +666,9 @@ func NewMCPServer(config MCPServerConfig) *MCPServer {
 
 	// Register federation tools
 	fedHub := federation.NewFederationHubWithDefaults()
-	_ = fedHub.Initialize()
+	if err := fedHub.Initialize(); err != nil {
+		fedHub = nil
+	}
 	providers = append(providers, tools.NewFederationTools(fedHub))
 
 	opts := mcp.Options{
