@@ -3287,7 +3287,7 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			args: map[string]interface{}{
 				"swarmId":   "swarm-1",
 				"name":      "swarm-one",
-				"maxAgents": float64(math.MaxInt) + 1024,
+				"maxAgents": 1e20,
 			},
 		},
 		{
@@ -3443,6 +3443,26 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 			expectedError: "ttl must be greater than 0",
 		},
 		{
+			name:     "spawn ttl non-finite",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  math.Inf(1),
+			},
+			expectedError: "ttl must be a finite integer",
+		},
+		{
+			name:     "spawn ttl out of range",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  1e20,
+			},
+			expectedError: "ttl is out of range",
+		},
+		{
 			name:     "spawn type nil",
 			toolName: "federation/spawn-ephemeral",
 			args: map[string]interface{}{
@@ -3481,6 +3501,26 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 				"maxAgents": float64(5),
 			},
 			expectedError: "endpoint must be a string",
+		},
+		{
+			name:     "register maxAgents non-finite",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      "swarm-one",
+				"maxAgents": math.Inf(1),
+			},
+			expectedError: "maxAgents must be a finite integer",
+		},
+		{
+			name:     "register maxAgents out of range",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      "swarm-one",
+				"maxAgents": 1e20,
+			},
+			expectedError: "maxAgents is out of range",
 		},
 		{
 			name:     "register name nil",
@@ -3558,6 +3598,14 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 			expectedError: "status must be a string",
 		},
 		{
+			name:     "list status invalid value",
+			toolName: "federation/list-ephemeral",
+			args: map[string]interface{}{
+				"status": "invalid",
+			},
+			expectedError: "status must be one of: spawning, active, completing, terminated",
+		},
+		{
 			name:     "terminate error wrong type",
 			toolName: "federation/terminate-ephemeral",
 			args: map[string]interface{}{
@@ -3594,6 +3642,15 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 			expectedError: "payload is required",
 		},
 		{
+			name:     "broadcast payload wrong type",
+			toolName: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": "swarm-1",
+				"payload":       "event",
+			},
+			expectedError: "payload must be an object",
+		},
+		{
 			name:     "propose value nil",
 			toolName: "federation/propose",
 			args: map[string]interface{}{
@@ -3602,6 +3659,16 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 				"value":        nil,
 			},
 			expectedError: "value is required",
+		},
+		{
+			name:     "propose value wrong type",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "swarm-1",
+				"proposalType": "scale",
+				"value":        "invalid",
+			},
+			expectedError: "value must be an object",
 		},
 	}
 
