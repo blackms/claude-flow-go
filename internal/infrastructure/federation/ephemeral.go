@@ -3,6 +3,7 @@ package federation
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
@@ -62,6 +63,12 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 
 	// Create ephemeral agent
 	now := shared.Now()
+	if opts.TTL > math.MaxInt64-now {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  "ttl is out of range",
+		}, fmt.Errorf("ttl is out of range")
+	}
 	agentID := generateID("ephemeral")
 
 	agent := &shared.EphemeralAgent{

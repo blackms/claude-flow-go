@@ -134,6 +134,10 @@ func (fh *FederationHub) RegisterSwarm(swarm shared.SwarmRegistration) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
+	if _, exists := fh.swarms[swarm.SwarmID]; exists {
+		return fmt.Errorf("swarm %s already exists", swarm.SwarmID)
+	}
+
 	now := shared.Now()
 	swarm.RegisteredAt = now
 	swarm.LastHeartbeat = now
