@@ -881,6 +881,90 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_RuntimeErrorParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	tests := []struct {
+		name     string
+		toolName string
+		args     map[string]interface{}
+	}{
+		{
+			name:     "spawn ephemeral without available swarm",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+			},
+		},
+		{
+			name:     "terminate unknown agent",
+			toolName: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": "missing-agent",
+			},
+		},
+		{
+			name:     "broadcast unknown source swarm",
+			toolName: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": "missing-swarm",
+				"payload":       map[string]interface{}{"event": "x"},
+			},
+		},
+		{
+			name:     "propose unknown proposer swarm",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "missing-swarm",
+				"proposalType": "scale",
+				"value":        map[string]interface{}{"maxAgents": 10},
+			},
+		},
+		{
+			name:     "vote unknown voter swarm",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "missing-voter",
+				"proposalId": "missing-proposal",
+				"approve":    true,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			execResult, execErr := ft.Execute(context.Background(), tc.toolName, tc.args)
+			if execErr == nil {
+				t.Fatalf("expected Execute runtime error for %s", tc.toolName)
+			}
+			if execResult == nil {
+				t.Fatalf("expected Execute result for %s", tc.toolName)
+			}
+
+			directResult, directErr := ft.ExecuteTool(context.Background(), tc.toolName, tc.args)
+			if directErr == nil {
+				t.Fatalf("expected ExecuteTool runtime error for %s", tc.toolName)
+			}
+
+			if execResult.Success != directResult.Success {
+				t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+			}
+			if execResult.Error != directResult.Error {
+				t.Fatalf("expected error parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
+			}
+		})
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_UnknownToolParity(t *testing.T) {
 	ft := &FederationTools{}
 
