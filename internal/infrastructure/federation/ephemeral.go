@@ -431,7 +431,7 @@ func (fh *FederationHub) selectOptimalSwarm(requiredCapabilities []string) *shar
 
 		// Calculate score
 		score := fh.calculateSwarmScore(swarm)
-		if score > bestScore {
+		if score > bestScore || (score == bestScore && (bestSwarm == nil || swarm.SwarmID < bestSwarm.SwarmID)) {
 			bestScore = score
 			bestSwarm = swarm
 		}

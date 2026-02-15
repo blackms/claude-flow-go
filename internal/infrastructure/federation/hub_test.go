@@ -361,6 +361,47 @@ func TestFederationHub_SpawnEphemeralNormalizesRequiredCapabilities(t *testing.T
 	}
 }
 
+func TestFederationHub_SpawnEphemeralAutoSelectionDeterministicTieBreak(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:      "swarm-auto-b",
+		Name:         "Auto Select B",
+		MaxAgents:    3,
+		Capabilities: []string{"code"},
+	}); err != nil {
+		t.Fatalf("failed to register swarm-auto-b: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:      "swarm-auto-a",
+		Name:         "Auto Select A",
+		MaxAgents:    3,
+		Capabilities: []string{"code"},
+	}); err != nil {
+		t.Fatalf("failed to register swarm-auto-a: %v", err)
+	}
+
+	result, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		Type: "coder",
+		Task: "deterministic tie break",
+	})
+	if err != nil {
+		t.Fatalf("expected deterministic auto-selection spawn to succeed, got %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected spawn result")
+	}
+	if result.SwarmID != "swarm-auto-a" {
+		t.Fatalf("expected deterministic tie-break to pick lexicographically smallest swarm-auto-a, got %q", result.SwarmID)
+	}
+}
+
 func TestFederationHub_SpawnEphemeralFailureDoesNotMutateAgentStats(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
