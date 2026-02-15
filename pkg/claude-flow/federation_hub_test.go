@@ -2,6 +2,7 @@ package claudeflow
 
 import (
 	"context"
+	"reflect"
 	"testing"
 )
 
@@ -229,4 +230,38 @@ func TestFederationHub_PublicNilReceiverMethodsFailGracefully(t *testing.T) {
 	if _, ok := hub.GetAgent("agent"); ok {
 		t.Fatal("expected nil receiver GetAgent to fail")
 	}
+}
+
+func TestFederationHub_PublicUnconfiguredReadDefaults(t *testing.T) {
+	var hub *FederationHub
+
+	if proposals := hub.GetPendingProposals(); len(proposals) != 0 {
+		t.Fatalf("expected nil receiver pending proposals empty, got %d", len(proposals))
+	}
+	if messages := hub.GetMessagesBySwarm("swarm", 10); len(messages) != 0 {
+		t.Fatalf("expected nil receiver swarm messages empty, got %d", len(messages))
+	}
+	if _, ok := hub.GetMessage("msg-id"); ok {
+		t.Fatal("expected nil receiver GetMessage to fail")
+	}
+	if _, ok := hub.GetProposal("proposal-id"); ok {
+		t.Fatal("expected nil receiver GetProposal to fail")
+	}
+
+	activeSwarms, requiredVotes, quorum := hub.GetQuorumInfo()
+	if activeSwarms != 0 || requiredVotes != 0 || quorum != 0 {
+		t.Fatalf("expected nil receiver quorum defaults 0, got active=%d required=%d quorum=%v", activeSwarms, requiredVotes, quorum)
+	}
+
+	if stats := hub.GetStats(); stats != (FederationStats{}) {
+		t.Fatalf("expected nil receiver stats zero-value, got %+v", stats)
+	}
+
+	expectedConfig := DefaultFederationConfig()
+	if config := hub.GetConfig(); !reflect.DeepEqual(config, expectedConfig) {
+		t.Fatalf("expected nil receiver default config %+v, got %+v", expectedConfig, config)
+	}
+
+	// Should be a no-op and not panic for unconfigured wrapper.
+	hub.SetEventHandler(func(event FederationEvent) {})
 }

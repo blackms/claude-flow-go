@@ -327,6 +327,43 @@ func TestFederationHub_EventHandlerMutationDoesNotCorruptEventHistory(t *testing
 	}
 }
 
+func TestFederationHub_EventHandlerPanicsAreRecovered(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	hub.SetEventHandler(func(event shared.FederationEvent) {
+		panic("handler panic should be recovered")
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "panic-handler-swarm-a",
+		Name:      "Panic Handler A",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register first swarm: %v", err)
+	}
+
+	time.Sleep(30 * time.Millisecond)
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "panic-handler-swarm-b",
+		Name:      "Panic Handler B",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register second swarm after panicing handler: %v", err)
+	}
+
+	swarms := hub.GetSwarms()
+	if len(swarms) != 2 {
+		t.Fatalf("expected both swarms to be registered despite handler panics, got %d", len(swarms))
+	}
+}
+
 func TestFederationHub_MutatingOperationsRejectAfterShutdown(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {

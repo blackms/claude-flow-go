@@ -444,6 +444,7 @@ func (fh *FederationHub) SetEventHandler(handler EventHandler) {
 
 // emitEvent emits a federation event.
 func (fh *FederationHub) emitEvent(event shared.FederationEvent) {
+	handler := fh.eventHandler
 	historyEvent := event
 	historyEvent.Data = cloneInterfaceValue(event.Data)
 	fh.events = append(fh.events, &historyEvent)
@@ -453,10 +454,15 @@ func (fh *FederationHub) emitEvent(event shared.FederationEvent) {
 		fh.events = fh.events[1:]
 	}
 
-	if fh.eventHandler != nil {
+	if handler != nil {
 		handlerEvent := historyEvent
 		handlerEvent.Data = cloneInterfaceValue(historyEvent.Data)
-		go fh.eventHandler(handlerEvent)
+		go func(callback EventHandler, payload shared.FederationEvent) {
+			defer func() {
+				_ = recover()
+			}()
+			callback(payload)
+		}(handler, handlerEvent)
 	}
 }
 
