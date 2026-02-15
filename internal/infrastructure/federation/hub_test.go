@@ -257,6 +257,66 @@ func TestFederationHub_SetEventHandlerSupportsUpdateAndClear(t *testing.T) {
 	}
 }
 
+func TestFederationHub_MutatingOperationsRejectAfterShutdown(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("failed to shutdown federation hub: %v", err)
+	}
+
+	const expectedErr = "federation hub is shut down"
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected register swarm shutdown error %q, got %v", expectedErr, err)
+	}
+	if err := hub.UnregisterSwarm("swarm"); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected unregister swarm shutdown error %q, got %v", expectedErr, err)
+	}
+	if err := hub.Heartbeat("swarm"); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected heartbeat shutdown error %q, got %v", expectedErr, err)
+	}
+
+	spawnResult, spawnErr := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		Type: "coder",
+		Task: "shutdown-check",
+	})
+	if spawnErr == nil || spawnErr.Error() != expectedErr {
+		t.Fatalf("expected spawn shutdown error %q, got %v", expectedErr, spawnErr)
+	}
+	if spawnResult == nil || spawnResult.Error != expectedErr {
+		t.Fatalf("expected spawn result shutdown error %q, got %+v", expectedErr, spawnResult)
+	}
+
+	if err := hub.CompleteAgent("agent-id", nil); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected complete agent shutdown error %q, got %v", expectedErr, err)
+	}
+	if err := hub.TerminateAgent("agent-id", ""); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected terminate agent shutdown error %q, got %v", expectedErr, err)
+	}
+
+	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected send message shutdown error %q, got %v", expectedErr, err)
+	}
+	if _, err := hub.Broadcast("source", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected broadcast shutdown error %q, got %v", expectedErr, err)
+	}
+	if _, err := hub.SendHeartbeat("source", "target"); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected send heartbeat shutdown error %q, got %v", expectedErr, err)
+	}
+	if _, err := hub.SendConsensusMessage("source", map[string]interface{}{"ok": true}, "target"); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected send consensus message shutdown error %q, got %v", expectedErr, err)
+	}
+
+	if _, err := hub.Propose("source", "proposal", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected propose shutdown error %q, got %v", expectedErr, err)
+	}
+	if err := hub.Vote("source", "proposal", true); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected vote shutdown error %q, got %v", expectedErr, err)
+	}
+}
+
 func TestFederationHub_RegisterSwarmRejectsTrimmedDuplicateIDs(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {

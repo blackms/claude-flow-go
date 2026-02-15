@@ -21,6 +21,9 @@ func (fh *FederationHub) Propose(proposerID, proposalType string, value interfac
 
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return nil, fmt.Errorf("federation hub is shut down")
+	}
 
 	proposerID = strings.TrimSpace(proposerID)
 	proposalType = strings.TrimSpace(proposalType)
@@ -99,6 +102,9 @@ func (fh *FederationHub) Vote(voterID, proposalID string, approve bool) error {
 
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return fmt.Errorf("federation hub is shut down")
+	}
 
 	voterID = strings.TrimSpace(voterID)
 	proposalID = strings.TrimSpace(proposalID)

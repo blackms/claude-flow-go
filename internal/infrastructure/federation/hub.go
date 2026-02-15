@@ -180,6 +180,9 @@ func (fh *FederationHub) Shutdown() error {
 func (fh *FederationHub) RegisterSwarm(swarm shared.SwarmRegistration) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return fmt.Errorf("federation hub is shut down")
+	}
 
 	swarmID := strings.TrimSpace(swarm.SwarmID)
 	if swarmID == "" {
@@ -227,6 +230,9 @@ func (fh *FederationHub) RegisterSwarm(swarm shared.SwarmRegistration) error {
 func (fh *FederationHub) UnregisterSwarm(swarmID string) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return fmt.Errorf("federation hub is shut down")
+	}
 
 	swarmID = strings.TrimSpace(swarmID)
 	if swarmID == "" {
@@ -263,6 +269,9 @@ func (fh *FederationHub) UnregisterSwarm(swarmID string) error {
 func (fh *FederationHub) Heartbeat(swarmID string) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return fmt.Errorf("federation hub is shut down")
+	}
 
 	swarmID = strings.TrimSpace(swarmID)
 	if swarmID == "" {
