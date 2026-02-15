@@ -32,6 +32,42 @@ func TestNewMCPServer_RegistersFederationTools(t *testing.T) {
 	}
 }
 
+func TestNewMCPServer_RegistersAllFederationTools(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	expected := map[string]bool{
+		"federation/status":              true,
+		"federation/spawn-ephemeral":     true,
+		"federation/terminate-ephemeral": true,
+		"federation/list-ephemeral":      true,
+		"federation/register-swarm":      true,
+		"federation/broadcast":           true,
+		"federation/propose":             true,
+		"federation/vote":                true,
+	}
+
+	counts := make(map[string]int, len(expected))
+	for _, tool := range tools {
+		if expected[tool.Name] {
+			counts[tool.Name]++
+		}
+	}
+
+	for name := range expected {
+		if counts[name] != 1 {
+			t.Fatalf("expected exactly one %s tool, got %d", name, counts[name])
+		}
+	}
+}
+
 func TestNewMCPServer_RegistersBuiltInHooksAndUniqueTools(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
 	if server == nil {
