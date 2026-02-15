@@ -1427,6 +1427,214 @@ func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralBlankFiltersNoopPari
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralBlankStatusUsesSwarmFilterParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-blank-status-target", Name: "Blank Status Target", MaxAgents: 5}); err != nil {
+		t.Fatalf("failed to register target swarm: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-blank-status-other", Name: "Blank Status Other", MaxAgents: 5}); err != nil {
+		t.Fatalf("failed to register other swarm: %v", err)
+	}
+
+	if _, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-blank-status-target",
+		Type:    "coder",
+		Task:    "target agent A",
+	}); err != nil {
+		t.Fatalf("failed to spawn target agent A: %v", err)
+	}
+	if _, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-blank-status-target",
+		Type:    "reviewer",
+		Task:    "target agent B",
+	}); err != nil {
+		t.Fatalf("failed to spawn target agent B: %v", err)
+	}
+	if _, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-blank-status-other",
+		Type:    "analyst",
+		Task:    "other agent",
+	}); err != nil {
+		t.Fatalf("failed to spawn other agent: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+	blankStatusArgs := map[string]interface{}{
+		"swarmId": "swarm-list-blank-status-target",
+		"status":  "   ",
+	}
+	swarmOnlyArgs := map[string]interface{}{
+		"swarmId": "swarm-list-blank-status-target",
+	}
+
+	baselineExec, baselineExecErr := ft.Execute(context.Background(), "federation/list-ephemeral", swarmOnlyArgs)
+	if baselineExecErr != nil {
+		t.Fatalf("baseline Execute with swarm filter should succeed, got error: %v", baselineExecErr)
+	}
+	baselineDirect, baselineDirectErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", swarmOnlyArgs)
+	if baselineDirectErr != nil {
+		t.Fatalf("baseline ExecuteTool with swarm filter should succeed, got error: %v", baselineDirectErr)
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/list-ephemeral", blankStatusArgs)
+	if execErr != nil {
+		t.Fatalf("Execute should treat blank status as no-op when swarm filter is present, got error: %v", execErr)
+	}
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", blankStatusArgs)
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should treat blank status as no-op when swarm filter is present, got error: %v", directErr)
+	}
+
+	extractIDs := func(result shared.MCPToolResult) []string {
+		t.Helper()
+		agents, ok := result.Data.([]*shared.EphemeralAgent)
+		if !ok {
+			t.Fatalf("expected result data type []*shared.EphemeralAgent, got %T", result.Data)
+		}
+		ids := make([]string, 0, len(agents))
+		for _, agent := range agents {
+			if agent == nil {
+				continue
+			}
+			if agent.SwarmID != "swarm-list-blank-status-target" {
+				t.Fatalf("expected only target swarm agents, got %q", agent.SwarmID)
+			}
+			ids = append(ids, agent.ID)
+		}
+		return ids
+	}
+
+	baselineExecIDs := extractIDs(*baselineExec)
+	baselineDirectIDs := extractIDs(baselineDirect)
+	execIDs := extractIDs(*execResult)
+	directIDs := extractIDs(directResult)
+
+	if !reflect.DeepEqual(execIDs, baselineExecIDs) {
+		t.Fatalf("expected Execute blank-status IDs %v to match swarm-only baseline IDs %v", execIDs, baselineExecIDs)
+	}
+	if !reflect.DeepEqual(directIDs, baselineDirectIDs) {
+		t.Fatalf("expected ExecuteTool blank-status IDs %v to match swarm-only baseline IDs %v", directIDs, baselineDirectIDs)
+	}
+	if !reflect.DeepEqual(execIDs, directIDs) {
+		t.Fatalf("expected Execute and ExecuteTool blank-status ID parity, got Execute=%v ExecuteTool=%v", execIDs, directIDs)
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralBlankSwarmUsesStatusFilterParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-blank-swarm-a", Name: "Blank Swarm A", MaxAgents: 5}); err != nil {
+		t.Fatalf("failed to register swarm A: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-blank-swarm-b", Name: "Blank Swarm B", MaxAgents: 5}); err != nil {
+		t.Fatalf("failed to register swarm B: %v", err)
+	}
+
+	terminatedA, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-blank-swarm-a",
+		Type:    "coder",
+		Task:    "terminated A",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn terminated A candidate: %v", err)
+	}
+	if err := hub.TerminateAgent(terminatedA.AgentID, "done"); err != nil {
+		t.Fatalf("failed to terminate A candidate: %v", err)
+	}
+	terminatedB, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-blank-swarm-b",
+		Type:    "reviewer",
+		Task:    "terminated B",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn terminated B candidate: %v", err)
+	}
+	if err := hub.TerminateAgent(terminatedB.AgentID, "done"); err != nil {
+		t.Fatalf("failed to terminate B candidate: %v", err)
+	}
+	if _, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-blank-swarm-b",
+		Type:    "analyst",
+		Task:    "active B",
+	}); err != nil {
+		t.Fatalf("failed to spawn active B agent: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+	blankSwarmArgs := map[string]interface{}{
+		"swarmId": "   ",
+		"status":  "terminated",
+	}
+	statusOnlyArgs := map[string]interface{}{
+		"status": "terminated",
+	}
+
+	baselineExec, baselineExecErr := ft.Execute(context.Background(), "federation/list-ephemeral", statusOnlyArgs)
+	if baselineExecErr != nil {
+		t.Fatalf("baseline Execute with status filter should succeed, got error: %v", baselineExecErr)
+	}
+	baselineDirect, baselineDirectErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", statusOnlyArgs)
+	if baselineDirectErr != nil {
+		t.Fatalf("baseline ExecuteTool with status filter should succeed, got error: %v", baselineDirectErr)
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/list-ephemeral", blankSwarmArgs)
+	if execErr != nil {
+		t.Fatalf("Execute should treat blank swarmId as no-op when status filter is present, got error: %v", execErr)
+	}
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", blankSwarmArgs)
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should treat blank swarmId as no-op when status filter is present, got error: %v", directErr)
+	}
+
+	extractIDs := func(result shared.MCPToolResult) []string {
+		t.Helper()
+		agents, ok := result.Data.([]*shared.EphemeralAgent)
+		if !ok {
+			t.Fatalf("expected result data type []*shared.EphemeralAgent, got %T", result.Data)
+		}
+		ids := make([]string, 0, len(agents))
+		for _, agent := range agents {
+			if agent == nil {
+				continue
+			}
+			if agent.Status != shared.EphemeralStatusTerminated {
+				t.Fatalf("expected only terminated agents, got %q", agent.Status)
+			}
+			ids = append(ids, agent.ID)
+		}
+		return ids
+	}
+
+	baselineExecIDs := extractIDs(*baselineExec)
+	baselineDirectIDs := extractIDs(baselineDirect)
+	execIDs := extractIDs(*execResult)
+	directIDs := extractIDs(directResult)
+
+	if !reflect.DeepEqual(execIDs, baselineExecIDs) {
+		t.Fatalf("expected Execute blank-swarm IDs %v to match status-only baseline IDs %v", execIDs, baselineExecIDs)
+	}
+	if !reflect.DeepEqual(directIDs, baselineDirectIDs) {
+		t.Fatalf("expected ExecuteTool blank-swarm IDs %v to match status-only baseline IDs %v", directIDs, baselineDirectIDs)
+	}
+	if !reflect.DeepEqual(execIDs, directIDs) {
+		t.Fatalf("expected Execute and ExecuteTool blank-swarm ID parity, got Execute=%v ExecuteTool=%v", execIDs, directIDs)
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralInvalidStatusParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
