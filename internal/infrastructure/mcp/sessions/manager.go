@@ -3,6 +3,9 @@ package sessions
 
 import (
 	"context"
+	"fmt"
+	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -22,8 +25,76 @@ type SessionManager struct {
 	cleanupInterval time.Duration
 }
 
+func normalizeSessionConfig(config shared.SessionConfig) shared.SessionConfig {
+	defaults := shared.DefaultSessionConfig()
+
+	if config.MaxSessions <= 0 {
+		config.MaxSessions = defaults.MaxSessions
+	}
+	if config.SessionTimeout <= 0 {
+		config.SessionTimeout = defaults.SessionTimeout
+	}
+	if config.CleanupInterval <= 0 {
+		config.CleanupInterval = defaults.CleanupInterval
+	}
+
+	return config
+}
+
+func cloneStringInterfaceMap(source map[string]interface{}) map[string]interface{} {
+	if source == nil {
+		return nil
+	}
+
+	cloned := make(map[string]interface{}, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func cloneSessionClientInfo(info *shared.SessionClientInfo) *shared.SessionClientInfo {
+	if info == nil {
+		return nil
+	}
+	cloned := *info
+	return &cloned
+}
+
+func cloneSession(value *shared.Session) *shared.Session {
+	if value == nil {
+		return nil
+	}
+
+	cloned := *value
+	if value.ClientInfo != nil {
+		cloned.ClientInfo = cloneSessionClientInfo(value.ClientInfo)
+	}
+	if value.Capabilities != nil {
+		cloned.Capabilities = cloneStringInterfaceMap(value.Capabilities)
+	}
+	if value.Agents != nil {
+		cloned.Agents = append([]string(nil), value.Agents...)
+	}
+	if value.Tasks != nil {
+		cloned.Tasks = append([]string(nil), value.Tasks...)
+	}
+	if value.Metadata != nil {
+		cloned.Metadata = cloneStringInterfaceMap(value.Metadata)
+	}
+	return &cloned
+}
+
+func cloneStringSlice(source []string) []string {
+	if source == nil {
+		return nil
+	}
+	return append([]string(nil), source...)
+}
+
 // NewSessionManager creates a new SessionManager.
 func NewSessionManager(config shared.SessionConfig) *SessionManager {
+	config = normalizeSessionConfig(config)
 	return &SessionManager{
 		sessions:        make(map[string]*shared.Session),
 		config:          config,
@@ -96,18 +167,22 @@ func (sm *SessionManager) CreateSession(transport shared.TransportType) (*shared
 	}
 
 	now := shared.Now()
+	expiresAt := now + sm.config.SessionTimeout
+	if sm.config.SessionTimeout > math.MaxInt64-now {
+		expiresAt = math.MaxInt64
+	}
 	session := &shared.Session{
-		ID:             shared.GenerateID("session"),
-		State:          shared.SessionStateCreated,
-		Transport:      transport,
-		CreatedAt:      now,
-		LastActivityAt: now,
-		ExpiresAt:      now + sm.config.SessionTimeout,
-		IsInitialized:  false,
+		ID:              shared.GenerateID("session"),
+		State:           shared.SessionStateCreated,
+		Transport:       transport,
+		CreatedAt:       now,
+		LastActivityAt:  now,
+		ExpiresAt:       expiresAt,
+		IsInitialized:   false,
 		IsAuthenticated: false,
-		Agents:         make([]string, 0),
-		Tasks:          make([]string, 0),
-		Metadata:       make(map[string]interface{}),
+		Agents:          make([]string, 0),
+		Tasks:           make([]string, 0),
+		Metadata:        make(map[string]interface{}),
 	}
 
 	sm.sessions[session.ID] = session
@@ -116,7 +191,7 @@ func (sm *SessionManager) CreateSession(transport shared.TransportType) (*shared
 	sm.stats.ByState[session.State]++
 	sm.stats.ByTransport[transport]++
 
-	return session, nil
+	return cloneSession(session), nil
 }
 
 // GetSession returns a session by ID.
@@ -137,7 +212,7 @@ func (sm *SessionManager) GetSession(id string) (*shared.Session, error) {
 		return nil, shared.ErrSessionClosed
 	}
 
-	return session, nil
+	return cloneSession(session), nil
 }
 
 // UpdateActivity updates the last activity timestamp for a session.
@@ -185,7 +260,7 @@ func (sm *SessionManager) InitializeSession(id string, clientInfo *shared.Sessio
 	sm.stats.ByState[session.State]--
 	session.State = shared.SessionStateReady
 	session.IsInitialized = true
-	session.ClientInfo = clientInfo
+	session.ClientInfo = cloneSessionClientInfo(clientInfo)
 	session.ProtocolVersion = protocolVersion
 	session.LastActivityAt = shared.Now()
 	sm.stats.ByState[session.State]++
@@ -306,6 +381,10 @@ func (sm *SessionManager) ListSessions(filter *shared.SessionListRequest) *share
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 
+	if filter == nil {
+		filter = &shared.SessionListRequest{}
+	}
+
 	var summaries []*shared.SessionSummary
 
 	for _, session := range sm.sessions {
@@ -329,6 +408,13 @@ func (sm *SessionManager) ListSessions(filter *shared.SessionListRequest) *share
 	}
 
 	total := len(summaries)
+
+	sort.Slice(summaries, func(i, j int) bool {
+		if summaries[i].CreatedAt == summaries[j].CreatedAt {
+			return summaries[i].ID < summaries[j].ID
+		}
+		return summaries[i].CreatedAt < summaries[j].CreatedAt
+	})
 
 	// Apply pagination
 	offset := filter.Offset
@@ -467,6 +553,10 @@ func (sm *SessionManager) GetPersistence() *PersistenceStore {
 
 // SaveSession saves a session to disk.
 func (sm *SessionManager) SaveSession(req *shared.SessionSaveRequest) (*shared.SessionSaveResult, error) {
+	if req == nil {
+		return nil, fmt.Errorf("session save request is required")
+	}
+
 	sm.mu.RLock()
 	session, exists := sm.sessions[req.SessionID]
 	if !exists {
@@ -482,8 +572,8 @@ func (sm *SessionManager) SaveSession(req *shared.SessionSaveRequest) (*shared.S
 		Version:     "3.0.0",
 		CreatedAt:   session.CreatedAt,
 		SavedAt:     shared.Now(),
-		Tags:        req.Tags,
-		Metadata:    session.Metadata,
+		Tags:        cloneStringSlice(req.Tags),
+		Metadata:    cloneStringInterfaceMap(session.Metadata),
 	}
 
 	if req.IncludeAgents {

@@ -3,6 +3,8 @@ package federation
 
 import (
 	"fmt"
+	"math"
+	"strings"
 	"time"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
@@ -14,14 +16,56 @@ import (
 
 // SpawnEphemeralAgent spawns a new ephemeral agent.
 func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) (*shared.SpawnResult, error) {
+	if err := fh.configuredOrError(); err != nil {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  err.Error(),
+		}, err
+	}
+
 	startTime := shared.Now()
 
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  "federation hub is shut down",
+		}, fmt.Errorf("federation hub is shut down")
+	}
+	if !fh.initialized {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  "federation hub is not initialized",
+		}, fmt.Errorf("federation hub is not initialized")
+	}
+
+	opts.SwarmID = strings.TrimSpace(opts.SwarmID)
+	opts.Type = strings.TrimSpace(opts.Type)
+	opts.Task = strings.TrimSpace(opts.Task)
+	opts.Capabilities = normalizeStringValues(opts.Capabilities)
+	if opts.Type == "" {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  "type is required",
+		}, fmt.Errorf("type is required")
+	}
+	if opts.Task == "" {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  "task is required",
+		}, fmt.Errorf("task is required")
+	}
 
 	// Set default TTL
 	if opts.TTL <= 0 {
 		opts.TTL = fh.config.DefaultAgentTTL
+	}
+	if opts.TTL <= 0 {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  "ttl must be greater than 0",
+		}, fmt.Errorf("ttl must be greater than 0")
 	}
 
 	// Select optimal swarm if not specified
@@ -62,6 +106,12 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 
 	// Create ephemeral agent
 	now := shared.Now()
+	if opts.TTL > math.MaxInt64-now {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  "ttl is out of range",
+		}, fmt.Errorf("ttl is out of range")
+	}
 	agentID := generateID("ephemeral")
 
 	agent := &shared.EphemeralAgent{
@@ -73,7 +123,7 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 		TTL:       opts.TTL,
 		CreatedAt: now,
 		ExpiresAt: now + opts.TTL,
-		Metadata:  opts.Metadata,
+		Metadata:  cloneStringInterfaceMap(opts.Metadata),
 	}
 
 	// Add to indexes
@@ -135,8 +185,23 @@ func (fh *FederationHub) activateAgent(agentID string) {
 
 // CompleteAgent marks an agent as completing with a result.
 func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error {
+	if err := fh.configuredOrError(); err != nil {
+		return err
+	}
+
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return fmt.Errorf("federation hub is shut down")
+	}
+	if !fh.initialized {
+		return fmt.Errorf("federation hub is not initialized")
+	}
+
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return fmt.Errorf("agentId is required")
+	}
 
 	agent, exists := fh.ephemeralAgents[agentID]
 	if !exists {
@@ -154,7 +219,7 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 	fh.agentsByStatus[shared.EphemeralStatusCompleting][agentID] = true
 
 	agent.Status = shared.EphemeralStatusCompleting
-	agent.Result = result
+	agent.Result = cloneInterfaceValue(result)
 	agent.CompletedAt = now
 
 	// Emit event
@@ -162,7 +227,7 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 		Type:      shared.FederationEventAgentCompleted,
 		SwarmID:   agent.SwarmID,
 		AgentID:   agentID,
-		Data:      result,
+		Data:      cloneInterfaceValue(result),
 		Timestamp: now,
 	})
 
@@ -177,8 +242,22 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 
 // TerminateAgent terminates an agent with an optional error.
 func (fh *FederationHub) TerminateAgent(agentID string, errorMsg string) error {
+	if err := fh.configuredOrError(); err != nil {
+		return err
+	}
+
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return fmt.Errorf("federation hub is shut down")
+	}
+	if !fh.initialized {
+		return fmt.Errorf("federation hub is not initialized")
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return fmt.Errorf("agentId is required")
+	}
 	return fh.terminateAgentInternal(agentID, errorMsg)
 }
 
@@ -240,56 +319,91 @@ func (fh *FederationHub) terminateAgentInternal(agentID string, errorMsg string)
 
 // GetAgent returns an agent by ID.
 func (fh *FederationHub) GetAgent(agentID string) (*shared.EphemeralAgent, bool) {
+	if !fh.isConfigured() {
+		return nil, false
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, false
+	}
 	agent, exists := fh.ephemeralAgents[agentID]
-	return agent, exists
+	if !exists {
+		return nil, false
+	}
+	return cloneEphemeralAgent(agent), true
 }
 
 // GetAgents returns all ephemeral agents.
 func (fh *FederationHub) GetAgents() []*shared.EphemeralAgent {
+	if !fh.isConfigured() {
+		return []*shared.EphemeralAgent{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
 	agents := make([]*shared.EphemeralAgent, 0, len(fh.ephemeralAgents))
 	for _, agent := range fh.ephemeralAgents {
-		agents = append(agents, agent)
+		agents = append(agents, cloneEphemeralAgent(agent))
 	}
+	sortEphemeralAgentsByID(agents)
 	return agents
 }
 
 // GetActiveAgents returns all active ephemeral agents.
 func (fh *FederationHub) GetActiveAgents() []*shared.EphemeralAgent {
+	if !fh.isConfigured() {
+		return []*shared.EphemeralAgent{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
 	agents := make([]*shared.EphemeralAgent, 0)
 	for agentID := range fh.agentsByStatus[shared.EphemeralStatusActive] {
 		if agent, exists := fh.ephemeralAgents[agentID]; exists {
-			agents = append(agents, agent)
+			agents = append(agents, cloneEphemeralAgent(agent))
 		}
 	}
+	sortEphemeralAgentsByID(agents)
 	return agents
 }
 
 // GetAgentsBySwarm returns all agents in a swarm. O(1) lookup.
 func (fh *FederationHub) GetAgentsBySwarm(swarmID string) []*shared.EphemeralAgent {
+	if !fh.isConfigured() {
+		return []*shared.EphemeralAgent{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
+
+	swarmID = strings.TrimSpace(swarmID)
+	if swarmID == "" {
+		return []*shared.EphemeralAgent{}
+	}
 
 	agents := make([]*shared.EphemeralAgent, 0)
 	if agentIDs, exists := fh.agentsBySwarm[swarmID]; exists {
 		for agentID := range agentIDs {
 			if agent, exists := fh.ephemeralAgents[agentID]; exists {
-				agents = append(agents, agent)
+				agents = append(agents, cloneEphemeralAgent(agent))
 			}
 		}
 	}
+	sortEphemeralAgentsByID(agents)
 	return agents
 }
 
 // GetAgentsByStatus returns all agents with a given status. O(1) lookup.
 func (fh *FederationHub) GetAgentsByStatus(status shared.EphemeralAgentStatus) []*shared.EphemeralAgent {
+	if !fh.isConfigured() {
+		return []*shared.EphemeralAgent{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -297,10 +411,11 @@ func (fh *FederationHub) GetAgentsByStatus(status shared.EphemeralAgentStatus) [
 	if agentIDs, exists := fh.agentsByStatus[status]; exists {
 		for agentID := range agentIDs {
 			if agent, exists := fh.ephemeralAgents[agentID]; exists {
-				agents = append(agents, agent)
+				agents = append(agents, cloneEphemeralAgent(agent))
 			}
 		}
 	}
+	sortEphemeralAgentsByID(agents)
 	return agents
 }
 
@@ -308,6 +423,12 @@ func (fh *FederationHub) GetAgentsByStatus(status shared.EphemeralAgentStatus) [
 func (fh *FederationHub) cleanupExpiredAgents() {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return
+	}
+	if !fh.initialized {
+		return
+	}
 
 	now := shared.Now()
 	expiredAgents := make([]string, 0)
@@ -375,7 +496,7 @@ func (fh *FederationHub) selectOptimalSwarm(requiredCapabilities []string) *shar
 
 		// Calculate score
 		score := fh.calculateSwarmScore(swarm)
-		if score > bestScore {
+		if score > bestScore || (score == bestScore && (bestSwarm == nil || swarm.SwarmID < bestSwarm.SwarmID)) {
 			bestScore = score
 			bestSwarm = swarm
 		}

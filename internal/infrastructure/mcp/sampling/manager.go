@@ -3,6 +3,9 @@ package sampling
 
 import (
 	"context"
+	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,8 +28,113 @@ type SamplingManager struct {
 	stats           *shared.SamplingStats
 }
 
+func normalizeSamplingConfig(config shared.SamplingConfig) shared.SamplingConfig {
+	defaults := shared.DefaultSamplingConfig()
+
+	if config.DefaultMaxTokens <= 0 {
+		config.DefaultMaxTokens = defaults.DefaultMaxTokens
+	}
+	if config.DefaultTemperature == 0 {
+		config.DefaultTemperature = defaults.DefaultTemperature
+	}
+	if config.TimeoutMs <= 0 {
+		config.TimeoutMs = defaults.TimeoutMs
+	}
+
+	return config
+}
+
+func cloneCreateMessageRequest(request *shared.CreateMessageRequest) *shared.CreateMessageRequest {
+	if request == nil {
+		return nil
+	}
+
+	cloned := *request
+
+	if request.Messages != nil {
+		cloned.Messages = make([]shared.SamplingMessage, len(request.Messages))
+		for i := range request.Messages {
+			cloned.Messages[i] = request.Messages[i]
+			if request.Messages[i].Content != nil {
+				cloned.Messages[i].Content = append([]shared.PromptContent(nil), request.Messages[i].Content...)
+			}
+		}
+	}
+
+	if request.ModelPreferences != nil {
+		prefs := *request.ModelPreferences
+		if request.ModelPreferences.Hints != nil {
+			prefs.Hints = append([]shared.ModelHint(nil), request.ModelPreferences.Hints...)
+		}
+		cloned.ModelPreferences = &prefs
+	}
+
+	if request.StopSequences != nil {
+		cloned.StopSequences = append([]string(nil), request.StopSequences...)
+	}
+
+	if request.Metadata != nil {
+		cloned.Metadata = make(map[string]interface{}, len(request.Metadata))
+		for key, value := range request.Metadata {
+			cloned.Metadata[key] = value
+		}
+	}
+
+	return &cloned
+}
+
+func safeProviderName(provider LLMProvider) (name string, ok bool) {
+	if provider == nil {
+		return "", false
+	}
+
+	defer func() {
+		if recover() != nil {
+			name = ""
+			ok = false
+		}
+	}()
+
+	name = strings.TrimSpace(provider.Name())
+	if name == "" {
+		return "", false
+	}
+	return name, true
+}
+
+func safeProviderIsAvailable(provider LLMProvider) (available bool) {
+	if provider == nil {
+		return false
+	}
+
+	defer func() {
+		if recover() != nil {
+			available = false
+		}
+	}()
+
+	return provider.IsAvailable()
+}
+
+func safeProviderCreateMessage(provider LLMProvider, ctx context.Context, request *shared.CreateMessageRequest) (result *shared.CreateMessageResult, err error) {
+	name, _ := safeProviderName(provider)
+	if name == "" {
+		name = "<unknown>"
+	}
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("provider %s panicked: %v", name, recovered)
+			result = nil
+		}
+	}()
+
+	return provider.CreateMessage(ctx, request)
+}
+
 // NewSamplingManager creates a new SamplingManager.
 func NewSamplingManager(config shared.SamplingConfig) *SamplingManager {
+	config = normalizeSamplingConfig(config)
 	return &SamplingManager{
 		providers: make(map[string]LLMProvider),
 		config:    config,
@@ -44,7 +152,11 @@ func (sm *SamplingManager) RegisterProvider(provider LLMProvider, isDefault bool
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	name := provider.Name()
+	name, ok := safeProviderName(provider)
+	if !ok {
+		return
+	}
+
 	sm.providers[name] = provider
 
 	if isDefault || sm.defaultProvider == "" {
@@ -57,6 +169,7 @@ func (sm *SamplingManager) UnregisterProvider(name string) bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
+	name = strings.TrimSpace(name)
 	if _, exists := sm.providers[name]; !exists {
 		return false
 	}
@@ -88,16 +201,29 @@ func (sm *SamplingManager) CreateMessageWithContext(ctx context.Context, request
 	sm.stats.TotalRequests++
 	sm.mu.Unlock()
 
-	// Apply defaults
-	if request.MaxTokens <= 0 {
-		request.MaxTokens = sm.config.DefaultMaxTokens
+	if request == nil {
+		sm.mu.Lock()
+		sm.stats.FailedRequests++
+		sm.mu.Unlock()
+		return nil, fmt.Errorf("sampling request is required")
 	}
-	if request.Temperature == 0 {
-		request.Temperature = sm.config.DefaultTemperature
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	requestCopy := cloneCreateMessageRequest(request)
+
+	// Apply defaults
+	if requestCopy.MaxTokens <= 0 {
+		requestCopy.MaxTokens = sm.config.DefaultMaxTokens
+	}
+	if requestCopy.Temperature == 0 {
+		requestCopy.Temperature = sm.config.DefaultTemperature
 	}
 
 	// Select provider
-	provider, err := sm.selectProvider(request.ModelPreferences)
+	provider, err := sm.selectProvider(requestCopy.ModelPreferences)
 	if err != nil {
 		sm.mu.Lock()
 		sm.stats.FailedRequests++
@@ -111,7 +237,7 @@ func (sm *SamplingManager) CreateMessageWithContext(ctx context.Context, request
 	defer cancel()
 
 	// Execute request
-	result, err := provider.CreateMessage(ctx, request)
+	result, err := safeProviderCreateMessage(provider, ctx, requestCopy)
 	if err != nil {
 		sm.mu.Lock()
 		sm.stats.FailedRequests++
@@ -146,8 +272,9 @@ func (sm *SamplingManager) selectProvider(prefs *shared.ModelPreferences) (LLMPr
 	// Check if specific model hint is provided
 	if prefs != nil && len(prefs.Hints) > 0 {
 		for _, hint := range prefs.Hints {
-			if provider, exists := sm.providers[hint.Name]; exists {
-				if provider.IsAvailable() {
+			name := strings.TrimSpace(hint.Name)
+			if provider, exists := sm.providers[name]; exists {
+				if safeProviderIsAvailable(provider) {
 					return provider, nil
 				}
 			}
@@ -157,15 +284,21 @@ func (sm *SamplingManager) selectProvider(prefs *shared.ModelPreferences) (LLMPr
 	// Use default provider
 	if sm.defaultProvider != "" {
 		if provider, exists := sm.providers[sm.defaultProvider]; exists {
-			if provider.IsAvailable() {
+			if safeProviderIsAvailable(provider) {
 				return provider, nil
 			}
 		}
 	}
 
 	// Find any available provider
-	for _, provider := range sm.providers {
-		if provider.IsAvailable() {
+	names := make([]string, 0, len(sm.providers))
+	for name := range sm.providers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		provider := sm.providers[name]
+		if safeProviderIsAvailable(provider) {
 			return provider, nil
 		}
 	}
@@ -177,7 +310,7 @@ func (sm *SamplingManager) selectProvider(prefs *shared.ModelPreferences) (LLMPr
 func (sm *SamplingManager) GetProvider(name string) LLMProvider {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
-	return sm.providers[name]
+	return sm.providers[strings.TrimSpace(name)]
 }
 
 // GetProviders returns all registered providers.
@@ -189,6 +322,7 @@ func (sm *SamplingManager) GetProviders() []string {
 	for name := range sm.providers {
 		names = append(names, name)
 	}
+	sort.Strings(names)
 	return names
 }
 
@@ -198,7 +332,7 @@ func (sm *SamplingManager) IsAvailable() bool {
 	defer sm.mu.RUnlock()
 
 	for _, provider := range sm.providers {
-		if provider.IsAvailable() {
+		if safeProviderIsAvailable(provider) {
 			return true
 		}
 	}
@@ -229,6 +363,7 @@ func (sm *SamplingManager) SetDefaultProvider(name string) bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
+	name = strings.TrimSpace(name)
 	if _, exists := sm.providers[name]; !exists {
 		return false
 	}

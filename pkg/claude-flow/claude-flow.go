@@ -21,10 +21,12 @@ package claudeflow
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/anthropics/claude-flow-go/internal/application/consensus"
 	"github.com/anthropics/claude-flow-go/internal/application/coordinator"
+	"github.com/anthropics/claude-flow-go/internal/application/executor"
 	"github.com/anthropics/claude-flow-go/internal/application/hivemind"
 	"github.com/anthropics/claude-flow-go/internal/application/workflow"
 	"github.com/anthropics/claude-flow-go/internal/domain/agent"
@@ -37,7 +39,6 @@ import (
 	mcplogging "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/logging"
 	mcpprompts "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/prompts"
 	mcpresources "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/resources"
-	"github.com/anthropics/claude-flow-go/internal/application/executor"
 	mcpsampling "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sampling"
 	mcpsessions "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sessions"
 	mcptasks "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tasks"
@@ -88,14 +89,14 @@ type (
 	TrajectoryStep       = shared.TrajectoryStep
 
 	// Hive Mind Consensus types
-	ConsensusType    = shared.ConsensusType
-	ProposalStatus   = shared.ProposalStatus
-	Proposal         = shared.Proposal
-	WeightedVote     = shared.WeightedVote
-	ProposalResult   = shared.ProposalResult
-	HiveMindConfig   = shared.HiveMindConfig
-	HiveMindState    = shared.HiveMindState
-	ProposalOutcome  = shared.ProposalOutcome
+	ConsensusType   = shared.ConsensusType
+	ProposalStatus  = shared.ProposalStatus
+	Proposal        = shared.Proposal
+	WeightedVote    = shared.WeightedVote
+	ProposalResult  = shared.ProposalResult
+	HiveMindConfig  = shared.HiveMindConfig
+	HiveMindState   = shared.HiveMindState
+	ProposalOutcome = shared.ProposalOutcome
 
 	// Distributed Consensus Algorithm types
 	ConsensusAlgorithmType     = shared.ConsensusAlgorithmType
@@ -122,13 +123,13 @@ type (
 	AlgorithmStats             = shared.AlgorithmStats
 
 	// Message Bus types
-	MessagePriority   = shared.MessagePriority
-	BusMessageType    = shared.BusMessageType
-	BusMessage        = shared.BusMessage
-	MessageAck        = shared.MessageAck
-	MessageBusConfig  = shared.MessageBusConfig
-	MessageBusStats   = shared.MessageBusStats
-	MessageEntry      = shared.MessageEntry
+	MessagePriority  = shared.MessagePriority
+	BusMessageType   = shared.BusMessageType
+	BusMessage       = shared.BusMessage
+	MessageAck       = shared.MessageAck
+	MessageBusConfig = shared.MessageBusConfig
+	MessageBusStats  = shared.MessageBusStats
+	MessageEntry     = shared.MessageEntry
 
 	// Task types
 	TaskPriority = shared.TaskPriority
@@ -186,26 +187,26 @@ type (
 	FederationStats          = shared.FederationStats
 
 	// Attention Mechanism types
-	AttentionMechanism         = shared.AttentionMechanism
-	AttentionAgentOutput       = shared.AttentionAgentOutput
+	AttentionMechanism          = shared.AttentionMechanism
+	AttentionAgentOutput        = shared.AttentionAgentOutput
 	AttentionCoordinationResult = shared.AttentionCoordinationResult
-	FlashAttentionConfig       = shared.FlashAttentionConfig
-	MultiHeadAttentionConfig   = shared.MultiHeadAttentionConfig
-	LinearAttentionConfig      = shared.LinearAttentionConfig
-	HyperbolicAttentionConfig  = shared.HyperbolicAttentionConfig
-	MoEConfig                  = shared.MoEConfig
-	GraphRoPEConfig            = shared.GraphRoPEConfig
-	AttentionConfig            = shared.AttentionConfig
-	Expert                     = shared.Expert
-	ExpertRoutingResult        = shared.ExpertRoutingResult
-	ExpertSelection            = shared.ExpertSelection
-	AttentionPerformanceStats  = shared.AttentionPerformanceStats
+	FlashAttentionConfig        = shared.FlashAttentionConfig
+	MultiHeadAttentionConfig    = shared.MultiHeadAttentionConfig
+	LinearAttentionConfig       = shared.LinearAttentionConfig
+	HyperbolicAttentionConfig   = shared.HyperbolicAttentionConfig
+	MoEConfig                   = shared.MoEConfig
+	GraphRoPEConfig             = shared.GraphRoPEConfig
+	AttentionConfig             = shared.AttentionConfig
+	Expert                      = shared.Expert
+	ExpertRoutingResult         = shared.ExpertRoutingResult
+	ExpertSelection             = shared.ExpertSelection
+	AttentionPerformanceStats   = shared.AttentionPerformanceStats
 
 	// Plugin types
-	Plugin           = shared.Plugin
-	ExtensionPoint   = shared.ExtensionPoint
-	PluginMetadata   = shared.PluginMetadata
-	PluginManager    = shared.PluginManager
+	Plugin         = shared.Plugin
+	ExtensionPoint = shared.ExtensionPoint
+	PluginMetadata = shared.PluginMetadata
+	PluginManager  = shared.PluginManager
 
 	// MCP types
 	MCPTool         = shared.MCPTool
@@ -216,11 +217,11 @@ type (
 
 	// MCP 2025-11-25 Compliance Types
 	// Resource types
-	MCPResource        = shared.MCPResource
-	ResourceContent    = shared.ResourceContent
-	ResourceTemplate   = shared.ResourceTemplate
-	ResourceListResult = shared.ResourceListResult
-	ResourceReadResult = shared.ResourceReadResult
+	MCPResource         = shared.MCPResource
+	ResourceContent     = shared.ResourceContent
+	ResourceTemplate    = shared.ResourceTemplate
+	ResourceListResult  = shared.ResourceListResult
+	ResourceReadResult  = shared.ResourceReadResult
 	ResourceCacheConfig = shared.ResourceCacheConfig
 
 	// Prompt types
@@ -304,23 +305,23 @@ type (
 	PostCommandResult   = shared.PostCommandResult
 
 	// Session Management Types
-	SessionState         = shared.SessionState
-	TransportType        = shared.TransportType
-	Session              = shared.Session
-	SessionClientInfo    = shared.SessionClientInfo
-	SessionConfig        = shared.SessionConfig
-	SessionStats         = shared.SessionStats
-	SessionSaveRequest   = shared.SessionSaveRequest
-	SessionSaveResult    = shared.SessionSaveResult
+	SessionState          = shared.SessionState
+	TransportType         = shared.TransportType
+	Session               = shared.Session
+	SessionClientInfo     = shared.SessionClientInfo
+	SessionConfig         = shared.SessionConfig
+	SessionStats          = shared.SessionStats
+	SessionSaveRequest    = shared.SessionSaveRequest
+	SessionSaveResult     = shared.SessionSaveResult
 	SessionRestoreRequest = shared.SessionRestoreRequest
-	SessionRestoreResult = shared.SessionRestoreResult
-	SessionListRequest   = shared.SessionListRequest
-	SessionListResult    = shared.SessionListResult
-	SessionSummary       = shared.SessionSummary
-	SavedSession         = shared.SavedSession
-	SavedSessionAgent    = shared.SavedSessionAgent
-	SavedSessionTask     = shared.SavedSessionTask
-	SavedSessionMemory   = shared.SavedSessionMemory
+	SessionRestoreResult  = shared.SessionRestoreResult
+	SessionListRequest    = shared.SessionListRequest
+	SessionListResult     = shared.SessionListResult
+	SessionSummary        = shared.SessionSummary
+	SavedSession          = shared.SavedSession
+	SavedSessionAgent     = shared.SavedSessionAgent
+	SavedSessionTask      = shared.SavedSessionTask
+	SavedSessionMemory    = shared.SavedSessionMemory
 
 	// Backend types
 	MemoryBackend = shared.MemoryBackend
@@ -373,18 +374,18 @@ const (
 	AgentTypeReleaseManager      = shared.AgentTypeReleaseManager
 
 	// Extended Agent Types (12 additional types)
-	AgentTypeResearcher          = shared.AgentTypeResearcher
-	AgentTypeArchitect           = shared.AgentTypeArchitect
-	AgentTypeAnalyst             = shared.AgentTypeAnalyst
-	AgentTypeOptimizer           = shared.AgentTypeOptimizer
-	AgentTypeSecurityAuditor     = shared.AgentTypeSecurityAuditor
-	AgentTypeCoreArchitect       = shared.AgentTypeCoreArchitect
-	AgentTypeTestArchitect       = shared.AgentTypeTestArchitect
+	AgentTypeResearcher           = shared.AgentTypeResearcher
+	AgentTypeArchitect            = shared.AgentTypeArchitect
+	AgentTypeAnalyst              = shared.AgentTypeAnalyst
+	AgentTypeOptimizer            = shared.AgentTypeOptimizer
+	AgentTypeSecurityAuditor      = shared.AgentTypeSecurityAuditor
+	AgentTypeCoreArchitect        = shared.AgentTypeCoreArchitect
+	AgentTypeTestArchitect        = shared.AgentTypeTestArchitect
 	AgentTypeIntegrationArchitect = shared.AgentTypeIntegrationArchitect
-	AgentTypeHooksDeveloper      = shared.AgentTypeHooksDeveloper
-	AgentTypeMCPSpecialist       = shared.AgentTypeMCPSpecialist
-	AgentTypeDocumentationLead   = shared.AgentTypeDocumentationLead
-	AgentTypeDevOpsEngineer      = shared.AgentTypeDevOpsEngineer
+	AgentTypeHooksDeveloper       = shared.AgentTypeHooksDeveloper
+	AgentTypeMCPSpecialist        = shared.AgentTypeMCPSpecialist
+	AgentTypeDocumentationLead    = shared.AgentTypeDocumentationLead
+	AgentTypeDevOpsEngineer       = shared.AgentTypeDevOpsEngineer
 )
 
 // Domain constants
@@ -617,7 +618,15 @@ func (we *WorkflowEngine) Shutdown() error {
 
 // MCPServer wraps the internal MCP server for public use.
 type MCPServer struct {
-	internal *mcp.Server
+	internal      *mcp.Server
+	federationHub *federation.FederationHub
+}
+
+func (ms *MCPServer) internalOrError() (*mcp.Server, error) {
+	if ms == nil || ms.internal == nil || !ms.internal.IsConfigured() {
+		return nil, fmt.Errorf("mcp server is not initialized")
+	}
+	return ms.internal, nil
 }
 
 // MCPServerConfig holds configuration for creating an MCP server.
@@ -665,7 +674,9 @@ func NewMCPServer(config MCPServerConfig) *MCPServer {
 
 	// Register federation tools
 	fedHub := federation.NewFederationHubWithDefaults()
-	fedHub.Initialize()
+	if err := fedHub.Initialize(); err != nil {
+		fedHub = nil
+	}
 	providers = append(providers, tools.NewFederationTools(fedHub))
 
 	opts := mcp.Options{
@@ -674,32 +685,82 @@ func NewMCPServer(config MCPServerConfig) *MCPServer {
 		Host:  config.Host,
 	}
 
-	return &MCPServer{internal: mcp.NewServer(opts)}
+	return &MCPServer{
+		internal:      mcp.NewServer(opts),
+		federationHub: fedHub,
+	}
 }
 
 // Start starts the MCP server.
 func (ms *MCPServer) Start() error {
-	return ms.internal.Start()
+	internal, err := ms.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.Start()
 }
 
 // Stop stops the MCP server.
 func (ms *MCPServer) Stop() error {
-	return ms.internal.Stop()
+	if ms == nil {
+		return fmt.Errorf("mcp server is not initialized")
+	}
+
+	var stopErr error
+	if ms.internal != nil && ms.internal.IsConfigured() {
+		stopErr = ms.internal.Stop()
+	} else {
+		stopErr = fmt.Errorf("mcp server is not initialized")
+	}
+
+	if ms.federationHub != nil {
+		fedHub := ms.federationHub
+		ms.federationHub = nil
+		if shutdownErr := fedHub.Shutdown(); stopErr == nil {
+			stopErr = shutdownErr
+		}
+	}
+
+	return stopErr
 }
 
 // ListTools returns available tools.
 func (ms *MCPServer) ListTools() []MCPTool {
-	return ms.internal.ListTools()
+	internal, err := ms.internalOrError()
+	if err != nil {
+		return []MCPTool{}
+	}
+	return internal.ListTools()
 }
 
 // GetStatus returns server status.
 func (ms *MCPServer) GetStatus() map[string]interface{} {
-	return ms.internal.GetStatus()
+	internal, err := ms.internalOrError()
+	if err != nil {
+		return map[string]interface{}{
+			"running": false,
+			"error":   "mcp server is not initialized",
+		}
+	}
+	return internal.GetStatus()
 }
 
 // RunStdio runs the MCP server using stdio transport (stdin/stdout).
 func (ms *MCPServer) RunStdio(ctx context.Context, reader io.Reader, writer io.Writer) error {
-	transport := mcp.NewStdioTransport(ms.internal, reader, writer)
+	internal, err := ms.internalOrError()
+	if err != nil {
+		return err
+	}
+	if ctx == nil {
+		return fmt.Errorf("context is required")
+	}
+	if reader == nil {
+		return fmt.Errorf("reader is required")
+	}
+	if writer == nil {
+		return fmt.Errorf("writer is required")
+	}
+	transport := mcp.NewStdioTransport(internal, reader, writer)
 	return transport.Run(ctx)
 }
 
@@ -1852,45 +1913,84 @@ func NewFederationHubWithDefaults() *FederationHub {
 	return &FederationHub{internal: federation.NewFederationHubWithDefaults()}
 }
 
+func (fh *FederationHub) internalOrError() (*federation.FederationHub, error) {
+	if fh == nil || fh.internal == nil {
+		return nil, fmt.Errorf("federation hub is not configured")
+	}
+	if !fh.internal.IsConfigured() {
+		return nil, fmt.Errorf("federation hub is not configured")
+	}
+	return fh.internal, nil
+}
+
 // Initialize starts the federation hub background processes.
 func (fh *FederationHub) Initialize() error {
-	return fh.internal.Initialize()
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.Initialize()
 }
 
 // Shutdown stops the federation hub and cleans up resources.
 func (fh *FederationHub) Shutdown() error {
-	return fh.internal.Shutdown()
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.Shutdown()
 }
 
 // Swarm Registration
 
 // RegisterSwarm registers a swarm with the federation.
 func (fh *FederationHub) RegisterSwarm(swarm SwarmRegistration) error {
-	return fh.internal.RegisterSwarm(swarm)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.RegisterSwarm(swarm)
 }
 
 // UnregisterSwarm removes a swarm from the federation.
 func (fh *FederationHub) UnregisterSwarm(swarmID string) error {
-	return fh.internal.UnregisterSwarm(swarmID)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.UnregisterSwarm(swarmID)
 }
 
 // Heartbeat updates the heartbeat for a swarm.
 func (fh *FederationHub) Heartbeat(swarmID string) error {
-	return fh.internal.Heartbeat(swarmID)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.Heartbeat(swarmID)
 }
 
 // GetSwarm returns a swarm by ID.
 func (fh *FederationHub) GetSwarm(swarmID string) (*SwarmRegistration, bool) {
+	if fh == nil || fh.internal == nil {
+		return nil, false
+	}
 	return fh.internal.GetSwarm(swarmID)
 }
 
 // GetSwarms returns all registered swarms.
 func (fh *FederationHub) GetSwarms() []*SwarmRegistration {
+	if fh == nil || fh.internal == nil {
+		return []*SwarmRegistration{}
+	}
 	return fh.internal.GetSwarms()
 }
 
 // GetActiveSwarms returns all active swarms.
 func (fh *FederationHub) GetActiveSwarms() []*SwarmRegistration {
+	if fh == nil || fh.internal == nil {
+		return []*SwarmRegistration{}
+	}
 	return fh.internal.GetActiveSwarms()
 }
 
@@ -1898,41 +1998,71 @@ func (fh *FederationHub) GetActiveSwarms() []*SwarmRegistration {
 
 // SpawnEphemeralAgent spawns a new ephemeral agent.
 func (fh *FederationHub) SpawnEphemeralAgent(opts SpawnEphemeralOptions) (*SpawnResult, error) {
-	return fh.internal.SpawnEphemeralAgent(opts)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return &SpawnResult{
+			Status: "failed",
+			Error:  err.Error(),
+		}, err
+	}
+	return internal.SpawnEphemeralAgent(opts)
 }
 
 // CompleteAgent marks an agent as completing with a result.
 func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error {
-	return fh.internal.CompleteAgent(agentID, result)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.CompleteAgent(agentID, result)
 }
 
 // TerminateAgent terminates an agent with an optional error.
 func (fh *FederationHub) TerminateAgent(agentID string, errorMsg string) error {
-	return fh.internal.TerminateAgent(agentID, errorMsg)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.TerminateAgent(agentID, errorMsg)
 }
 
 // GetAgent returns an agent by ID.
 func (fh *FederationHub) GetAgent(agentID string) (*EphemeralAgent, bool) {
+	if fh == nil || fh.internal == nil {
+		return nil, false
+	}
 	return fh.internal.GetAgent(agentID)
 }
 
 // GetAgents returns all ephemeral agents.
 func (fh *FederationHub) GetAgents() []*EphemeralAgent {
+	if fh == nil || fh.internal == nil {
+		return []*EphemeralAgent{}
+	}
 	return fh.internal.GetAgents()
 }
 
 // GetActiveAgents returns all active ephemeral agents.
 func (fh *FederationHub) GetActiveAgents() []*EphemeralAgent {
+	if fh == nil || fh.internal == nil {
+		return []*EphemeralAgent{}
+	}
 	return fh.internal.GetActiveAgents()
 }
 
 // GetAgentsBySwarm returns all agents in a swarm. O(1) lookup.
 func (fh *FederationHub) GetAgentsBySwarm(swarmID string) []*EphemeralAgent {
+	if fh == nil || fh.internal == nil {
+		return []*EphemeralAgent{}
+	}
 	return fh.internal.GetAgentsBySwarm(swarmID)
 }
 
 // GetAgentsByStatus returns all agents with a given status. O(1) lookup.
 func (fh *FederationHub) GetAgentsByStatus(status EphemeralAgentStatus) []*EphemeralAgent {
+	if fh == nil || fh.internal == nil {
+		return []*EphemeralAgent{}
+	}
 	return fh.internal.GetAgentsByStatus(status)
 }
 
@@ -1940,26 +2070,43 @@ func (fh *FederationHub) GetAgentsByStatus(status EphemeralAgentStatus) []*Ephem
 
 // SendMessage sends a direct message to a specific swarm.
 func (fh *FederationHub) SendMessage(sourceSwarmID, targetSwarmID string, payload interface{}) (*FederationMessage, error) {
-	return fh.internal.SendMessage(sourceSwarmID, targetSwarmID, payload)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return nil, err
+	}
+	return internal.SendMessage(sourceSwarmID, targetSwarmID, payload)
 }
 
 // Broadcast sends a message to all active swarms except the sender.
 func (fh *FederationHub) Broadcast(sourceSwarmID string, payload interface{}) (*FederationMessage, error) {
-	return fh.internal.Broadcast(sourceSwarmID, payload)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return nil, err
+	}
+	return internal.Broadcast(sourceSwarmID, payload)
 }
 
 // GetMessages returns recent messages.
 func (fh *FederationHub) GetMessages(limit int) []*FederationMessage {
+	if fh == nil || fh.internal == nil {
+		return []*FederationMessage{}
+	}
 	return fh.internal.GetMessages(limit)
 }
 
 // GetMessagesBySwarm returns messages for a specific swarm.
 func (fh *FederationHub) GetMessagesBySwarm(swarmID string, limit int) []*FederationMessage {
+	if fh == nil || fh.internal == nil {
+		return []*FederationMessage{}
+	}
 	return fh.internal.GetMessagesBySwarm(swarmID, limit)
 }
 
 // GetMessage returns a message by ID.
 func (fh *FederationHub) GetMessage(messageID string) (*FederationMessage, bool) {
+	if fh == nil || fh.internal == nil {
+		return nil, false
+	}
 	return fh.internal.GetMessage(messageID)
 }
 
@@ -1967,31 +2114,51 @@ func (fh *FederationHub) GetMessage(messageID string) (*FederationMessage, bool)
 
 // Propose creates a new consensus proposal.
 func (fh *FederationHub) Propose(proposerID, proposalType string, value interface{}) (*FederationProposal, error) {
-	return fh.internal.Propose(proposerID, proposalType, value)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return nil, err
+	}
+	return internal.Propose(proposerID, proposalType, value)
 }
 
 // Vote submits a vote on a proposal.
 func (fh *FederationHub) Vote(voterID, proposalID string, approve bool) error {
-	return fh.internal.Vote(voterID, proposalID, approve)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.Vote(voterID, proposalID, approve)
 }
 
 // GetProposal returns a proposal by ID.
 func (fh *FederationHub) GetProposal(proposalID string) (*FederationProposal, bool) {
+	if fh == nil || fh.internal == nil {
+		return nil, false
+	}
 	return fh.internal.GetProposal(proposalID)
 }
 
 // GetProposals returns all proposals.
 func (fh *FederationHub) GetProposals() []*FederationProposal {
+	if fh == nil || fh.internal == nil {
+		return []*FederationProposal{}
+	}
 	return fh.internal.GetProposals()
 }
 
 // GetPendingProposals returns all pending proposals.
 func (fh *FederationHub) GetPendingProposals() []*FederationProposal {
+	if fh == nil || fh.internal == nil {
+		return []*FederationProposal{}
+	}
 	return fh.internal.GetPendingProposals()
 }
 
 // GetQuorumInfo returns information about quorum requirements.
 func (fh *FederationHub) GetQuorumInfo() (activeSwarms int, requiredVotes int, quorumPercentage float64) {
+	if fh == nil || fh.internal == nil {
+		return 0, 0, 0
+	}
 	return fh.internal.GetQuorumInfo()
 }
 
@@ -1999,21 +2166,33 @@ func (fh *FederationHub) GetQuorumInfo() (activeSwarms int, requiredVotes int, q
 
 // SetEventHandler sets the event handler for federation events.
 func (fh *FederationHub) SetEventHandler(handler FederationEventHandler) {
+	if fh == nil || fh.internal == nil {
+		return
+	}
 	fh.internal.SetEventHandler(handler)
 }
 
 // GetEvents returns recent federation events.
 func (fh *FederationHub) GetEvents(limit int) []*FederationEvent {
+	if fh == nil || fh.internal == nil {
+		return []*FederationEvent{}
+	}
 	return fh.internal.GetEvents(limit)
 }
 
 // GetStats returns federation statistics.
 func (fh *FederationHub) GetStats() FederationStats {
+	if fh == nil || fh.internal == nil {
+		return FederationStats{}
+	}
 	return fh.internal.GetStats()
 }
 
 // GetConfig returns the federation configuration.
 func (fh *FederationHub) GetConfig() FederationConfig {
+	if fh == nil || fh.internal == nil {
+		return shared.DefaultFederationConfig()
+	}
 	return fh.internal.GetConfig()
 }
 
@@ -2024,6 +2203,12 @@ func DefaultFederationConfig() FederationConfig {
 
 // NewFederationTools creates MCP tools for federation operations.
 func NewFederationTools(hub *FederationHub) *tools.FederationTools {
+	if hub == nil {
+		return tools.NewFederationTools(nil)
+	}
+	if hub.internal == nil || !hub.internal.IsConfigured() {
+		return tools.NewFederationTools(nil)
+	}
 	return tools.NewFederationTools(hub.internal)
 }
 
@@ -2755,11 +2940,28 @@ type CompletionHandler struct {
 
 // NewCompletionHandler creates a new CompletionHandler.
 func NewCompletionHandler(res *ResourceRegistry, pr *PromptRegistry) *CompletionHandler {
-	return &CompletionHandler{internal: mcpcompletion.NewCompletionHandler(res.internal, pr.internal)}
+	var internalResources *mcpresources.ResourceRegistry
+	if res != nil {
+		internalResources = res.internal
+	}
+
+	var internalPrompts *mcpprompts.PromptRegistry
+	if pr != nil {
+		internalPrompts = pr.internal
+	}
+
+	return &CompletionHandler{internal: mcpcompletion.NewCompletionHandler(internalResources, internalPrompts)}
 }
 
 // Complete handles a completion request.
 func (ch *CompletionHandler) Complete(ref *CompletionReference, arg *CompletionArgument) *CompletionResult {
+	if ch == nil || ch.internal == nil {
+		return &CompletionResult{
+			Values:  []string{},
+			Total:   0,
+			HasMore: false,
+		}
+	}
 	return ch.internal.Complete(ref, arg)
 }
 
@@ -3263,13 +3465,13 @@ type RoutingDecision struct {
 
 // Session state constants
 const (
-	SessionStateCreated  = shared.SessionStateCreated
-	SessionStateReady    = shared.SessionStateReady
-	SessionStateActive   = shared.SessionStateActive
-	SessionStateClosing  = shared.SessionStateClosing
-	SessionStateClosed   = shared.SessionStateClosed
-	SessionStateExpired  = shared.SessionStateExpired
-	SessionStateError    = shared.SessionStateError
+	SessionStateCreated = shared.SessionStateCreated
+	SessionStateReady   = shared.SessionStateReady
+	SessionStateActive  = shared.SessionStateActive
+	SessionStateClosing = shared.SessionStateClosing
+	SessionStateClosed  = shared.SessionStateClosed
+	SessionStateExpired = shared.SessionStateExpired
+	SessionStateError   = shared.SessionStateError
 )
 
 // Transport type constants

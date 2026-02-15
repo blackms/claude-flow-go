@@ -3,6 +3,7 @@ package logging
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,11 +24,26 @@ type LogHandler func(entry LogEntry)
 
 // LogManager manages logging configuration and output.
 type LogManager struct {
-	mu       sync.RWMutex
-	level    shared.MCPLogLevel
-	handlers []LogHandler
-	entries  []LogEntry
+	mu         sync.RWMutex
+	level      shared.MCPLogLevel
+	handlers   []LogHandler
+	entries    []LogEntry
 	maxEntries int
+}
+
+func normalizeLogLevel(level string) shared.MCPLogLevel {
+	return shared.MCPLogLevel(strings.ToLower(strings.TrimSpace(level)))
+}
+
+func safeInvokeLogHandler(handler LogHandler, entry LogEntry) {
+	if handler == nil {
+		return
+	}
+
+	defer func() {
+		_ = recover()
+	}()
+	handler(entry)
 }
 
 // NewLogManager creates a new LogManager.
@@ -50,7 +66,11 @@ func NewLogManagerWithDefaults() *LogManager {
 
 // SetLevel sets the log level.
 func (lm *LogManager) SetLevel(level string) error {
-	logLevel := shared.MCPLogLevel(level)
+	if lm == nil {
+		return fmt.Errorf("log manager is required")
+	}
+
+	logLevel := normalizeLogLevel(level)
 
 	// Validate level
 	switch logLevel {
@@ -76,6 +96,10 @@ func (lm *LogManager) SetLevel(level string) error {
 
 // GetLevel returns the current log level.
 func (lm *LogManager) GetLevel() shared.MCPLogLevel {
+	if lm == nil {
+		return shared.MCPLogLevelInfo
+	}
+
 	lm.mu.RLock()
 	defer lm.mu.RUnlock()
 	return lm.level
@@ -83,6 +107,10 @@ func (lm *LogManager) GetLevel() shared.MCPLogLevel {
 
 // AddHandler adds a log handler.
 func (lm *LogManager) AddHandler(handler LogHandler) {
+	if lm == nil || handler == nil {
+		return
+	}
+
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 	lm.handlers = append(lm.handlers, handler)
@@ -90,6 +118,10 @@ func (lm *LogManager) AddHandler(handler LogHandler) {
 
 // Log logs a message at the specified level.
 func (lm *LogManager) Log(level shared.MCPLogLevel, message string, data interface{}) {
+	if lm == nil {
+		return
+	}
+
 	if !lm.shouldLog(level) {
 		return
 	}
@@ -113,12 +145,16 @@ func (lm *LogManager) Log(level shared.MCPLogLevel, message string, data interfa
 
 	// Notify handlers
 	for _, handler := range handlers {
-		go handler(entry)
+		go safeInvokeLogHandler(handler, entry)
 	}
 }
 
 // LogWithLogger logs a message with a specific logger name.
 func (lm *LogManager) LogWithLogger(level shared.MCPLogLevel, logger, message string, data interface{}) {
+	if lm == nil {
+		return
+	}
+
 	if !lm.shouldLog(level) {
 		return
 	}
@@ -141,12 +177,16 @@ func (lm *LogManager) LogWithLogger(level shared.MCPLogLevel, logger, message st
 	lm.mu.Unlock()
 
 	for _, handler := range handlers {
-		go handler(entry)
+		go safeInvokeLogHandler(handler, entry)
 	}
 }
 
 // shouldLog checks if a message at the given level should be logged.
 func (lm *LogManager) shouldLog(level shared.MCPLogLevel) bool {
+	if lm == nil {
+		return false
+	}
+
 	lm.mu.RLock()
 	currentLevel := lm.level
 	lm.mu.RUnlock()
@@ -212,6 +252,10 @@ func (lm *LogManager) Critical(message string, data interface{}) {
 
 // GetEntries returns recent log entries.
 func (lm *LogManager) GetEntries(limit int) []LogEntry {
+	if lm == nil {
+		return []LogEntry{}
+	}
+
 	lm.mu.RLock()
 	defer lm.mu.RUnlock()
 
@@ -231,6 +275,10 @@ func (lm *LogManager) GetEntries(limit int) []LogEntry {
 
 // GetEntriesByLevel returns log entries filtered by level.
 func (lm *LogManager) GetEntriesByLevel(level shared.MCPLogLevel, limit int) []LogEntry {
+	if lm == nil {
+		return []LogEntry{}
+	}
+
 	lm.mu.RLock()
 	defer lm.mu.RUnlock()
 
@@ -251,6 +299,10 @@ func (lm *LogManager) GetEntriesByLevel(level shared.MCPLogLevel, limit int) []L
 
 // Clear clears all log entries.
 func (lm *LogManager) Clear() {
+	if lm == nil {
+		return
+	}
+
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 	lm.entries = make([]LogEntry, 0)
@@ -258,6 +310,10 @@ func (lm *LogManager) Clear() {
 
 // Count returns the number of log entries.
 func (lm *LogManager) Count() int {
+	if lm == nil {
+		return 0
+	}
+
 	lm.mu.RLock()
 	defer lm.mu.RUnlock()
 	return len(lm.entries)
