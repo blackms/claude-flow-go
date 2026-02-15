@@ -225,3 +225,34 @@ func TestFederationHub_NilReceiverMethodsFailGracefully(t *testing.T) {
 	// no-op path should not panic
 	hub.SetEventHandler(func(event shared.FederationEvent) {})
 }
+
+func TestFederationHub_IsConfigured(t *testing.T) {
+	var nilHub *FederationHub
+	if nilHub.IsConfigured() {
+		t.Fatal("expected nil receiver to be unconfigured")
+	}
+
+	var zero FederationHub
+	if zero.IsConfigured() {
+		t.Fatal("expected zero-value hub to be unconfigured")
+	}
+
+	constructed := NewFederationHubWithDefaults()
+	if !constructed.IsConfigured() {
+		t.Fatal("expected constructor-created hub to be configured")
+	}
+
+	if err := constructed.Initialize(); err != nil {
+		t.Fatalf("expected constructed hub to initialize, got %v", err)
+	}
+	if !constructed.IsConfigured() {
+		t.Fatal("expected initialized hub to remain configured")
+	}
+
+	if err := constructed.Shutdown(); err != nil {
+		t.Fatalf("expected shutdown to succeed, got %v", err)
+	}
+	if !constructed.IsConfigured() {
+		t.Fatal("expected shutdown hub to remain structurally configured")
+	}
+}
