@@ -502,6 +502,11 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 }
 
 func TestCloneInterfaceValue_ReflectionFallbackForTypedContainers(t *testing.T) {
+	type typedPayload struct {
+		Labels map[string][]string
+		Scores []map[string]int
+	}
+
 	originalMapOfSlices := map[string][]string{
 		"roles": {"dev", "ops"},
 	}
@@ -568,6 +573,53 @@ func TestCloneInterfaceValue_ReflectionFallbackForTypedContainers(t *testing.T) 
 	(*clonedPointerMap)["teams"][0] = "mutated"
 	if (*originalPointerMap)["teams"][0] != "core" {
 		t.Fatalf("expected original pointer map value to remain unchanged, got %v", (*originalPointerMap)["teams"][0])
+	}
+
+	originalStruct := typedPayload{
+		Labels: map[string][]string{
+			"teams": {"core", "ml"},
+		},
+		Scores: []map[string]int{
+			{"alpha": 1},
+		},
+	}
+	clonedStructRaw := cloneInterfaceValue(originalStruct)
+	clonedStruct, ok := clonedStructRaw.(typedPayload)
+	if !ok {
+		t.Fatalf("expected cloned typedPayload, got %T", clonedStructRaw)
+	}
+	clonedStruct.Labels["teams"][0] = "mutated"
+	clonedStruct.Scores[0]["alpha"] = 99
+	if originalStruct.Labels["teams"][0] != "core" {
+		t.Fatalf("expected original struct map/slice value to remain unchanged, got %v", originalStruct.Labels["teams"][0])
+	}
+	if originalStruct.Scores[0]["alpha"] != 1 {
+		t.Fatalf("expected original struct slice/map value to remain unchanged, got %v", originalStruct.Scores[0]["alpha"])
+	}
+
+	originalStructPtr := &typedPayload{
+		Labels: map[string][]string{
+			"teams": {"api", "infra"},
+		},
+		Scores: []map[string]int{
+			{"beta": 2},
+		},
+	}
+	clonedStructPtrRaw := cloneInterfaceValue(originalStructPtr)
+	clonedStructPtr, ok := clonedStructPtrRaw.(*typedPayload)
+	if !ok {
+		t.Fatalf("expected cloned *typedPayload, got %T", clonedStructPtrRaw)
+	}
+	if clonedStructPtr == originalStructPtr {
+		t.Fatal("expected cloned struct pointer to use a distinct allocation")
+	}
+	clonedStructPtr.Labels["teams"][0] = "mutated"
+	clonedStructPtr.Scores[0]["beta"] = 200
+	if originalStructPtr.Labels["teams"][0] != "api" {
+		t.Fatalf("expected original struct pointer map/slice value to remain unchanged, got %v", originalStructPtr.Labels["teams"][0])
+	}
+	if originalStructPtr.Scores[0]["beta"] != 2 {
+		t.Fatalf("expected original struct pointer slice/map value to remain unchanged, got %v", originalStructPtr.Scores[0]["beta"])
 	}
 }
 

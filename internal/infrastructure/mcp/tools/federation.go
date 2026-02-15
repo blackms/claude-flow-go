@@ -1095,6 +1095,8 @@ func cloneReflectContainer(value interface{}) interface{} {
 		return cloneArrayValue(reflected).Interface()
 	case reflect.Ptr:
 		return clonePointerValue(reflected).Interface()
+	case reflect.Struct:
+		return cloneStructValue(reflected).Interface()
 	default:
 		return value
 	}
@@ -1147,20 +1149,35 @@ func clonePointerValue(value reflect.Value) reflect.Value {
 	return clonedPtr
 }
 
+func cloneStructValue(value reflect.Value) reflect.Value {
+	cloned := reflect.New(value.Type()).Elem()
+	cloned.Set(value)
+	for i := 0; i < value.NumField(); i++ {
+		targetField := cloned.Field(i)
+		if !targetField.CanSet() {
+			continue
+		}
+		targetField.Set(cloneValueForType(targetField.Type(), value.Field(i)))
+	}
+	return cloned
+}
+
 func cloneValueForType(targetType reflect.Type, value reflect.Value) reflect.Value {
 	if !value.IsValid() {
 		return reflect.Zero(targetType)
 	}
 
-	clonedInterface := cloneInterfaceValue(value.Interface())
-	if clonedInterface != nil {
-		clonedValue := reflect.ValueOf(clonedInterface)
-		if clonedValue.IsValid() {
-			if clonedValue.Type().AssignableTo(targetType) {
-				return clonedValue
-			}
-			if clonedValue.Type().ConvertibleTo(targetType) {
-				return clonedValue.Convert(targetType)
+	if value.CanInterface() {
+		clonedInterface := cloneInterfaceValue(value.Interface())
+		if clonedInterface != nil {
+			clonedValue := reflect.ValueOf(clonedInterface)
+			if clonedValue.IsValid() {
+				if clonedValue.Type().AssignableTo(targetType) {
+					return clonedValue
+				}
+				if clonedValue.Type().ConvertibleTo(targetType) {
+					return clonedValue.Convert(targetType)
+				}
 			}
 		}
 	}
