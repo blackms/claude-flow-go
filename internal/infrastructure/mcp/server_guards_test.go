@@ -636,6 +636,38 @@ func TestServer_PanickingProviderIsIsolated(t *testing.T) {
 	if resp.Result == nil {
 		t.Fatal("expected non-nil result from fallback provider")
 	}
+
+	toolCallResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "panic-provider-tool-call",
+		Method: "tools/call",
+		Params: map[string]interface{}{
+			"name":      "guard/provider-tool",
+			"arguments": map[string]interface{}{},
+		},
+	})
+	if toolCallResp.Error != nil {
+		t.Fatalf("expected tools/call to skip panicking provider and succeed, got %v", toolCallResp.Error)
+	}
+}
+
+func TestServer_AddToolProviderPanickingGetToolsDoesNotCorruptRegistry(t *testing.T) {
+	server := NewServer(Options{})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	baseline := server.ListTools()
+	server.AddToolProvider(panicProvider{panicOnGetTools: true})
+	after := server.ListTools()
+
+	if len(after) != len(baseline) {
+		t.Fatalf("expected panicking provider to add no tools, baseline=%d after=%d", len(baseline), len(after))
+	}
+	for i := range baseline {
+		if baseline[i].Name != after[i].Name {
+			t.Fatalf("expected tool ordering/content unchanged, mismatch at %d: %q != %q", i, baseline[i].Name, after[i].Name)
+		}
+	}
 }
 
 func TestServer_HandleRequestProviderParamsAreDefensivelyCopied(t *testing.T) {
