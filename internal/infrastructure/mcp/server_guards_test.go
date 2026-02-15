@@ -286,6 +286,32 @@ func TestServer_NewServerConfiguredPathStillWorks(t *testing.T) {
 	}
 }
 
+func TestServer_StartRejectsInvalidPortAndHost(t *testing.T) {
+	invalidPortServer := NewServer(Options{Port: -1})
+	if invalidPortServer == nil {
+		t.Fatal("expected server with invalid port to be constructed")
+	}
+	if err := invalidPortServer.Start(); err == nil || err.Error() != "invalid port: -1" {
+		t.Fatalf("expected invalid-port start error, got %v", err)
+	}
+
+	overflowPortServer := NewServer(Options{Port: 70000})
+	if overflowPortServer == nil {
+		t.Fatal("expected server with overflow port to be constructed")
+	}
+	if err := overflowPortServer.Start(); err == nil || err.Error() != "invalid port: 70000" {
+		t.Fatalf("expected overflow-port start error, got %v", err)
+	}
+
+	blankHostServer := NewServer(Options{Host: "   "})
+	if blankHostServer == nil {
+		t.Fatal("expected server with blank host to be constructed")
+	}
+	if err := blankHostServer.Start(); err == nil || err.Error() != "host is required" {
+		t.Fatalf("expected host-required start error, got %v", err)
+	}
+}
+
 func TestServer_ListToolsReturnsDeterministicSortedNames(t *testing.T) {
 	server := &Server{
 		toolRegistry: map[string]shared.MCPTool{

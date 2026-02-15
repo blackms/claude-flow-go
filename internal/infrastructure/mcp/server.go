@@ -430,6 +430,12 @@ func (s *Server) Start() error {
 	if err := s.configuredOrError(); err != nil {
 		return err
 	}
+	if s.port <= 0 || s.port > 65535 {
+		return fmt.Errorf("invalid port: %d", s.port)
+	}
+	if strings.TrimSpace(s.host) == "" {
+		return fmt.Errorf("host is required")
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
