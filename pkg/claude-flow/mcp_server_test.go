@@ -191,6 +191,54 @@ func TestNewMCPServer_WithCoordinator_RegistersCoordinatorTools(t *testing.T) {
 	}
 }
 
+func TestNewMCPServer_WithCoordinator_RegistersAllFederationTools(t *testing.T) {
+	coord, err := NewSwarmCoordinator(SwarmConfig{
+		Topology: TopologyMesh,
+	})
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = coord.Shutdown()
+	})
+
+	server := NewMCPServer(MCPServerConfig{
+		Coordinator: coord,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	expectedFederation := map[string]bool{
+		"federation/status":              true,
+		"federation/spawn-ephemeral":     true,
+		"federation/terminate-ephemeral": true,
+		"federation/list-ephemeral":      true,
+		"federation/register-swarm":      true,
+		"federation/broadcast":           true,
+		"federation/propose":             true,
+		"federation/vote":                true,
+	}
+
+	counts := make(map[string]int, len(expectedFederation))
+	for _, tool := range tools {
+		if expectedFederation[tool.Name] {
+			counts[tool.Name]++
+		}
+	}
+
+	for name := range expectedFederation {
+		if counts[name] != 1 {
+			t.Fatalf("expected exactly one %s tool in coordinator-only config, got %d", name, counts[name])
+		}
+	}
+}
+
 func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
 	if server == nil {
@@ -354,6 +402,49 @@ func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 	}
 	if !hasFederationStatus || !hasFederationSpawn || !hasHooksList {
 		t.Fatalf("expected federation/hooks tools to remain registered; got federationStatus=%v federationSpawn=%v hooks=%v", hasFederationStatus, hasFederationSpawn, hasHooksList)
+	}
+}
+
+func TestNewMCPServer_WithMemory_RegistersAllFederationTools(t *testing.T) {
+	backend, err := NewSQLiteBackend(":memory:")
+	if err != nil {
+		t.Fatalf("failed to initialize sqlite backend: %v", err)
+	}
+
+	server := NewMCPServer(MCPServerConfig{
+		Memory: backend,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	expectedFederation := map[string]bool{
+		"federation/status":              true,
+		"federation/spawn-ephemeral":     true,
+		"federation/terminate-ephemeral": true,
+		"federation/list-ephemeral":      true,
+		"federation/register-swarm":      true,
+		"federation/broadcast":           true,
+		"federation/propose":             true,
+		"federation/vote":                true,
+	}
+
+	counts := make(map[string]int, len(expectedFederation))
+	for _, tool := range tools {
+		if expectedFederation[tool.Name] {
+			counts[tool.Name]++
+		}
+	}
+
+	for name := range expectedFederation {
+		if counts[name] != 1 {
+			t.Fatalf("expected exactly one %s tool in memory-only config, got %d", name, counts[name])
+		}
 	}
 }
 
