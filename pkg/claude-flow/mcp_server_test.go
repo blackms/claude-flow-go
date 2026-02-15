@@ -1,6 +1,9 @@
 package claudeflow
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestNewMCPServer_RegistersFederationTools(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
@@ -505,6 +508,108 @@ func TestNewMCPServer_WithCoordinator_FederationToolSchemas_ExposeValidatedStatu
 	for _, expected := range expectedEnum {
 		if !enumValues[expected] {
 			t.Fatalf("expected status enum to include %q", expected)
+		}
+	}
+}
+
+func TestNewMCPServer_FederationToolSchemas_AreIdenticalAcrossConfigs(t *testing.T) {
+	baseServer := NewMCPServer(MCPServerConfig{})
+	if baseServer == nil {
+		t.Fatal("expected base MCP server to be created")
+	}
+	baseSchemas := extractFederationToolSchemas(t, baseServer.ListTools())
+	if len(baseSchemas) == 0 {
+		t.Fatal("expected base MCP server to include federation schemas")
+	}
+
+	coord, err := NewSwarmCoordinator(SwarmConfig{
+		Topology: TopologyMesh,
+	})
+	if err != nil {
+		t.Fatalf("failed to create coordinator for coordinator-only config: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = coord.Shutdown()
+	})
+	coordServer := NewMCPServer(MCPServerConfig{
+		Coordinator: coord,
+	})
+	if coordServer == nil {
+		t.Fatal("expected coordinator MCP server to be created")
+	}
+	assertFederationSchemasEqual(t, baseSchemas, extractFederationToolSchemas(t, coordServer.ListTools()), "coordinator-only")
+
+	memoryBackend, err := NewSQLiteBackend(":memory:")
+	if err != nil {
+		t.Fatalf("failed to initialize sqlite backend for memory-only config: %v", err)
+	}
+	memoryServer := NewMCPServer(MCPServerConfig{
+		Memory: memoryBackend,
+	})
+	if memoryServer == nil {
+		t.Fatal("expected memory MCP server to be created")
+	}
+	assertFederationSchemasEqual(t, baseSchemas, extractFederationToolSchemas(t, memoryServer.ListTools()), "memory-only")
+
+	coordMemory, err := NewSwarmCoordinator(SwarmConfig{
+		Topology: TopologyMesh,
+	})
+	if err != nil {
+		t.Fatalf("failed to create coordinator for coordinator+memory config: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = coordMemory.Shutdown()
+	})
+	coordMemoryBackend, err := NewSQLiteBackend(":memory:")
+	if err != nil {
+		t.Fatalf("failed to initialize sqlite backend for coordinator+memory config: %v", err)
+	}
+	coordMemoryServer := NewMCPServer(MCPServerConfig{
+		Coordinator: coordMemory,
+		Memory:      coordMemoryBackend,
+	})
+	if coordMemoryServer == nil {
+		t.Fatal("expected coordinator+memory MCP server to be created")
+	}
+	assertFederationSchemasEqual(t, baseSchemas, extractFederationToolSchemas(t, coordMemoryServer.ListTools()), "coordinator+memory")
+}
+
+func extractFederationToolSchemas(t *testing.T, tools []MCPTool) map[string]map[string]interface{} {
+	t.Helper()
+
+	expectedFederationToolNames := map[string]bool{
+		"federation/status":              true,
+		"federation/spawn-ephemeral":     true,
+		"federation/terminate-ephemeral": true,
+		"federation/list-ephemeral":      true,
+		"federation/register-swarm":      true,
+		"federation/broadcast":           true,
+		"federation/propose":             true,
+		"federation/vote":                true,
+	}
+
+	schemas := make(map[string]map[string]interface{}, len(expectedFederationToolNames))
+	for _, tool := range tools {
+		if expectedFederationToolNames[tool.Name] {
+			schemas[tool.Name] = tool.Parameters
+		}
+	}
+
+	if len(schemas) != len(expectedFederationToolNames) {
+		t.Fatalf("expected %d federation tool schemas, got %d", len(expectedFederationToolNames), len(schemas))
+	}
+	return schemas
+}
+
+func assertFederationSchemasEqual(t *testing.T, baseline map[string]map[string]interface{}, current map[string]map[string]interface{}, configLabel string) {
+	t.Helper()
+	for name, baselineSchema := range baseline {
+		schema, ok := current[name]
+		if !ok {
+			t.Fatalf("expected %s schema in %s config", name, configLabel)
+		}
+		if !reflect.DeepEqual(baselineSchema, schema) {
+			t.Fatalf("expected %s schema to match baseline in %s config", name, configLabel)
 		}
 	}
 }
