@@ -123,6 +123,59 @@ func TestFederationTools_ExecuteAndExecuteTool_RequireConfiguredHubPrecedesArgVa
 			tool: "federation/propose",
 			args: map[string]interface{}{},
 		},
+		{
+			name: "nil hub register swarm with invalid maxAgents type",
+			ft:   &FederationTools{},
+			tool: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm",
+				"name":      "swarm",
+				"maxAgents": "not-an-integer",
+			},
+		},
+		{
+			name: "nil hub terminate with invalid agentId type",
+			ft:   &FederationTools{},
+			tool: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": 123,
+			},
+		},
+		{
+			name: "nil hub broadcast with invalid payload type",
+			ft:   &FederationTools{},
+			tool: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": "source",
+				"payload":       "not-an-object",
+			},
+		},
+		{
+			name: "nil hub vote with invalid approve type",
+			ft:   &FederationTools{},
+			tool: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "voter",
+				"proposalId": "proposal",
+				"approve":    "yes",
+			},
+		},
+		{
+			name: "nil hub list ephemeral with invalid status type",
+			ft:   &FederationTools{},
+			tool: "federation/list-ephemeral",
+			args: map[string]interface{}{
+				"status": 99,
+			},
+		},
+		{
+			name: "zero-value internal hub status with irrelevant args",
+			ft:   NewFederationTools(&federation.FederationHub{}),
+			tool: "federation/status",
+			args: map[string]interface{}{
+				"unexpected": map[string]interface{}{"x": 1},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
