@@ -300,6 +300,24 @@ func TestNewFederationTools_WithShutdownHubPreservesLifecycleContracts(t *testin
 	if registerResult.Success {
 		t.Fatal("expected register-swarm failure after shutdown")
 	}
+
+	unknownResult, unknownErr := fedTools.Execute(context.Background(), "federation/not-real", map[string]interface{}{})
+	if unknownErr == nil {
+		t.Fatal("expected unknown-tool error after shutdown")
+	}
+	if unknownResult == nil {
+		t.Fatal("expected unknown-tool result after shutdown")
+	}
+	const expectedUnknownErr = "unknown tool: federation/not-real"
+	if unknownErr.Error() != expectedUnknownErr {
+		t.Fatalf("expected unknown-tool error %q, got %q", expectedUnknownErr, unknownErr.Error())
+	}
+	if unknownResult.Error != expectedUnknownErr {
+		t.Fatalf("expected unknown-tool result error %q, got %q", expectedUnknownErr, unknownResult.Error)
+	}
+	if unknownResult.Success {
+		t.Fatal("expected unknown-tool failure after shutdown")
+	}
 }
 
 func TestFederationHub_PublicLifecycleReadsAvailableBeforeInitialize(t *testing.T) {
