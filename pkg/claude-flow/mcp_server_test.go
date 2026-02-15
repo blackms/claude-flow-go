@@ -218,8 +218,14 @@ func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 	hasMemoryRetrieve := false
 	hasFederationStatus := false
 	hasHooksList := false
+	seen := make(map[string]bool, len(tools))
 
 	for _, tool := range tools {
+		if seen[tool.Name] {
+			t.Fatalf("duplicate tool name found: %s", tool.Name)
+		}
+		seen[tool.Name] = true
+
 		switch tool.Name {
 		case "memory_store":
 			hasMemoryStore = true
