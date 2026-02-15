@@ -239,6 +239,96 @@ func TestFederationTools_ExecuteAndExecuteTool_ZeroValueInternalHubRejectsReadTo
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_NilArgsParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	testCases := []struct {
+		name        string
+		expectedErr string
+	}{
+		{
+			name:        "federation/register-swarm",
+			expectedErr: "swarmId is required",
+		},
+		{
+			name:        "federation/spawn-ephemeral",
+			expectedErr: "type is required",
+		},
+		{
+			name:        "federation/terminate-ephemeral",
+			expectedErr: "agentId is required",
+		},
+		{
+			name:        "federation/broadcast",
+			expectedErr: "sourceSwarmId is required",
+		},
+		{
+			name:        "federation/propose",
+			expectedErr: "proposerId is required",
+		},
+		{
+			name:        "federation/vote",
+			expectedErr: "voterId is required",
+		},
+		{
+			name:        "federation/status",
+			expectedErr: "",
+		},
+		{
+			name:        "federation/list-ephemeral",
+			expectedErr: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			execResult, execErr := ft.Execute(context.Background(), tc.name, nil)
+			if execResult == nil {
+				t.Fatal("expected Execute result with nil args")
+			}
+
+			directResult, directErr := ft.ExecuteTool(context.Background(), tc.name, nil)
+
+			if tc.expectedErr == "" {
+				if execErr != nil || directErr != nil {
+					t.Fatalf("expected nil-args success, got Execute err=%v ExecuteTool err=%v", execErr, directErr)
+				}
+				if !execResult.Success || !directResult.Success {
+					t.Fatalf("expected nil-args success results, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+				}
+				return
+			}
+
+			if execErr == nil || directErr == nil {
+				t.Fatalf("expected nil-args errors, got Execute err=%v ExecuteTool err=%v", execErr, directErr)
+			}
+			if execErr.Error() != tc.expectedErr {
+				t.Fatalf("expected Execute error %q, got %q", tc.expectedErr, execErr.Error())
+			}
+			if directErr.Error() != tc.expectedErr {
+				t.Fatalf("expected ExecuteTool error %q, got %q", tc.expectedErr, directErr.Error())
+			}
+			if execResult.Error != tc.expectedErr {
+				t.Fatalf("expected Execute result error %q, got %q", tc.expectedErr, execResult.Error)
+			}
+			if directResult.Error != tc.expectedErr {
+				t.Fatalf("expected ExecuteTool result error %q, got %q", tc.expectedErr, directResult.Error)
+			}
+			if execResult.Success || directResult.Success {
+				t.Fatalf("expected nil-args failures, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+			}
+		})
+	}
+}
+
 func TestFederationTools_GetTools_HaveObjectSchemasAndRequiredFields(t *testing.T) {
 	ft := &FederationTools{}
 
