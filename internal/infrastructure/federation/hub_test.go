@@ -54,6 +54,67 @@ func TestFederationHub_RegisterSwarmRejectsDuplicateIDs(t *testing.T) {
 	}
 }
 
+func TestFederationHub_InitializeRejectsInvalidIntervals(t *testing.T) {
+	tests := []struct {
+		name        string
+		configure   func(cfg *shared.FederationConfig)
+		expectedErr string
+	}{
+		{
+			name: "non-positive heartbeat interval",
+			configure: func(cfg *shared.FederationConfig) {
+				cfg.HeartbeatInterval = 0
+			},
+			expectedErr: "heartbeat interval must be greater than 0",
+		},
+		{
+			name: "non-positive sync interval",
+			configure: func(cfg *shared.FederationConfig) {
+				cfg.SyncInterval = 0
+			},
+			expectedErr: "sync interval must be greater than 0",
+		},
+		{
+			name: "cleanup enabled with non-positive cleanup interval",
+			configure: func(cfg *shared.FederationConfig) {
+				cfg.AutoCleanupEnabled = true
+				cfg.CleanupInterval = 0
+			},
+			expectedErr: "cleanup interval must be greater than 0",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := shared.DefaultFederationConfig()
+			tc.configure(&cfg)
+
+			hub := NewFederationHub(cfg)
+			err := hub.Initialize()
+			if err == nil {
+				t.Fatalf("expected initialization error %q", tc.expectedErr)
+			}
+			if err.Error() != tc.expectedErr {
+				t.Fatalf("expected error %q, got %q", tc.expectedErr, err.Error())
+			}
+		})
+	}
+}
+
+func TestFederationHub_InitializeAllowsDisabledCleanupWithNonPositiveCleanupInterval(t *testing.T) {
+	cfg := shared.DefaultFederationConfig()
+	cfg.AutoCleanupEnabled = false
+	cfg.CleanupInterval = 0
+
+	hub := NewFederationHub(cfg)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("expected initialization to succeed when cleanup is disabled, got %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+}
+
 func TestFederationHub_RegisterSwarmRejectsTrimmedDuplicateIDs(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
