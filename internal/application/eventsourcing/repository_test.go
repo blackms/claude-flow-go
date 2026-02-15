@@ -34,6 +34,13 @@ type repositorySnapshotFailAggregate struct {
 	setVersionCall    bool
 }
 
+type repositorySetterOnlyAggregate struct {
+	id             string
+	version        int
+	appliedVersions []int
+	setVersionCall bool
+}
+
 func (a *repositoryTestAggregate) ID() string { return a.id }
 
 func (a *repositoryTestAggregate) Type() string { return "repository-test" }
@@ -112,6 +119,27 @@ func (a *repositorySnapshotFailAggregate) FromSnapshot(data []byte) error {
 }
 
 func (a *repositorySnapshotFailAggregate) SetVersion(version int) {
+	a.setVersionCall = true
+	a.version = version
+}
+
+func (a *repositorySetterOnlyAggregate) ID() string { return a.id }
+
+func (a *repositorySetterOnlyAggregate) Type() string { return "repository-test" }
+
+func (a *repositorySetterOnlyAggregate) Version() int { return a.version }
+
+func (a *repositorySetterOnlyAggregate) ApplyEvent(event domain.Event) error {
+	a.appliedVersions = append(a.appliedVersions, event.Version())
+	a.version = event.Version()
+	return nil
+}
+
+func (a *repositorySetterOnlyAggregate) UncommittedEvents() []domain.Event { return nil }
+
+func (a *repositorySetterOnlyAggregate) ClearUncommittedEvents() {}
+
+func (a *repositorySetterOnlyAggregate) SetVersion(version int) {
 	a.setVersionCall = true
 	a.version = version
 }
@@ -373,6 +401,67 @@ func TestAggregateRepository_Load_ExpiredSnapshotIsIgnored(t *testing.T) {
 
 	if agg.setVersionCall {
 		t.Fatal("setVersion should not be called for expired snapshot")
+	}
+
+	if len(agg.appliedVersions) != 3 || agg.appliedVersions[0] != 1 || agg.appliedVersions[1] != 2 || agg.appliedVersions[2] != 3 {
+		t.Fatalf("expected full replay of versions [1 2 3], got %v", agg.appliedVersions)
+	}
+
+	if agg.Version() != 3 {
+		t.Fatalf("expected final aggregate version 3, got %d", agg.Version())
+	}
+}
+
+func TestAggregateRepository_Load_NonStatefulAggregateIgnoresSnapshot(t *testing.T) {
+	ctx := context.Background()
+	aggregateID := "aggregate-non-stateful"
+
+	eventStore := infra.NewInMemoryEventStore()
+	snapshotStore := infra.NewInMemorySnapshotStore()
+	serializer := infra.NewJSONEventSerializer()
+
+	for version := 1; version <= 3; version++ {
+		event := domain.NewBaseEvent("repo:event", aggregateID, "repository-test", version, map[string]interface{}{"version": version})
+		stored, err := serializer.Serialize(event)
+		if err != nil {
+			t.Fatalf("failed to serialize event version %d: %v", version, err)
+		}
+		if err := eventStore.Append(ctx, []*domain.StoredEvent{stored}); err != nil {
+			t.Fatalf("failed to append event version %d: %v", version, err)
+		}
+	}
+
+	if err := snapshotStore.Save(ctx, &domain.Snapshot{
+		AggregateID:   aggregateID,
+		AggregateType: "repository-test",
+		Version:       2,
+		State:         []byte(`{"restored":true}`),
+		CreatedAt:     time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("failed to save snapshot: %v", err)
+	}
+
+	repo := NewAggregateRepository(RepositoryConfig{
+		EventStore:    eventStore,
+		SnapshotStore: snapshotStore,
+		Serializer:    serializer,
+		Factory: func(id string) domain.Aggregate {
+			return &repositorySetterOnlyAggregate{id: id}
+		},
+	})
+
+	loaded, err := repo.Load(ctx, aggregateID)
+	if err != nil {
+		t.Fatalf("unexpected load error: %v", err)
+	}
+
+	agg, ok := loaded.(*repositorySetterOnlyAggregate)
+	if !ok {
+		t.Fatalf("expected *repositorySetterOnlyAggregate, got %T", loaded)
+	}
+
+	if agg.setVersionCall {
+		t.Fatal("setVersion should not be called when aggregate is not AggregateState")
 	}
 
 	if len(agg.appliedVersions) != 3 || agg.appliedVersions[0] != 1 || agg.appliedVersions[1] != 2 || agg.appliedVersions[2] != 3 {

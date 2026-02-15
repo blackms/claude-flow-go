@@ -30,6 +30,14 @@ type snapshotFailAggregate struct {
 	setVersionCall   bool
 }
 
+type snapshotSetterOnlyAggregate struct {
+	id              string
+	aggregateType   string
+	version         int
+	appliedVersions []int
+	setVersionCall  bool
+}
+
 func (a *snapshotTestAggregate) ID() string { return a.id }
 
 func (a *snapshotTestAggregate) Type() string { return a.aggregateType }
@@ -104,6 +112,27 @@ func (a *snapshotFailAggregate) FromSnapshot(data []byte) error {
 }
 
 func (a *snapshotFailAggregate) SetVersion(version int) {
+	a.setVersionCall = true
+	a.version = version
+}
+
+func (a *snapshotSetterOnlyAggregate) ID() string { return a.id }
+
+func (a *snapshotSetterOnlyAggregate) Type() string { return a.aggregateType }
+
+func (a *snapshotSetterOnlyAggregate) Version() int { return a.version }
+
+func (a *snapshotSetterOnlyAggregate) ApplyEvent(event Event) error {
+	a.appliedVersions = append(a.appliedVersions, event.Version())
+	a.version = event.Version()
+	return nil
+}
+
+func (a *snapshotSetterOnlyAggregate) UncommittedEvents() []Event { return nil }
+
+func (a *snapshotSetterOnlyAggregate) ClearUncommittedEvents() {}
+
+func (a *snapshotSetterOnlyAggregate) SetVersion(version int) {
 	a.setVersionCall = true
 	a.version = version
 }
@@ -213,5 +242,39 @@ func TestRebuildFromSnapshot_FromSnapshotError(t *testing.T) {
 
 	if agg.setVersionCall {
 		t.Fatal("setVersion should not be called when snapshot restoration fails")
+	}
+}
+
+func TestRebuildFromSnapshot_SetterOnlyAggregate(t *testing.T) {
+	agg := &snapshotSetterOnlyAggregate{
+		id:            "agg-4",
+		aggregateType: "test-aggregate",
+	}
+
+	snapshot := &Snapshot{
+		AggregateID:   "agg-4",
+		AggregateType: "test-aggregate",
+		Version:       5,
+		State:         []byte(`{"state":"snapshot"}`),
+	}
+
+	events := []Event{
+		NewBaseEvent("evt-1", "agg-4", "test-aggregate", 6, map[string]interface{}{"k": "v"}),
+	}
+
+	if err := RebuildFromSnapshot(agg, snapshot, events); err != nil {
+		t.Fatalf("unexpected error rebuilding from snapshot: %v", err)
+	}
+
+	if !agg.setVersionCall {
+		t.Fatal("expected SetVersion capability to be used for setter-only aggregate")
+	}
+
+	if len(agg.appliedVersions) != 1 || agg.appliedVersions[0] != 6 {
+		t.Fatalf("expected event version 6 to be applied, got %v", agg.appliedVersions)
+	}
+
+	if agg.Version() != 6 {
+		t.Fatalf("expected final version 6, got %d", agg.Version())
 	}
 }
