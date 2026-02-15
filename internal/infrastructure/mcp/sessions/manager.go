@@ -3,7 +3,6 @@ package sessions
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"sort"
 	"sync"
@@ -41,18 +40,6 @@ func normalizeSessionConfig(config shared.SessionConfig) shared.SessionConfig {
 	return config
 }
 
-func cloneStringInterfaceMap(source map[string]interface{}) map[string]interface{} {
-	if source == nil {
-		return nil
-	}
-
-	cloned := make(map[string]interface{}, len(source))
-	for key, value := range source {
-		cloned[key] = value
-	}
-	return cloned
-}
-
 func cloneSessionClientInfo(info *shared.SessionClientInfo) *shared.SessionClientInfo {
 	if info == nil {
 		return nil
@@ -71,7 +58,7 @@ func cloneSession(value *shared.Session) *shared.Session {
 		cloned.ClientInfo = cloneSessionClientInfo(value.ClientInfo)
 	}
 	if value.Capabilities != nil {
-		cloned.Capabilities = cloneStringInterfaceMap(value.Capabilities)
+		cloned.Capabilities = shared.CloneStringInterfaceMap(value.Capabilities)
 	}
 	if value.Agents != nil {
 		cloned.Agents = append([]string(nil), value.Agents...)
@@ -80,7 +67,7 @@ func cloneSession(value *shared.Session) *shared.Session {
 		cloned.Tasks = append([]string(nil), value.Tasks...)
 	}
 	if value.Metadata != nil {
-		cloned.Metadata = cloneStringInterfaceMap(value.Metadata)
+		cloned.Metadata = shared.CloneStringInterfaceMap(value.Metadata)
 	}
 	return &cloned
 }
@@ -554,7 +541,7 @@ func (sm *SessionManager) GetPersistence() *PersistenceStore {
 // SaveSession saves a session to disk.
 func (sm *SessionManager) SaveSession(req *shared.SessionSaveRequest) (*shared.SessionSaveResult, error) {
 	if req == nil {
-		return nil, fmt.Errorf("session save request is required")
+		return nil, shared.ErrSessionSaveRequired
 	}
 
 	sm.mu.RLock()
@@ -573,7 +560,7 @@ func (sm *SessionManager) SaveSession(req *shared.SessionSaveRequest) (*shared.S
 		CreatedAt:   session.CreatedAt,
 		SavedAt:     shared.Now(),
 		Tags:        cloneStringSlice(req.Tags),
-		Metadata:    cloneStringInterfaceMap(session.Metadata),
+		Metadata:    shared.CloneStringInterfaceMap(session.Metadata),
 	}
 
 	if req.IncludeAgents {

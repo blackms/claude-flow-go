@@ -21,7 +21,6 @@ package claudeflow
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/anthropics/claude-flow-go/internal/application/consensus"
@@ -624,7 +623,7 @@ type MCPServer struct {
 
 func (ms *MCPServer) internalOrError() (*mcp.Server, error) {
 	if ms == nil || ms.internal == nil || !ms.internal.IsConfigured() {
-		return nil, fmt.Errorf("mcp server is not initialized")
+		return nil, shared.ErrNotInitialized
 	}
 	return ms.internal, nil
 }
@@ -703,14 +702,14 @@ func (ms *MCPServer) Start() error {
 // Stop stops the MCP server.
 func (ms *MCPServer) Stop() error {
 	if ms == nil {
-		return fmt.Errorf("mcp server is not initialized")
+		return shared.ErrNotInitialized
 	}
 
 	var stopErr error
 	if ms.internal != nil && ms.internal.IsConfigured() {
 		stopErr = ms.internal.Stop()
 	} else {
-		stopErr = fmt.Errorf("mcp server is not initialized")
+		stopErr = shared.ErrNotInitialized
 	}
 
 	if ms.federationHub != nil {
@@ -752,13 +751,13 @@ func (ms *MCPServer) RunStdio(ctx context.Context, reader io.Reader, writer io.W
 		return err
 	}
 	if ctx == nil {
-		return fmt.Errorf("context is required")
+		return shared.ErrContextRequired
 	}
 	if reader == nil {
-		return fmt.Errorf("reader is required")
+		return shared.ErrReaderRequired
 	}
 	if writer == nil {
-		return fmt.Errorf("writer is required")
+		return shared.ErrWriterRequired
 	}
 	transport := mcp.NewStdioTransport(internal, reader, writer)
 	return transport.Run(ctx)
@@ -1915,10 +1914,10 @@ func NewFederationHubWithDefaults() *FederationHub {
 
 func (fh *FederationHub) internalOrError() (*federation.FederationHub, error) {
 	if fh == nil || fh.internal == nil {
-		return nil, fmt.Errorf("federation hub is not configured")
+		return nil, shared.ErrHubNotConfigured
 	}
 	if !fh.internal.IsConfigured() {
-		return nil, fmt.Errorf("federation hub is not configured")
+		return nil, shared.ErrHubNotConfigured
 	}
 	return fh.internal, nil
 }

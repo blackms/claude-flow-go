@@ -15,12 +15,12 @@ import (
 
 func TestStdioTransport_RunRejectsUnconfiguredServer(t *testing.T) {
 	var nilTransport *StdioTransport
-	if err := nilTransport.Run(context.Background()); err == nil || err.Error() != "stdio transport server is not configured" {
+	if err := nilTransport.Run(context.Background()); err == nil || !errors.Is(err, shared.ErrStdioNotConfigured) {
 		t.Fatalf("expected nil transport server-configured error, got %v", err)
 	}
 
 	transport := NewStdioTransport(nil, bytes.NewBuffer(nil), bytes.NewBuffer(nil))
-	if err := transport.Run(context.Background()); err == nil || err.Error() != "stdio transport server is not configured" {
+	if err := transport.Run(context.Background()); err == nil || !errors.Is(err, shared.ErrStdioNotConfigured) {
 		t.Fatalf("expected nil server configured error, got %v", err)
 	}
 }
@@ -29,7 +29,7 @@ func TestStdioTransport_RunRejectsNilContext(t *testing.T) {
 	server := NewServer(Options{})
 	transport := NewStdioTransport(server, bytes.NewBuffer(nil), bytes.NewBuffer(nil))
 
-	if err := transport.Run(nil); err == nil || err.Error() != "context is required" {
+	if err := transport.Run(nil); err == nil || !errors.Is(err, shared.ErrContextRequired) {
 		t.Fatalf("expected context-required error, got %v", err)
 	}
 }
@@ -37,13 +37,13 @@ func TestStdioTransport_RunRejectsNilContext(t *testing.T) {
 func TestStdioTransport_RunRejectsNilReaderOrWriter(t *testing.T) {
 	server := NewServer(Options{})
 
-	if err := NewStdioTransport(server, nil, bytes.NewBuffer(nil)).Run(context.Background()); err == nil || err.Error() != "reader is required" {
+	if err := NewStdioTransport(server, nil, bytes.NewBuffer(nil)).Run(context.Background()); err == nil || !errors.Is(err, shared.ErrReaderRequired) {
 		t.Fatalf("expected reader-required error, got %v", err)
 	}
-	if err := NewStdioTransport(server, bytes.NewBuffer(nil), nil).Run(context.Background()); err == nil || err.Error() != "writer is required" {
+	if err := NewStdioTransport(server, bytes.NewBuffer(nil), nil).Run(context.Background()); err == nil || !errors.Is(err, shared.ErrWriterRequired) {
 		t.Fatalf("expected writer-required error, got %v", err)
 	}
-	if err := NewStdioTransport(server, nil, nil).Run(context.Background()); err == nil || err.Error() != "reader is required" {
+	if err := NewStdioTransport(server, nil, nil).Run(context.Background()); err == nil || !errors.Is(err, shared.ErrReaderRequired) {
 		t.Fatalf("expected reader-required precedence when both are nil, got %v", err)
 	}
 }
@@ -51,13 +51,13 @@ func TestStdioTransport_RunRejectsNilReaderOrWriter(t *testing.T) {
 func TestStdioTransport_RunValidationPrecedence(t *testing.T) {
 	server := NewServer(Options{})
 
-	if err := NewStdioTransport(nil, nil, nil).Run(nil); err == nil || err.Error() != "stdio transport server is not configured" {
+	if err := NewStdioTransport(nil, nil, nil).Run(nil); err == nil || !errors.Is(err, shared.ErrStdioNotConfigured) {
 		t.Fatalf("expected server-configured precedence error, got %v", err)
 	}
-	if err := NewStdioTransport(server, nil, nil).Run(nil); err == nil || err.Error() != "context is required" {
+	if err := NewStdioTransport(server, nil, nil).Run(nil); err == nil || !errors.Is(err, shared.ErrContextRequired) {
 		t.Fatalf("expected context-required precedence error, got %v", err)
 	}
-	if err := NewStdioTransport(server, nil, nil).Run(context.Background()); err == nil || err.Error() != "reader is required" {
+	if err := NewStdioTransport(server, nil, nil).Run(context.Background()); err == nil || !errors.Is(err, shared.ErrReaderRequired) {
 		t.Fatalf("expected reader-required precedence error, got %v", err)
 	}
 }

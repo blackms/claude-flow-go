@@ -2,7 +2,9 @@
 package resources
 
 import (
+	"log"
 	"regexp"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -26,7 +28,9 @@ func safeInvokeSubscriptionCallback(sub *Subscription, uri string, content *shar
 	}
 
 	defer func() {
-		_ = recover()
+		if r := recover(); r != nil {
+			log.Printf("[WARN] recovered panic in safeInvokeSubscriptionCallback: %v\n%s", r, debug.Stack())
+		}
 	}()
 
 	sub.Callback(uri, content)

@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ func TestLogManager_SetLevelNilReceiverReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nil log manager")
 	}
-	if err.Error() != "log manager is required" {
+	if !errors.Is(err, shared.ErrLogManagerRequired) {
 		t.Fatalf("expected nil receiver error, got %q", err.Error())
 	}
 }

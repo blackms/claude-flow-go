@@ -4,7 +4,9 @@ package federation
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -119,7 +121,7 @@ func (fh *FederationHub) IsConfigured() bool {
 
 func (fh *FederationHub) configuredOrError() error {
 	if !fh.isConfigured() {
-		return fmt.Errorf("federation hub is not configured")
+		return shared.ErrHubNotConfigured
 	}
 	return nil
 }
@@ -158,10 +160,10 @@ func (fh *FederationHub) Initialize() error {
 	defer fh.mu.Unlock()
 
 	if fh.shutdown {
-		return fmt.Errorf("federation hub is shut down")
+		return shared.ErrHubShutDown
 	}
 	if fh.initialized {
-		return fmt.Errorf("federation hub is already initialized")
+		return shared.ErrHubAlreadyInit
 	}
 
 	// Start sync loop
@@ -224,29 +226,29 @@ func (fh *FederationHub) RegisterSwarm(swarm shared.SwarmRegistration) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
-		return fmt.Errorf("federation hub is shut down")
+		return shared.ErrHubShutDown
 	}
 	if !fh.initialized {
-		return fmt.Errorf("federation hub is not initialized")
+		return shared.ErrHubNotInitialized
 	}
 
 	swarmID := strings.TrimSpace(swarm.SwarmID)
 	if swarmID == "" {
-		return fmt.Errorf("swarmId is required")
+		return shared.ErrSwarmIDRequired
 	}
 	name := strings.TrimSpace(swarm.Name)
 	if name == "" {
-		return fmt.Errorf("name is required")
+		return shared.ErrNameRequired
 	}
 	if swarm.MaxAgents <= 0 {
-		return fmt.Errorf("maxAgents must be greater than 0")
+		return shared.ErrMaxAgentsRequired
 	}
 
 	swarm.SwarmID = swarmID
 	swarm.Name = name
 	swarm.Endpoint = strings.TrimSpace(swarm.Endpoint)
 	swarm.Capabilities = normalizeStringValues(swarm.Capabilities)
-	swarm.Metadata = cloneStringInterfaceMap(swarm.Metadata)
+	swarm.Metadata = shared.CloneStringInterfaceMap(swarm.Metadata)
 
 	if _, exists := fh.swarms[swarm.SwarmID]; exists {
 		return fmt.Errorf("swarm %s already exists", swarm.SwarmID)
@@ -281,15 +283,15 @@ func (fh *FederationHub) UnregisterSwarm(swarmID string) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
-		return fmt.Errorf("federation hub is shut down")
+		return shared.ErrHubShutDown
 	}
 	if !fh.initialized {
-		return fmt.Errorf("federation hub is not initialized")
+		return shared.ErrHubNotInitialized
 	}
 
 	swarmID = strings.TrimSpace(swarmID)
 	if swarmID == "" {
-		return fmt.Errorf("swarmId is required")
+		return shared.ErrSwarmIDRequired
 	}
 
 	swarm, exists := fh.swarms[swarmID]
@@ -327,15 +329,15 @@ func (fh *FederationHub) Heartbeat(swarmID string) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
-		return fmt.Errorf("federation hub is shut down")
+		return shared.ErrHubShutDown
 	}
 	if !fh.initialized {
-		return fmt.Errorf("federation hub is not initialized")
+		return shared.ErrHubNotInitialized
 	}
 
 	swarmID = strings.TrimSpace(swarmID)
 	if swarmID == "" {
-		return fmt.Errorf("swarmId is required")
+		return shared.ErrSwarmIDRequired
 	}
 
 	swarm, exists := fh.swarms[swarmID]
@@ -513,7 +515,7 @@ func (fh *FederationHub) SetEventHandler(handler EventHandler) {
 func (fh *FederationHub) emitEvent(event shared.FederationEvent) {
 	handler := fh.eventHandler
 	historyEvent := event
-	historyEvent.Data = cloneInterfaceValue(event.Data)
+	historyEvent.Data = shared.CloneInterfaceValue(event.Data)
 	fh.events = append(fh.events, &historyEvent)
 
 	// Limit event history
@@ -523,10 +525,12 @@ func (fh *FederationHub) emitEvent(event shared.FederationEvent) {
 
 	if handler != nil {
 		handlerEvent := historyEvent
-		handlerEvent.Data = cloneInterfaceValue(historyEvent.Data)
+		handlerEvent.Data = shared.CloneInterfaceValue(historyEvent.Data)
 		go func(callback EventHandler, payload shared.FederationEvent) {
 			defer func() {
-				_ = recover()
+				if r := recover(); r != nil {
+					log.Printf("[WARN] recovered panic in event handler callback: %v\n%s", r, debug.Stack())
+				}
 			}()
 			callback(payload)
 		}(handler, handlerEvent)

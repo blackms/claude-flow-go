@@ -3,6 +3,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"math"
 	"reflect"
 	"strconv"
@@ -83,17 +84,17 @@ func TestFederationTools_ExecuteAndExecuteTool_RequireConfiguredHub(t *testing.T
 		t.Fatal("expected ExecuteTool to fail without configured hub")
 	}
 
-	const expectedErr = "federation hub is not configured"
-	if execErr.Error() != expectedErr {
+	expectedErr := shared.ErrHubNotConfigured
+	if !errors.Is(execErr, expectedErr) {
 		t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
 	}
-	if directErr.Error() != expectedErr {
+	if !errors.Is(directErr, expectedErr) {
 		t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
 	}
-	if execResult.Error != expectedErr {
+	if execResult.Error != expectedErr.Error() {
 		t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
 	}
-	if directResult.Error != expectedErr {
+	if directResult.Error != expectedErr.Error() {
 		t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
 	}
 	if execResult.Success || directResult.Success {
@@ -193,17 +194,17 @@ func TestFederationTools_ExecuteAndExecuteTool_RequireConfiguredHubPrecedesArgVa
 				t.Fatal("expected ExecuteTool to fail without configured hub")
 			}
 
-			const expectedErr = "federation hub is not configured"
-			if execErr.Error() != expectedErr {
+			expectedErr := shared.ErrHubNotConfigured
+			if !errors.Is(execErr, expectedErr) {
 				t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
 			}
-			if directErr.Error() != expectedErr {
+			if !errors.Is(directErr, expectedErr) {
 				t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
 			}
-			if execResult.Error != expectedErr {
+			if execResult.Error != expectedErr.Error() {
 				t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
 			}
-			if directResult.Error != expectedErr {
+			if directResult.Error != expectedErr.Error() {
 				t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
 			}
 			if execResult.Success || directResult.Success {
@@ -280,17 +281,17 @@ func TestFederationTools_ExecuteAndExecuteTool_ZeroValueInternalHubRejectsMutati
 				t.Fatal("expected ExecuteTool to fail with zero-value internal hub")
 			}
 
-			const expectedErr = "federation hub is not configured"
-			if execErr.Error() != expectedErr {
+			expectedErr := shared.ErrHubNotConfigured
+			if !errors.Is(execErr, expectedErr) {
 				t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
 			}
-			if directErr.Error() != expectedErr {
+			if !errors.Is(directErr, expectedErr) {
 				t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
 			}
-			if execResult.Error != expectedErr {
+			if execResult.Error != expectedErr.Error() {
 				t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
 			}
-			if directResult.Error != expectedErr {
+			if directResult.Error != expectedErr.Error() {
 				t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
 			}
 			if execResult.Success || directResult.Success {
@@ -331,17 +332,17 @@ func TestFederationTools_ExecuteAndExecuteTool_ZeroValueInternalHubRejectsReadTo
 				t.Fatal("expected ExecuteTool to fail with zero-value internal hub")
 			}
 
-			const expectedErr = "federation hub is not configured"
-			if execErr.Error() != expectedErr {
+			expectedErr := shared.ErrHubNotConfigured
+			if !errors.Is(execErr, expectedErr) {
 				t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
 			}
-			if directErr.Error() != expectedErr {
+			if !errors.Is(directErr, expectedErr) {
 				t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
 			}
-			if execResult.Error != expectedErr {
+			if execResult.Error != expectedErr.Error() {
 				t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
 			}
-			if directResult.Error != expectedErr {
+			if directResult.Error != expectedErr.Error() {
 				t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
 			}
 			if execResult.Success || directResult.Success {
@@ -364,39 +365,39 @@ func TestFederationTools_ExecuteAndExecuteTool_NilArgsParity(t *testing.T) {
 
 	testCases := []struct {
 		name        string
-		expectedErr string
+		expectedErr error
 	}{
 		{
 			name:        "federation/register-swarm",
-			expectedErr: "swarmId is required",
+			expectedErr: shared.ErrSwarmIDRequired,
 		},
 		{
 			name:        "federation/spawn-ephemeral",
-			expectedErr: "type is required",
+			expectedErr: shared.ErrTypeRequired,
 		},
 		{
 			name:        "federation/terminate-ephemeral",
-			expectedErr: "agentId is required",
+			expectedErr: shared.ErrAgentIDRequired,
 		},
 		{
 			name:        "federation/broadcast",
-			expectedErr: "sourceSwarmId is required",
+			expectedErr: shared.ErrSourceSwarmRequired,
 		},
 		{
 			name:        "federation/propose",
-			expectedErr: "proposerId is required",
+			expectedErr: shared.ErrProposerRequired,
 		},
 		{
 			name:        "federation/vote",
-			expectedErr: "voterId is required",
+			expectedErr: shared.ErrVoterRequired,
 		},
 		{
 			name:        "federation/status",
-			expectedErr: "",
+			expectedErr: nil,
 		},
 		{
 			name:        "federation/list-ephemeral",
-			expectedErr: "",
+			expectedErr: nil,
 		},
 	}
 
@@ -409,7 +410,7 @@ func TestFederationTools_ExecuteAndExecuteTool_NilArgsParity(t *testing.T) {
 
 			directResult, directErr := ft.ExecuteTool(context.Background(), tc.name, nil)
 
-			if tc.expectedErr == "" {
+			if tc.expectedErr == nil {
 				if execErr != nil || directErr != nil {
 					t.Fatalf("expected nil-args success, got Execute err=%v ExecuteTool err=%v", execErr, directErr)
 				}
@@ -422,16 +423,16 @@ func TestFederationTools_ExecuteAndExecuteTool_NilArgsParity(t *testing.T) {
 			if execErr == nil || directErr == nil {
 				t.Fatalf("expected nil-args errors, got Execute err=%v ExecuteTool err=%v", execErr, directErr)
 			}
-			if execErr.Error() != tc.expectedErr {
+			if !errors.Is(execErr, tc.expectedErr) {
 				t.Fatalf("expected Execute error %q, got %q", tc.expectedErr, execErr.Error())
 			}
-			if directErr.Error() != tc.expectedErr {
+			if !errors.Is(directErr, tc.expectedErr) {
 				t.Fatalf("expected ExecuteTool error %q, got %q", tc.expectedErr, directErr.Error())
 			}
-			if execResult.Error != tc.expectedErr {
+			if execResult.Error != tc.expectedErr.Error() {
 				t.Fatalf("expected Execute result error %q, got %q", tc.expectedErr, execResult.Error)
 			}
-			if directResult.Error != tc.expectedErr {
+			if directResult.Error != tc.expectedErr.Error() {
 				t.Fatalf("expected ExecuteTool result error %q, got %q", tc.expectedErr, directResult.Error)
 			}
 			if execResult.Success || directResult.Success {
@@ -971,7 +972,7 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 		},
 	}
 
-	clonedRaw := cloneInterfaceValue(original)
+	clonedRaw := shared.CloneInterfaceValue(original)
 	cloned, ok := clonedRaw.(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected cloned type map[string]interface{}, got %T", clonedRaw)
@@ -1064,7 +1065,7 @@ func TestCloneInterfaceValue_ReflectionFallbackForTypedContainers(t *testing.T) 
 	originalMapOfSlices := map[string][]string{
 		"roles": {"dev", "ops"},
 	}
-	clonedMapOfSlicesRaw := cloneInterfaceValue(originalMapOfSlices)
+	clonedMapOfSlicesRaw := shared.CloneInterfaceValue(originalMapOfSlices)
 	clonedMapOfSlices, ok := clonedMapOfSlicesRaw.(map[string][]string)
 	if !ok {
 		t.Fatalf("expected cloned map[string][]string, got %T", clonedMapOfSlicesRaw)
@@ -1077,7 +1078,7 @@ func TestCloneInterfaceValue_ReflectionFallbackForTypedContainers(t *testing.T) 
 	originalSliceOfTypedMaps := []map[string][]string{
 		{"labels": {"alpha", "beta"}},
 	}
-	clonedSliceOfTypedMapsRaw := cloneInterfaceValue(originalSliceOfTypedMaps)
+	clonedSliceOfTypedMapsRaw := shared.CloneInterfaceValue(originalSliceOfTypedMaps)
 	clonedSliceOfTypedMaps, ok := clonedSliceOfTypedMapsRaw.([]map[string][]string)
 	if !ok {
 		t.Fatalf("expected cloned []map[string][]string, got %T", clonedSliceOfTypedMapsRaw)
@@ -1090,7 +1091,7 @@ func TestCloneInterfaceValue_ReflectionFallbackForTypedContainers(t *testing.T) 
 	originalNestedTypedMap := map[string]map[string]int{
 		"quota": {"hard": 2},
 	}
-	clonedNestedTypedMapRaw := cloneInterfaceValue(originalNestedTypedMap)
+	clonedNestedTypedMapRaw := shared.CloneInterfaceValue(originalNestedTypedMap)
 	clonedNestedTypedMap, ok := clonedNestedTypedMapRaw.(map[string]map[string]int)
 	if !ok {
 		t.Fatalf("expected cloned map[string]map[string]int, got %T", clonedNestedTypedMapRaw)
@@ -1103,7 +1104,7 @@ func TestCloneInterfaceValue_ReflectionFallbackForTypedContainers(t *testing.T) 
 	originalArrayOfMaps := [1]map[string][]string{
 		{"labels": {"alpha", "beta"}},
 	}
-	clonedArrayOfMapsRaw := cloneInterfaceValue(originalArrayOfMaps)
+	clonedArrayOfMapsRaw := shared.CloneInterfaceValue(originalArrayOfMaps)
 	clonedArrayOfMaps, ok := clonedArrayOfMapsRaw.([1]map[string][]string)
 	if !ok {
 		t.Fatalf("expected cloned [1]map[string][]string, got %T", clonedArrayOfMapsRaw)
@@ -1116,7 +1117,7 @@ func TestCloneInterfaceValue_ReflectionFallbackForTypedContainers(t *testing.T) 
 	originalPointerMap := &map[string][]string{
 		"teams": {"core", "ml"},
 	}
-	clonedPointerMapRaw := cloneInterfaceValue(originalPointerMap)
+	clonedPointerMapRaw := shared.CloneInterfaceValue(originalPointerMap)
 	clonedPointerMap, ok := clonedPointerMapRaw.(*map[string][]string)
 	if !ok {
 		t.Fatalf("expected cloned *map[string][]string, got %T", clonedPointerMapRaw)
@@ -1137,7 +1138,7 @@ func TestCloneInterfaceValue_ReflectionFallbackForTypedContainers(t *testing.T) 
 			{"alpha": 1},
 		},
 	}
-	clonedStructRaw := cloneInterfaceValue(originalStruct)
+	clonedStructRaw := shared.CloneInterfaceValue(originalStruct)
 	clonedStruct, ok := clonedStructRaw.(typedPayload)
 	if !ok {
 		t.Fatalf("expected cloned typedPayload, got %T", clonedStructRaw)
@@ -1159,7 +1160,7 @@ func TestCloneInterfaceValue_ReflectionFallbackForTypedContainers(t *testing.T) 
 			{"beta": 2},
 		},
 	}
-	clonedStructPtrRaw := cloneInterfaceValue(originalStructPtr)
+	clonedStructPtrRaw := shared.CloneInterfaceValue(originalStructPtr)
 	clonedStructPtr, ok := clonedStructPtrRaw.(*typedPayload)
 	if !ok {
 		t.Fatalf("expected cloned *typedPayload, got %T", clonedStructPtrRaw)
@@ -4376,17 +4377,17 @@ func TestFederationTools_ExecuteAndExecuteTool_ProposeInvalidQuorumConfigParity(
 		t.Fatal("expected ExecuteTool propose error for invalid quorum config")
 	}
 
-	const expectedErr = "consensus quorum must be between 0 and 1"
-	if execErr.Error() != expectedErr {
+	expectedErr := shared.ErrQuorumRange
+	if !errors.Is(execErr, expectedErr) {
 		t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
 	}
-	if directErr.Error() != expectedErr {
+	if !errors.Is(directErr, expectedErr) {
 		t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
 	}
-	if execResult.Error != expectedErr {
+	if execResult.Error != expectedErr.Error() {
 		t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
 	}
-	if directResult.Error != expectedErr {
+	if directResult.Error != expectedErr.Error() {
 		t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
 	}
 	if execResult.Success || directResult.Success {
@@ -4463,7 +4464,7 @@ func TestFederationTools_ExecuteAndExecuteTool_MutatingToolsRejectAfterHubShutdo
 		},
 	}
 
-	const expectedErr = "federation hub is shut down"
+	expectedErr := shared.ErrHubShutDown
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			execResult, execErr := ft.Execute(context.Background(), tc.toolName, tc.args)
@@ -4479,16 +4480,16 @@ func TestFederationTools_ExecuteAndExecuteTool_MutatingToolsRejectAfterHubShutdo
 				t.Fatalf("expected ExecuteTool error for %s", tc.toolName)
 			}
 
-			if execErr.Error() != expectedErr {
+			if !errors.Is(execErr, expectedErr) {
 				t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
 			}
-			if directErr.Error() != expectedErr {
+			if !errors.Is(directErr, expectedErr) {
 				t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
 			}
-			if execResult.Error != expectedErr {
+			if execResult.Error != expectedErr.Error() {
 				t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
 			}
-			if directResult.Error != expectedErr {
+			if directResult.Error != expectedErr.Error() {
 				t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
 			}
 			if execResult.Success || directResult.Success {
@@ -4727,7 +4728,7 @@ func TestFederationTools_ExecuteAndExecuteTool_MutatingToolsRejectBeforeInitiali
 		},
 	}
 
-	const expectedErr = "federation hub is not initialized"
+	expectedErr := shared.ErrHubNotInitialized
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			execResult, execErr := ft.Execute(context.Background(), tc.toolName, tc.args)
@@ -4743,16 +4744,16 @@ func TestFederationTools_ExecuteAndExecuteTool_MutatingToolsRejectBeforeInitiali
 				t.Fatalf("expected ExecuteTool error for %s", tc.toolName)
 			}
 
-			if execErr.Error() != expectedErr {
+			if !errors.Is(execErr, expectedErr) {
 				t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
 			}
-			if directErr.Error() != expectedErr {
+			if !errors.Is(directErr, expectedErr) {
 				t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
 			}
-			if execResult.Error != expectedErr {
+			if execResult.Error != expectedErr.Error() {
 				t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
 			}
-			if directResult.Error != expectedErr {
+			if directResult.Error != expectedErr.Error() {
 				t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
 			}
 			if execResult.Success || directResult.Success {

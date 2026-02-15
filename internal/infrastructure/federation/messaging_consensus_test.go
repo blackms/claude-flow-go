@@ -1,6 +1,7 @@
 package federation
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -76,31 +77,31 @@ func TestFederationHub_MessagingOperationsTrimIdentifiersAndValidateInputs(t *te
 		t.Fatalf("expected one direct message when limit=0, got %d", len(directMessages))
 	}
 
-	if _, err := hub.SendMessage("   ", "swarm-target-msg", map[string]interface{}{"kind": "direct"}); err == nil || err.Error() != "sourceSwarmId is required" {
+	if _, err := hub.SendMessage("   ", "swarm-target-msg", map[string]interface{}{"kind": "direct"}); err == nil || !errors.Is(err, shared.ErrSourceSwarmRequired) {
 		t.Fatalf("expected blank source swarm validation error, got %v", err)
 	}
-	if _, err := hub.SendMessage("swarm-source-msg", "   ", map[string]interface{}{"kind": "direct"}); err == nil || err.Error() != "targetSwarmId is required" {
+	if _, err := hub.SendMessage("swarm-source-msg", "   ", map[string]interface{}{"kind": "direct"}); err == nil || !errors.Is(err, shared.ErrTargetSwarmRequired) {
 		t.Fatalf("expected blank target swarm validation error, got %v", err)
 	}
-	if _, err := hub.SendMessage("swarm-source-msg", "swarm-target-msg", nil); err == nil || err.Error() != "payload is required" {
+	if _, err := hub.SendMessage("swarm-source-msg", "swarm-target-msg", nil); err == nil || !errors.Is(err, shared.ErrPayloadRequired) {
 		t.Fatalf("expected nil direct payload validation error, got %v", err)
 	}
-	if _, err := hub.Broadcast("   ", map[string]interface{}{"kind": "broadcast"}); err == nil || err.Error() != "sourceSwarmId is required" {
+	if _, err := hub.Broadcast("   ", map[string]interface{}{"kind": "broadcast"}); err == nil || !errors.Is(err, shared.ErrSourceSwarmRequired) {
 		t.Fatalf("expected blank source broadcast validation error, got %v", err)
 	}
-	if _, err := hub.Broadcast("swarm-source-msg", nil); err == nil || err.Error() != "payload is required" {
+	if _, err := hub.Broadcast("swarm-source-msg", nil); err == nil || !errors.Is(err, shared.ErrPayloadRequired) {
 		t.Fatalf("expected nil broadcast payload validation error, got %v", err)
 	}
-	if _, err := hub.SendHeartbeat("   ", "swarm-target-msg"); err == nil || err.Error() != "sourceSwarmId is required" {
+	if _, err := hub.SendHeartbeat("   ", "swarm-target-msg"); err == nil || !errors.Is(err, shared.ErrSourceSwarmRequired) {
 		t.Fatalf("expected blank source heartbeat validation error, got %v", err)
 	}
-	if _, err := hub.SendHeartbeat("swarm-source-msg", "   "); err == nil || err.Error() != "targetSwarmId is required" {
+	if _, err := hub.SendHeartbeat("swarm-source-msg", "   "); err == nil || !errors.Is(err, shared.ErrTargetSwarmRequired) {
 		t.Fatalf("expected blank target heartbeat validation error, got %v", err)
 	}
-	if _, err := hub.SendConsensusMessage("   ", map[string]interface{}{"kind": "consensus"}, "swarm-target-msg"); err == nil || err.Error() != "sourceSwarmId is required" {
+	if _, err := hub.SendConsensusMessage("   ", map[string]interface{}{"kind": "consensus"}, "swarm-target-msg"); err == nil || !errors.Is(err, shared.ErrSourceSwarmRequired) {
 		t.Fatalf("expected blank source consensus validation error, got %v", err)
 	}
-	if _, err := hub.SendConsensusMessage("swarm-source-msg", nil, "swarm-target-msg"); err == nil || err.Error() != "payload is required" {
+	if _, err := hub.SendConsensusMessage("swarm-source-msg", nil, "swarm-target-msg"); err == nil || !errors.Is(err, shared.ErrPayloadRequired) {
 		t.Fatalf("expected nil consensus payload validation error, got %v", err)
 	}
 }
@@ -153,25 +154,25 @@ func TestFederationHub_ConsensusOperationsTrimIdentifiersAndValidateInputs(t *te
 		t.Fatalf("expected vote tally approvals=2 rejections=0, got approvals=%d rejections=%d", approvals, rejections)
 	}
 
-	if _, err := hub.Propose("   ", "policy-update", map[string]interface{}{"value": "on"}); err == nil || err.Error() != "proposerId is required" {
+	if _, err := hub.Propose("   ", "policy-update", map[string]interface{}{"value": "on"}); err == nil || !errors.Is(err, shared.ErrProposerRequired) {
 		t.Fatalf("expected blank proposer validation error, got %v", err)
 	}
-	if _, err := hub.Propose("swarm-proposer-consensus", "   ", map[string]interface{}{"value": "on"}); err == nil || err.Error() != "proposalType is required" {
+	if _, err := hub.Propose("swarm-proposer-consensus", "   ", map[string]interface{}{"value": "on"}); err == nil || !errors.Is(err, shared.ErrProposalTypeRequired) {
 		t.Fatalf("expected blank proposalType validation error, got %v", err)
 	}
-	if _, err := hub.Propose("swarm-proposer-consensus", "policy-update", nil); err == nil || err.Error() != "value is required" {
+	if _, err := hub.Propose("swarm-proposer-consensus", "policy-update", nil); err == nil || !errors.Is(err, shared.ErrValueRequired) {
 		t.Fatalf("expected nil proposal value validation error, got %v", err)
 	}
-	if err := hub.Vote("   ", proposal.ID, true); err == nil || err.Error() != "voterId is required" {
+	if err := hub.Vote("   ", proposal.ID, true); err == nil || !errors.Is(err, shared.ErrVoterRequired) {
 		t.Fatalf("expected blank voter validation error, got %v", err)
 	}
-	if err := hub.Vote("swarm-voter-consensus", "   ", true); err == nil || err.Error() != "proposalId is required" {
+	if err := hub.Vote("swarm-voter-consensus", "   ", true); err == nil || !errors.Is(err, shared.ErrProposalIDRequired) {
 		t.Fatalf("expected blank proposalId validation error, got %v", err)
 	}
 	if _, ok := hub.GetProposal("   "); ok {
 		t.Fatal("expected blank proposal lookup to fail")
 	}
-	if _, _, err := hub.GetProposalVotes("   "); err == nil || err.Error() != "proposalId is required" {
+	if _, _, err := hub.GetProposalVotes("   "); err == nil || !errors.Is(err, shared.ErrProposalIDRequired) {
 		t.Fatalf("expected blank proposalId votes validation error, got %v", err)
 	}
 }
@@ -279,7 +280,7 @@ func TestFederationHub_ProposeRejectsInvalidProposalTimeoutConfiguration(t *test
 		_ = zeroTimeoutHub.Shutdown()
 	})
 
-	if _, err := zeroTimeoutHub.Propose("any-proposer", "policy-update", map[string]interface{}{"value": "on"}); err == nil || err.Error() != "proposal timeout must be greater than 0" {
+	if _, err := zeroTimeoutHub.Propose("any-proposer", "policy-update", map[string]interface{}{"value": "on"}); err == nil || !errors.Is(err, shared.ErrProposalTimeout) {
 		t.Fatalf("expected non-positive proposal timeout validation error, got %v", err)
 	}
 
@@ -294,7 +295,7 @@ func TestFederationHub_ProposeRejectsInvalidProposalTimeoutConfiguration(t *test
 	})
 
 	registerTestSwarm(t, overflowHub, "overflow-proposer", "Overflow Proposer")
-	if _, err := overflowHub.Propose("overflow-proposer", "policy-update", map[string]interface{}{"value": "on"}); err == nil || err.Error() != "proposal timeout is out of range" {
+	if _, err := overflowHub.Propose("overflow-proposer", "policy-update", map[string]interface{}{"value": "on"}); err == nil || !errors.Is(err, shared.ErrProposalTimeoutRange) {
 		t.Fatalf("expected proposal timeout overflow validation error, got %v", err)
 	}
 }
@@ -326,7 +327,7 @@ func TestFederationHub_ProposeRejectsInvalidConsensusQuorumConfiguration(t *test
 			})
 
 			_, err := hub.Propose("some-proposer", "policy-update", map[string]interface{}{"value": "on"})
-			if err == nil || err.Error() != "consensus quorum must be between 0 and 1" {
+			if err == nil || !errors.Is(err, shared.ErrQuorumRange) {
 				t.Fatalf("expected invalid quorum validation error, got %v", err)
 			}
 

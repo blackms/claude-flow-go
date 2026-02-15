@@ -26,29 +26,29 @@ func (fh *FederationHub) Propose(proposerID, proposalType string, value interfac
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
-		return nil, fmt.Errorf("federation hub is shut down")
+		return nil, shared.ErrHubShutDown
 	}
 	if !fh.initialized {
-		return nil, fmt.Errorf("federation hub is not initialized")
+		return nil, shared.ErrHubNotInitialized
 	}
 
 	proposerID = strings.TrimSpace(proposerID)
 	proposalType = strings.TrimSpace(proposalType)
 	if proposerID == "" {
-		return nil, fmt.Errorf("proposerId is required")
+		return nil, shared.ErrProposerRequired
 	}
 	if proposalType == "" {
-		return nil, fmt.Errorf("proposalType is required")
+		return nil, shared.ErrProposalTypeRequired
 	}
 	if value == nil {
-		return nil, fmt.Errorf("value is required")
+		return nil, shared.ErrValueRequired
 	}
 	if math.IsNaN(fh.config.ConsensusQuorum) || math.IsInf(fh.config.ConsensusQuorum, 0) ||
 		fh.config.ConsensusQuorum <= 0 || fh.config.ConsensusQuorum > 1 {
-		return nil, fmt.Errorf("consensus quorum must be between 0 and 1")
+		return nil, shared.ErrQuorumRange
 	}
 	if fh.config.ProposalTimeout <= 0 {
-		return nil, fmt.Errorf("proposal timeout must be greater than 0")
+		return nil, shared.ErrProposalTimeout
 	}
 
 	// Validate proposer swarm
@@ -62,7 +62,7 @@ func (fh *FederationHub) Propose(proposerID, proposalType string, value interfac
 
 	now := shared.Now()
 	if fh.config.ProposalTimeout > math.MaxInt64-now {
-		return nil, fmt.Errorf("proposal timeout is out of range")
+		return nil, shared.ErrProposalTimeoutRange
 	}
 	proposalID := generateID("proposal")
 
@@ -70,7 +70,7 @@ func (fh *FederationHub) Propose(proposerID, proposalType string, value interfac
 		ID:         proposalID,
 		ProposerID: proposerID,
 		Type:       proposalType,
-		Value:      cloneInterfaceValue(value),
+		Value:      shared.CloneInterfaceValue(value),
 		Votes:      make(map[string]bool),
 		Status:     shared.FederationProposalPending,
 		CreatedAt:  now,
@@ -114,19 +114,19 @@ func (fh *FederationHub) Vote(voterID, proposalID string, approve bool) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
-		return fmt.Errorf("federation hub is shut down")
+		return shared.ErrHubShutDown
 	}
 	if !fh.initialized {
-		return fmt.Errorf("federation hub is not initialized")
+		return shared.ErrHubNotInitialized
 	}
 
 	voterID = strings.TrimSpace(voterID)
 	proposalID = strings.TrimSpace(proposalID)
 	if voterID == "" {
-		return fmt.Errorf("voterId is required")
+		return shared.ErrVoterRequired
 	}
 	if proposalID == "" {
-		return fmt.Errorf("proposalId is required")
+		return shared.ErrProposalIDRequired
 	}
 
 	// Validate voter swarm
@@ -268,7 +268,7 @@ func (fh *FederationHub) broadcastConsensusRequest(proposal *shared.FederationPr
 				"action":     "vote_request",
 				"proposalId": proposal.ID,
 				"type":       proposal.Type,
-				"value":      cloneInterfaceValue(proposal.Value),
+				"value":      shared.CloneInterfaceValue(proposal.Value),
 				"expiresAt":  proposal.ExpiresAt,
 			},
 			Timestamp: shared.Now(),
@@ -362,7 +362,7 @@ func (fh *FederationHub) GetProposalVotes(proposalID string) (approvals, rejecti
 
 	proposalID = strings.TrimSpace(proposalID)
 	if proposalID == "" {
-		return 0, 0, fmt.Errorf("proposalId is required")
+		return 0, 0, shared.ErrProposalIDRequired
 	}
 
 	proposal, exists := fh.proposals[proposalID]

@@ -4,6 +4,8 @@ package sampling
 import (
 	"context"
 	"fmt"
+	"log"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -89,7 +91,8 @@ func safeProviderName(provider LLMProvider) (name string, ok bool) {
 	}
 
 	defer func() {
-		if recover() != nil {
+		if r := recover(); r != nil {
+			log.Printf("[WARN] recovered panic in safeProviderName: %v\n%s", r, debug.Stack())
 			name = ""
 			ok = false
 		}
@@ -108,7 +111,8 @@ func safeProviderIsAvailable(provider LLMProvider) (available bool) {
 	}
 
 	defer func() {
-		if recover() != nil {
+		if r := recover(); r != nil {
+			log.Printf("[WARN] recovered panic in safeProviderIsAvailable: %v\n%s", r, debug.Stack())
 			available = false
 		}
 	}()
@@ -124,6 +128,7 @@ func safeProviderCreateMessage(provider LLMProvider, ctx context.Context, reques
 
 	defer func() {
 		if recovered := recover(); recovered != nil {
+			log.Printf("[WARN] recovered panic in safeProviderCreateMessage: %v\n%s", recovered, debug.Stack())
 			err = fmt.Errorf("provider %s panicked: %v", name, recovered)
 			result = nil
 		}
@@ -205,7 +210,7 @@ func (sm *SamplingManager) CreateMessageWithContext(ctx context.Context, request
 		sm.mu.Lock()
 		sm.stats.FailedRequests++
 		sm.mu.Unlock()
-		return nil, fmt.Errorf("sampling request is required")
+		return nil, shared.ErrSamplingReqRequired
 	}
 
 	if ctx == nil {

@@ -2,10 +2,12 @@ package claudeflow
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
+	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
 func TestFederationHub_PublicLifecycleInitializeGuards(t *testing.T) {
@@ -25,7 +27,7 @@ func TestFederationHub_PublicLifecycleInitializeGuards(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected second initialize to fail")
 	}
-	if err.Error() != "federation hub is already initialized" {
+	if !errors.Is(err, shared.ErrHubAlreadyInit) {
 		t.Fatalf("expected already initialized error, got %q", err.Error())
 	}
 }
@@ -72,7 +74,7 @@ func TestFederationHub_PublicLifecycleShutdownBlocksMutationsButKeepsReads(t *te
 	if err == nil {
 		t.Fatal("expected register swarm to fail after shutdown")
 	}
-	if err.Error() != "federation hub is shut down" {
+	if !errors.Is(err, shared.ErrHubShutDown) {
 		t.Fatalf("expected shutdown lifecycle error, got %q", err.Error())
 	}
 
@@ -104,7 +106,7 @@ func TestFederationHub_PublicLifecycleMutationsRequireInitialize(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected register swarm to fail before initialize")
 	}
-	if err.Error() != "federation hub is not initialized" {
+	if !errors.Is(err, shared.ErrHubNotInitialized) {
 		t.Fatalf("expected pre-init lifecycle error, got %q", err.Error())
 	}
 
@@ -115,10 +117,10 @@ func TestFederationHub_PublicLifecycleMutationsRequireInitialize(t *testing.T) {
 	if spawnErr == nil {
 		t.Fatal("expected spawn to fail before initialize")
 	}
-	if spawnErr.Error() != "federation hub is not initialized" {
+	if !errors.Is(spawnErr, shared.ErrHubNotInitialized) {
 		t.Fatalf("expected pre-init lifecycle error, got %q", spawnErr.Error())
 	}
-	if spawnResult == nil || spawnResult.Error != "federation hub is not initialized" {
+	if spawnResult == nil || spawnResult.Error != shared.ErrHubNotInitialized.Error() {
 		t.Fatalf("expected spawn result pre-init error, got %+v", spawnResult)
 	}
 }
@@ -136,10 +138,10 @@ func TestNewFederationTools_AllowsNilHubAndFailsGracefully(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected Execute result without configured hub")
 	}
-	if err.Error() != "federation hub is not configured" {
+	if !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected configured-hub error, got %q", err.Error())
 	}
-	if result.Error != "federation hub is not configured" {
+	if result.Error != shared.ErrHubNotConfigured.Error() {
 		t.Fatalf("expected result configured-hub error, got %q", result.Error)
 	}
 	if result.Success {
@@ -161,10 +163,10 @@ func TestNewFederationTools_AllowsZeroValueHubWrapperAndFailsGracefully(t *testi
 	if result == nil {
 		t.Fatal("expected Execute result for zero-value hub wrapper")
 	}
-	if err.Error() != "federation hub is not configured" {
+	if !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected configured-hub error, got %q", err.Error())
 	}
-	if result.Error != "federation hub is not configured" {
+	if result.Error != shared.ErrHubNotConfigured.Error() {
 		t.Fatalf("expected result configured-hub error, got %q", result.Error)
 	}
 	if result.Success {
@@ -186,10 +188,10 @@ func TestNewFederationTools_AllowsWrapperWithZeroValueInternalHubAndFailsGracefu
 	if result == nil {
 		t.Fatal("expected Execute result for wrapper with zero-value internal hub")
 	}
-	if err.Error() != "federation hub is not configured" {
+	if !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected configured-hub error, got %q", err.Error())
 	}
-	if result.Error != "federation hub is not configured" {
+	if result.Error != shared.ErrHubNotConfigured.Error() {
 		t.Fatalf("expected result configured-hub error, got %q", result.Error)
 	}
 	if result.Success {
@@ -329,7 +331,7 @@ func TestNewFederationTools_WithShutdownHubPreservesLifecycleContracts(t *testin
 		},
 	}
 
-	const expectedErr = "federation hub is shut down"
+	expectedErr := shared.ErrHubShutDown
 	for _, tc := range mutatingToolCases {
 		result, err := fedTools.Execute(context.Background(), tc.tool, tc.args)
 		if err == nil {
@@ -338,10 +340,10 @@ func TestNewFederationTools_WithShutdownHubPreservesLifecycleContracts(t *testin
 		if result == nil {
 			t.Fatalf("expected %s result after shutdown", tc.tool)
 		}
-		if err.Error() != expectedErr {
+		if !errors.Is(err, expectedErr) {
 			t.Fatalf("expected %s shutdown error %q, got %q", tc.tool, expectedErr, err.Error())
 		}
-		if result.Error != expectedErr {
+		if result.Error != expectedErr.Error() {
 			t.Fatalf("expected %s result error %q, got %q", tc.tool, expectedErr, result.Error)
 		}
 		if result.Success {
@@ -401,11 +403,11 @@ func TestNewFederationTools_WithUninitializedHubPreservesLifecycleContracts(t *t
 	if registerResult == nil {
 		t.Fatal("expected register-swarm result before initialize")
 	}
-	const expectedErr = "federation hub is not initialized"
-	if registerErr.Error() != expectedErr {
+	expectedErr := shared.ErrHubNotInitialized
+	if !errors.Is(registerErr, expectedErr) {
 		t.Fatalf("expected pre-init error %q, got %q", expectedErr, registerErr.Error())
 	}
-	if registerResult.Error != expectedErr {
+	if registerResult.Error != expectedErr.Error() {
 		t.Fatalf("expected register result error %q, got %q", expectedErr, registerResult.Error)
 	}
 	if registerResult.Success {
@@ -454,45 +456,45 @@ func TestFederationHub_PublicLifecycleReadsAvailableBeforeInitialize(t *testing.
 func TestFederationHub_PublicZeroValueMethodsFailGracefully(t *testing.T) {
 	var hub FederationHub
 
-	if err := hub.Initialize(); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Initialize(); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected initialize configuration error, got %v", err)
 	}
-	if err := hub.Shutdown(); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Shutdown(); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected shutdown configuration error, got %v", err)
 	}
-	if err := hub.RegisterSwarm(SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.RegisterSwarm(SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected register configuration error, got %v", err)
 	}
-	if err := hub.UnregisterSwarm("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.UnregisterSwarm("swarm"); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected unregister configuration error, got %v", err)
 	}
-	if err := hub.Heartbeat("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Heartbeat("swarm"); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected heartbeat configuration error, got %v", err)
 	}
 
 	spawnResult, spawnErr := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{Type: "coder", Task: "zero value"})
-	if spawnErr == nil || spawnErr.Error() != "federation hub is not configured" {
+	if spawnErr == nil || !errors.Is(spawnErr, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected spawn configuration error, got %v", spawnErr)
 	}
-	if spawnResult == nil || spawnResult.Error != "federation hub is not configured" {
+	if spawnResult == nil || spawnResult.Error != shared.ErrHubNotConfigured.Error() {
 		t.Fatalf("expected spawn result configuration error, got %+v", spawnResult)
 	}
-	if err := hub.CompleteAgent("agent", map[string]interface{}{"ok": true}); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.CompleteAgent("agent", map[string]interface{}{"ok": true}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected complete-agent configuration error, got %v", err)
 	}
-	if err := hub.TerminateAgent("agent", "err"); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.TerminateAgent("agent", "err"); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected terminate-agent configuration error, got %v", err)
 	}
-	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"hello": "world"}); err == nil || err.Error() != "federation hub is not configured" {
+	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"hello": "world"}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected send-message configuration error, got %v", err)
 	}
-	if _, err := hub.Broadcast("source", map[string]interface{}{"hello": "all"}); err == nil || err.Error() != "federation hub is not configured" {
+	if _, err := hub.Broadcast("source", map[string]interface{}{"hello": "all"}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected broadcast configuration error, got %v", err)
 	}
-	if _, err := hub.Propose("source", "task", map[string]interface{}{"vote": true}); err == nil || err.Error() != "federation hub is not configured" {
+	if _, err := hub.Propose("source", "task", map[string]interface{}{"vote": true}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected propose configuration error, got %v", err)
 	}
-	if err := hub.Vote("source", "proposal", true); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Vote("source", "proposal", true); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected vote configuration error, got %v", err)
 	}
 
@@ -559,45 +561,45 @@ func TestFederationHub_PublicZeroValueMethodsFailGracefully(t *testing.T) {
 func TestFederationHub_PublicNilReceiverMethodsFailGracefully(t *testing.T) {
 	var hub *FederationHub
 
-	if err := hub.Initialize(); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Initialize(); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil initialize configuration error, got %v", err)
 	}
-	if err := hub.Shutdown(); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Shutdown(); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil shutdown configuration error, got %v", err)
 	}
-	if err := hub.RegisterSwarm(SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.RegisterSwarm(SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil register configuration error, got %v", err)
 	}
-	if err := hub.UnregisterSwarm("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.UnregisterSwarm("swarm"); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil unregister configuration error, got %v", err)
 	}
-	if err := hub.Heartbeat("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Heartbeat("swarm"); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil heartbeat configuration error, got %v", err)
 	}
 
 	spawnResult, spawnErr := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{Type: "coder", Task: "nil receiver"})
-	if spawnErr == nil || spawnErr.Error() != "federation hub is not configured" {
+	if spawnErr == nil || !errors.Is(spawnErr, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil spawn configuration error, got %v", spawnErr)
 	}
-	if spawnResult == nil || spawnResult.Error != "federation hub is not configured" {
+	if spawnResult == nil || spawnResult.Error != shared.ErrHubNotConfigured.Error() {
 		t.Fatalf("expected nil spawn result configuration error, got %+v", spawnResult)
 	}
-	if err := hub.CompleteAgent("agent", map[string]interface{}{"ok": true}); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.CompleteAgent("agent", map[string]interface{}{"ok": true}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil complete-agent configuration error, got %v", err)
 	}
-	if err := hub.TerminateAgent("agent", "err"); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.TerminateAgent("agent", "err"); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil terminate-agent configuration error, got %v", err)
 	}
-	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"hello": "world"}); err == nil || err.Error() != "federation hub is not configured" {
+	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"hello": "world"}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil send-message configuration error, got %v", err)
 	}
-	if _, err := hub.Broadcast("source", map[string]interface{}{"hello": "all"}); err == nil || err.Error() != "federation hub is not configured" {
+	if _, err := hub.Broadcast("source", map[string]interface{}{"hello": "all"}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil broadcast configuration error, got %v", err)
 	}
-	if _, err := hub.Propose("source", "task", map[string]interface{}{"vote": true}); err == nil || err.Error() != "federation hub is not configured" {
+	if _, err := hub.Propose("source", "task", map[string]interface{}{"vote": true}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil propose configuration error, got %v", err)
 	}
-	if err := hub.Vote("source", "proposal", true); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Vote("source", "proposal", true); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected nil vote configuration error, got %v", err)
 	}
 
@@ -698,45 +700,45 @@ func TestFederationHub_PublicUnconfiguredReadDefaults(t *testing.T) {
 func TestFederationHub_PublicWrapperWithZeroValueInternalHubFailsGracefully(t *testing.T) {
 	hub := &FederationHub{internal: &federation.FederationHub{}}
 
-	if err := hub.Initialize(); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Initialize(); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected initialize configuration error, got %v", err)
 	}
-	if err := hub.Shutdown(); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Shutdown(); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected shutdown configuration error, got %v", err)
 	}
-	if err := hub.RegisterSwarm(SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.RegisterSwarm(SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected register configuration error, got %v", err)
 	}
-	if err := hub.UnregisterSwarm("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.UnregisterSwarm("swarm"); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected unregister configuration error, got %v", err)
 	}
-	if err := hub.Heartbeat("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Heartbeat("swarm"); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected heartbeat configuration error, got %v", err)
 	}
 
 	spawnResult, spawnErr := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{Type: "coder", Task: "wrapped zero internal"})
-	if spawnErr == nil || spawnErr.Error() != "federation hub is not configured" {
+	if spawnErr == nil || !errors.Is(spawnErr, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected spawn configuration error, got %v", spawnErr)
 	}
-	if spawnResult == nil || spawnResult.Error != "federation hub is not configured" {
+	if spawnResult == nil || spawnResult.Error != shared.ErrHubNotConfigured.Error() {
 		t.Fatalf("expected spawn result configuration error, got %+v", spawnResult)
 	}
-	if err := hub.CompleteAgent("agent", map[string]interface{}{"ok": true}); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.CompleteAgent("agent", map[string]interface{}{"ok": true}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected complete-agent configuration error, got %v", err)
 	}
-	if err := hub.TerminateAgent("agent", "err"); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.TerminateAgent("agent", "err"); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected terminate-agent configuration error, got %v", err)
 	}
-	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"hello": "world"}); err == nil || err.Error() != "federation hub is not configured" {
+	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"hello": "world"}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected send-message configuration error, got %v", err)
 	}
-	if _, err := hub.Broadcast("source", map[string]interface{}{"hello": "all"}); err == nil || err.Error() != "federation hub is not configured" {
+	if _, err := hub.Broadcast("source", map[string]interface{}{"hello": "all"}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected broadcast configuration error, got %v", err)
 	}
-	if _, err := hub.Propose("source", "task", map[string]interface{}{"vote": true}); err == nil || err.Error() != "federation hub is not configured" {
+	if _, err := hub.Propose("source", "task", map[string]interface{}{"vote": true}); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected propose configuration error, got %v", err)
 	}
-	if err := hub.Vote("source", "proposal", true); err == nil || err.Error() != "federation hub is not configured" {
+	if err := hub.Vote("source", "proposal", true); err == nil || !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected vote configuration error, got %v", err)
 	}
 

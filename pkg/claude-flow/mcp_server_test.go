@@ -206,7 +206,7 @@ func TestMCPServer_StopShutsDownFederationHub(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected federation hub to reject mutations after server stop")
 	}
-	if err.Error() != "federation hub is shut down" {
+	if !errors.Is(err, shared.ErrHubShutDown) {
 		t.Fatalf("expected shutdown lifecycle error, got %q", err.Error())
 	}
 }
@@ -224,7 +224,7 @@ func TestMCPServer_StopHandlesMalformedFederationHubGracefully(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected stop to surface malformed federation hub error")
 	}
-	if err.Error() != "federation hub is not configured" {
+	if !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected malformed federation hub error, got %q", err.Error())
 	}
 	if server.federationHub != nil {
@@ -246,7 +246,7 @@ func TestMCPServer_StopZeroValueWithMalformedFederationHubKeepsPrimaryError(t *t
 	if err == nil {
 		t.Fatal("expected stop to fail for zero-value server")
 	}
-	if err.Error() != "mcp server is not initialized" {
+	if !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected primary stop error, got %q", err.Error())
 	}
 	if server.federationHub != nil {
@@ -268,7 +268,7 @@ func TestMCPServer_StopWithoutInternalStillShutsDownFederationHub(t *testing.T) 
 	if err == nil {
 		t.Fatal("expected stop to fail without internal server")
 	}
-	if err.Error() != "mcp server is not initialized" {
+	if !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected primary stop error, got %q", err.Error())
 	}
 	if server.federationHub != nil {
@@ -283,11 +283,11 @@ func TestMCPServer_StopWithoutInternalStillShutsDownFederationHub(t *testing.T) 
 	if registerErr == nil {
 		t.Fatal("expected federation hub to reject mutations after stop without internal server")
 	}
-	if registerErr.Error() != "federation hub is shut down" {
+	if !errors.Is(registerErr, shared.ErrHubShutDown) {
 		t.Fatalf("expected shutdown lifecycle error, got %q", registerErr.Error())
 	}
 
-	if err := server.Stop(); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.Stop(); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected repeated stop to preserve initialization error, got %v", err)
 	}
 }
@@ -307,7 +307,7 @@ func TestMCPServer_StopWithMalformedInternalStillShutsDownFederationHub(t *testi
 	if err == nil {
 		t.Fatal("expected stop to fail with malformed internal server")
 	}
-	if err.Error() != "mcp server is not initialized" {
+	if !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected primary stop error, got %q", err.Error())
 	}
 	if server.federationHub != nil {
@@ -322,7 +322,7 @@ func TestMCPServer_StopWithMalformedInternalStillShutsDownFederationHub(t *testi
 	if registerErr == nil {
 		t.Fatal("expected federation hub to reject mutations after stop with malformed internal server")
 	}
-	if registerErr.Error() != "federation hub is shut down" {
+	if !errors.Is(registerErr, shared.ErrHubShutDown) {
 		t.Fatalf("expected shutdown lifecycle error, got %q", registerErr.Error())
 	}
 }
@@ -330,10 +330,10 @@ func TestMCPServer_StopWithMalformedInternalStillShutsDownFederationHub(t *testi
 func TestMCPServer_ZeroValueMethodsFailGracefully(t *testing.T) {
 	var server MCPServer
 
-	if err := server.Start(); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.Start(); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected start initialization error, got %v", err)
 	}
-	if err := server.Stop(); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.Stop(); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected stop initialization error, got %v", err)
 	}
 
@@ -348,16 +348,16 @@ func TestMCPServer_ZeroValueMethodsFailGracefully(t *testing.T) {
 		t.Fatalf("expected zero-value status error, got %v", status["error"])
 	}
 
-	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected stdio initialization error, got %v", err)
 	}
-	if err := server.RunStdio(nil, bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.RunStdio(nil, bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected stdio initialization error precedence for nil context, got %v", err)
 	}
-	if err := server.RunStdio(context.Background(), nil, bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.RunStdio(context.Background(), nil, bytes.NewBuffer(nil)); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected stdio initialization error precedence for nil reader, got %v", err)
 	}
-	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), nil); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), nil); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected stdio initialization error precedence for nil writer, got %v", err)
 	}
 }
@@ -402,7 +402,7 @@ func TestMCPServer_StartRejectsInvalidPort(t *testing.T) {
 	t.Cleanup(func() {
 		_ = invalidPortServer.Stop()
 	})
-	if err := invalidPortServer.Start(); err == nil || err.Error() != "invalid port: -1" {
+	if err := invalidPortServer.Start(); err == nil || !errors.Is(err, shared.ErrInvalidPort) {
 		t.Fatalf("expected invalid-port start error, got %v", err)
 	}
 
@@ -413,7 +413,7 @@ func TestMCPServer_StartRejectsInvalidPort(t *testing.T) {
 	t.Cleanup(func() {
 		_ = overflowPortServer.Stop()
 	})
-	if err := overflowPortServer.Start(); err == nil || err.Error() != "invalid port: 70000" {
+	if err := overflowPortServer.Start(); err == nil || !errors.Is(err, shared.ErrInvalidPort) {
 		t.Fatalf("expected overflow-port start error, got %v", err)
 	}
 }
@@ -453,10 +453,10 @@ func TestMCPServer_StartReturnsBindErrorWhenPortInUse(t *testing.T) {
 func TestMCPServer_NilReceiverMethodsFailGracefully(t *testing.T) {
 	var server *MCPServer
 
-	if err := server.Start(); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.Start(); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected nil-receiver start error, got %v", err)
 	}
-	if err := server.Stop(); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.Stop(); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected nil-receiver stop error, got %v", err)
 	}
 
@@ -471,16 +471,16 @@ func TestMCPServer_NilReceiverMethodsFailGracefully(t *testing.T) {
 		t.Fatalf("expected nil-receiver status error, got %v", status["error"])
 	}
 
-	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected nil-receiver stdio error, got %v", err)
 	}
-	if err := server.RunStdio(nil, bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.RunStdio(nil, bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected nil-receiver stdio error precedence for nil context, got %v", err)
 	}
-	if err := server.RunStdio(context.Background(), nil, bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.RunStdio(context.Background(), nil, bytes.NewBuffer(nil)); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected nil-receiver stdio error precedence for nil reader, got %v", err)
 	}
-	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), nil); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), nil); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected nil-receiver stdio error precedence for nil writer, got %v", err)
 	}
 }
@@ -490,10 +490,10 @@ func TestMCPServer_MalformedInternalServerFailsGracefully(t *testing.T) {
 		internal: &mcp.Server{},
 	}
 
-	if err := server.Start(); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.Start(); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected malformed-internal start error, got %v", err)
 	}
-	if err := server.Stop(); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.Stop(); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected malformed-internal stop error, got %v", err)
 	}
 
@@ -508,10 +508,10 @@ func TestMCPServer_MalformedInternalServerFailsGracefully(t *testing.T) {
 		t.Fatalf("expected malformed-internal status error, got %v", status["error"])
 	}
 
-	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected malformed-internal stdio init error, got %v", err)
 	}
-	if err := server.RunStdio(nil, nil, nil); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.RunStdio(nil, nil, nil); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected malformed-internal stdio init error precedence, got %v", err)
 	}
 }
@@ -529,14 +529,14 @@ func TestMCPServer_RunStdioRejectsNilContext(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected RunStdio to reject nil context")
 	}
-	if err.Error() != "context is required" {
+	if !errors.Is(err, shared.ErrContextRequired) {
 		t.Fatalf("expected context-required error, got %q", err.Error())
 	}
 
-	if err := server.RunStdio(nil, nil, bytes.NewBuffer(nil)); err == nil || err.Error() != "context is required" {
+	if err := server.RunStdio(nil, nil, bytes.NewBuffer(nil)); err == nil || !errors.Is(err, shared.ErrContextRequired) {
 		t.Fatalf("expected context-required precedence with nil reader, got %v", err)
 	}
-	if err := server.RunStdio(nil, bytes.NewBuffer(nil), nil); err == nil || err.Error() != "context is required" {
+	if err := server.RunStdio(nil, bytes.NewBuffer(nil), nil); err == nil || !errors.Is(err, shared.ErrContextRequired) {
 		t.Fatalf("expected context-required precedence with nil writer, got %v", err)
 	}
 }
@@ -550,13 +550,13 @@ func TestMCPServer_RunStdioRejectsNilReaderOrWriter(t *testing.T) {
 		_ = server.Stop()
 	})
 
-	if err := server.RunStdio(context.Background(), nil, bytes.NewBuffer(nil)); err == nil || err.Error() != "reader is required" {
+	if err := server.RunStdio(context.Background(), nil, bytes.NewBuffer(nil)); err == nil || !errors.Is(err, shared.ErrReaderRequired) {
 		t.Fatalf("expected reader-required error, got %v", err)
 	}
-	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), nil); err == nil || err.Error() != "writer is required" {
+	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), nil); err == nil || !errors.Is(err, shared.ErrWriterRequired) {
 		t.Fatalf("expected writer-required error, got %v", err)
 	}
-	if err := server.RunStdio(context.Background(), nil, nil); err == nil || err.Error() != "reader is required" {
+	if err := server.RunStdio(context.Background(), nil, nil); err == nil || !errors.Is(err, shared.ErrReaderRequired) {
 		t.Fatalf("expected reader-required precedence when both streams are nil, got %v", err)
 	}
 }

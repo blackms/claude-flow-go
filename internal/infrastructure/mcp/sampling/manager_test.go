@@ -2,6 +2,7 @@ package sampling
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -154,7 +155,7 @@ func TestSamplingManager_CreateMessageWithContextNilRequestReturnsError(t *testi
 	if err == nil {
 		t.Fatal("expected error for nil sampling request")
 	}
-	if err.Error() != "sampling request is required" {
+	if !errors.Is(err, shared.ErrSamplingReqRequired) {
 		t.Fatalf("expected nil request error message, got %q", err.Error())
 	}
 

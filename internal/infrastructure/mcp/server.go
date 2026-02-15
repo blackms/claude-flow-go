@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net"
 	"net/http"
-	"reflect"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -67,11 +68,6 @@ type Options struct {
 	SessionConfig       *shared.SessionConfig
 }
 
-type cloneVisit struct {
-	typ reflect.Type
-	ptr uintptr
-}
-
 func (s *Server) isConfigured() bool {
 	if s == nil {
 		return false
@@ -90,7 +86,7 @@ func (s *Server) isConfigured() bool {
 
 func (s *Server) configuredOrError() error {
 	if !s.isConfigured() {
-		return fmt.Errorf("mcp server is not initialized")
+		return shared.ErrNotInitialized
 	}
 	return nil
 }
@@ -107,7 +103,7 @@ func cloneCapabilities(c *shared.MCPCapabilities) *shared.MCPCapabilities {
 
 	cloned := *c
 	if c.Experimental != nil {
-		cloned.Experimental = cloneMapStringInterface(c.Experimental)
+		cloned.Experimental = shared.CloneStringInterfaceMap(c.Experimental)
 	}
 	if c.Logging != nil {
 		logging := *c.Logging
@@ -138,145 +134,6 @@ func normalizeToolName(name string) string {
 
 func buildListenAddress(host string, port int) string {
 	return net.JoinHostPort(host, strconv.Itoa(port))
-}
-
-func cloneInterfaceValue(value interface{}) interface{} {
-	if value == nil {
-		return nil
-	}
-
-	cloned := cloneReflectValue(reflect.ValueOf(value), make(map[cloneVisit]reflect.Value))
-	if !cloned.IsValid() {
-		return nil
-	}
-	return cloned.Interface()
-}
-
-func cloneReflectValue(value reflect.Value, seen map[cloneVisit]reflect.Value) reflect.Value {
-	if !value.IsValid() {
-		return value
-	}
-
-	switch value.Kind() {
-	case reflect.Map:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-
-		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
-		if visit.ptr != 0 {
-			if cached, ok := seen[visit]; ok {
-				return cached
-			}
-		}
-
-		clonedMap := reflect.MakeMapWithSize(value.Type(), value.Len())
-		if visit.ptr != 0 {
-			seen[visit] = clonedMap
-		}
-		for _, key := range value.MapKeys() {
-			clonedKey := cloneReflectValue(key, seen)
-			clonedValue := cloneReflectValue(value.MapIndex(key), seen)
-			clonedMap.SetMapIndex(clonedKey, clonedValue)
-		}
-		return clonedMap
-
-	case reflect.Slice:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-
-		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
-		if visit.ptr != 0 {
-			if cached, ok := seen[visit]; ok {
-				return cached
-			}
-		}
-
-		clonedSlice := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
-		if visit.ptr != 0 {
-			seen[visit] = clonedSlice
-		}
-		for i := 0; i < value.Len(); i++ {
-			clonedSlice.Index(i).Set(cloneReflectValue(value.Index(i), seen))
-		}
-		return clonedSlice
-
-	case reflect.Array:
-		clonedArray := reflect.New(value.Type()).Elem()
-		for i := 0; i < value.Len(); i++ {
-			clonedArray.Index(i).Set(cloneReflectValue(value.Index(i), seen))
-		}
-		return clonedArray
-
-	case reflect.Ptr:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-
-		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
-		if cached, ok := seen[visit]; ok {
-			return cached
-		}
-
-		clonedPointer := reflect.New(value.Type().Elem())
-		seen[visit] = clonedPointer
-		clonedPointer.Elem().Set(cloneReflectValue(value.Elem(), seen))
-		return clonedPointer
-
-	case reflect.Interface:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-		return cloneReflectValue(value.Elem(), seen)
-
-	case reflect.Struct:
-		clonedStruct := reflect.New(value.Type()).Elem()
-		clonedStruct.Set(value)
-		for i := 0; i < value.NumField(); i++ {
-			destinationField := clonedStruct.Field(i)
-			if !destinationField.CanSet() {
-				continue
-			}
-
-			clonedField := cloneReflectValue(value.Field(i), seen)
-			if !clonedField.IsValid() {
-				continue
-			}
-
-			if clonedField.Type().AssignableTo(destinationField.Type()) {
-				destinationField.Set(clonedField)
-			} else if clonedField.Type().ConvertibleTo(destinationField.Type()) {
-				destinationField.Set(clonedField.Convert(destinationField.Type()))
-			}
-		}
-		return clonedStruct
-
-	default:
-		return value
-	}
-}
-
-func cloneMapStringInterface(value map[string]interface{}) map[string]interface{} {
-	if value == nil {
-		return nil
-	}
-	cloned, ok := cloneInterfaceValue(value).(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	return cloned
-}
-
-func cloneParamsOrEmpty(value map[string]interface{}) map[string]interface{} {
-	if value == nil {
-		return map[string]interface{}{}
-	}
-	cloned := cloneMapStringInterface(value)
-	if cloned == nil {
-		return map[string]interface{}{}
-	}
-	return cloned
 }
 
 func parsePageSize(value interface{}, fallback int) int {
@@ -322,7 +179,7 @@ func normalizeAndCloneTool(tool shared.MCPTool) (shared.MCPTool, bool) {
 		return shared.MCPTool{}, false
 	}
 	tool.Name = toolName
-	tool.Parameters = cloneMapStringInterface(tool.Parameters)
+	tool.Parameters = shared.CloneStringInterfaceMap(tool.Parameters)
 	return tool, true
 }
 
@@ -332,7 +189,8 @@ func providerGetTools(provider shared.MCPToolProvider) (tools []shared.MCPTool) 
 	}
 
 	defer func() {
-		if recover() != nil {
+		if r := recover(); r != nil {
+			log.Printf("[WARN] recovered panic in providerGetTools: %v\n%s", r, debug.Stack())
 			tools = nil
 		}
 	}()
@@ -351,9 +209,10 @@ func providerExecute(
 	}
 
 	defer func() {
-		if recover() != nil {
+		if r := recover(); r != nil {
+			log.Printf("[WARN] recovered panic in providerExecute: %v\n%s", r, debug.Stack())
 			result = nil
-			err = fmt.Errorf("provider execution panic")
+			err = fmt.Errorf("provider execution panic: %v", r)
 		}
 	}()
 
@@ -476,12 +335,12 @@ func (s *Server) Start() error {
 	}
 
 	if s.port <= 0 || s.port > 65535 {
-		return fmt.Errorf("invalid port: %d", s.port)
+		return fmt.Errorf("%w: %d", shared.ErrInvalidPort, s.port)
 	}
 
 	trimmedHost := strings.TrimSpace(s.host)
 	if trimmedHost == "" {
-		return fmt.Errorf("host is required")
+		return shared.ErrHostRequired
 	}
 
 	s.mu.Lock()
@@ -724,7 +583,14 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 
 	// Find the tool provider that can handle this request
 	for _, provider := range providers {
-		result, err := providerExecute(provider, ctx, method, cloneParamsOrEmpty(request.Params))
+		// Clone params per-provider so mutations are isolated
+		clonedParams := map[string]interface{}{}
+		if request.Params != nil {
+			if c := shared.CloneStringInterfaceMap(request.Params); c != nil {
+				clonedParams = c
+			}
+		}
+		result, err := providerExecute(provider, ctx, method, clonedParams)
 		if err != nil {
 			continue // Try next provider
 		}
@@ -826,7 +692,14 @@ func (s *Server) handleToolsCall(ctx context.Context, request shared.MCPRequest)
 	s.mu.RUnlock()
 
 	for _, provider := range providers {
-		result, err := providerExecute(provider, ctx, toolName, cloneParamsOrEmpty(arguments))
+		// Clone arguments per-provider so mutations are isolated
+		clonedArgs := map[string]interface{}{}
+		if arguments != nil {
+			if c := shared.CloneStringInterfaceMap(arguments); c != nil {
+				clonedArgs = c
+			}
+		}
+		result, err := providerExecute(provider, ctx, toolName, clonedArgs)
 		if err != nil {
 			continue
 		}
@@ -1309,16 +1182,16 @@ func NewStdioTransport(server *Server, reader io.Reader, writer io.Writer) *Stdi
 // Run runs the stdio transport.
 func (t *StdioTransport) Run(ctx context.Context) error {
 	if t == nil || t.server == nil {
-		return fmt.Errorf("stdio transport server is not configured")
+		return shared.ErrStdioNotConfigured
 	}
 	if ctx == nil {
-		return fmt.Errorf("context is required")
+		return shared.ErrContextRequired
 	}
 	if t.reader == nil {
-		return fmt.Errorf("reader is required")
+		return shared.ErrReaderRequired
 	}
 	if t.writer == nil {
-		return fmt.Errorf("writer is required")
+		return shared.ErrWriterRequired
 	}
 
 	decoder := json.NewDecoder(t.reader)

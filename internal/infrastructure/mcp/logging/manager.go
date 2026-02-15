@@ -3,6 +3,8 @@ package logging
 
 import (
 	"fmt"
+	"log"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -41,7 +43,9 @@ func safeInvokeLogHandler(handler LogHandler, entry LogEntry) {
 	}
 
 	defer func() {
-		_ = recover()
+		if r := recover(); r != nil {
+			log.Printf("[WARN] recovered panic in safeInvokeLogHandler: %v\n%s", r, debug.Stack())
+		}
 	}()
 	handler(entry)
 }
@@ -67,7 +71,7 @@ func NewLogManagerWithDefaults() *LogManager {
 // SetLevel sets the log level.
 func (lm *LogManager) SetLevel(level string) error {
 	if lm == nil {
-		return fmt.Errorf("log manager is required")
+		return shared.ErrLogManagerRequired
 	}
 
 	logLevel := normalizeLogLevel(level)
