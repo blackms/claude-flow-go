@@ -625,15 +625,14 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 		}
 		swarm.Capabilities = append(swarm.Capabilities, normalizeCapabilities(capsRaw)...)
 	}
-	if _, exists := t.hub.GetSwarm(swarm.SwarmID); exists {
-		return shared.MCPToolResult{
-			Success: false,
-			Error:   "swarmId already exists",
-		}, fmt.Errorf("swarmId already exists")
-	}
-
 	err := t.hub.RegisterSwarm(swarm)
 	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "swarmId already exists",
+			}, fmt.Errorf("swarmId already exists")
+		}
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   err.Error(),
