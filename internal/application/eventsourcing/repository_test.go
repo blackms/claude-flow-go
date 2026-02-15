@@ -758,3 +758,47 @@ func TestAggregateRepository_Load_SnapshotStoreErrorAndNoEventsReturnsNotFound(t
 		t.Fatalf("expected ErrAggregateNotFound when snapshot load fails and no events exist, got %v", err)
 	}
 }
+
+func TestAggregateRepository_Load_SnapshotNotFoundFallsBackToEventReplay(t *testing.T) {
+	ctx := context.Background()
+	aggregateID := "aggregate-snapshot-not-found"
+
+	eventStore := infra.NewInMemoryEventStore()
+	serializer := infra.NewJSONEventSerializer()
+
+	event := domain.NewBaseEvent("repo:event", aggregateID, "repository-test", 1, map[string]interface{}{"version": 1})
+	stored, err := serializer.Serialize(event)
+	if err != nil {
+		t.Fatalf("failed to serialize event: %v", err)
+	}
+	if err := eventStore.Append(ctx, []*domain.StoredEvent{stored}); err != nil {
+		t.Fatalf("failed to append event: %v", err)
+	}
+
+	repo := NewAggregateRepository(RepositoryConfig{
+		EventStore:    eventStore,
+		SnapshotStore: &errorSnapshotStore{err: domain.ErrSnapshotNotFound},
+		Serializer:    serializer,
+		Factory: func(id string) domain.Aggregate {
+			return &repositoryTestAggregate{id: id}
+		},
+	})
+
+	loaded, err := repo.Load(ctx, aggregateID)
+	if err != nil {
+		t.Fatalf("expected load to replay events after ErrSnapshotNotFound, got error: %v", err)
+	}
+
+	agg, ok := loaded.(*repositoryTestAggregate)
+	if !ok {
+		t.Fatalf("expected *repositoryTestAggregate, got %T", loaded)
+	}
+
+	if agg.fromSnapshotCall {
+		t.Fatal("snapshot restore should not run when snapshot store returns ErrSnapshotNotFound")
+	}
+
+	if len(agg.appliedVersions) != 1 || agg.appliedVersions[0] != 1 {
+		t.Fatalf("expected replay of version [1], got %v", agg.appliedVersions)
+	}
+}
