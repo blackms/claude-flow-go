@@ -3,12 +3,27 @@ package mcp
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
+
+type errReadCloser struct {
+	closed bool
+}
+
+func (r *errReadCloser) Read(p []byte) (int, error) {
+	return 0, errors.New("forced read failure")
+}
+
+func (r *errReadCloser) Close() error {
+	r.closed = true
+	return nil
+}
 
 func TestServer_HTTPHandleRequestRejectsNonPOST(t *testing.T) {
 	server := NewServer(Options{})
@@ -38,6 +53,28 @@ func TestServer_HTTPHandleRequestReturnsParseErrorForInvalidJSON(t *testing.T) {
 	}
 	if response.Error.Code != -32700 || response.Error.Message != "Parse error" {
 		t.Fatalf("expected parse error payload, got %+v", response.Error)
+	}
+}
+
+func TestServer_HTTPHandleRequestClosesBodyWhenReadFails(t *testing.T) {
+	server := NewServer(Options{})
+	recorder := httptest.NewRecorder()
+	body := &errReadCloser{}
+	request := httptest.NewRequest(http.MethodPost, "/", io.NopCloser(bytes.NewBuffer(nil)))
+	request.Body = body
+
+	server.handleRequest(recorder, request)
+
+	if !body.closed {
+		t.Fatal("expected request body to be closed when read fails")
+	}
+
+	var response shared.MCPResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("expected parse-error response body, got %v", err)
+	}
+	if response.Error == nil || response.Error.Code != -32700 {
+		t.Fatalf("expected parse error response after read failure, got %+v", response.Error)
 	}
 }
 

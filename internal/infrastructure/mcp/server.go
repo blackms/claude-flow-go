@@ -1133,12 +1133,15 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Body != nil {
+		defer r.Body.Close()
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.writeError(w, "", -32700, "Parse error")
 		return
 	}
-	defer r.Body.Close()
 
 	var request shared.MCPRequest
 	if err := json.Unmarshal(body, &request); err != nil {
