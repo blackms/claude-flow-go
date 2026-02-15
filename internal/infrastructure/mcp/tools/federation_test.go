@@ -101,6 +101,45 @@ func TestFederationTools_ExecuteAndExecuteTool_RequireConfiguredHub(t *testing.T
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ZeroValueInternalHubRejectsMutations(t *testing.T) {
+	ft := NewFederationTools(&federation.FederationHub{})
+	args := map[string]interface{}{
+		"swarmId":   "zero-value-hub-swarm",
+		"name":      "Zero Value Hub Swarm",
+		"maxAgents": 1,
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/register-swarm", args)
+	if execErr == nil {
+		t.Fatal("expected Execute to fail with zero-value internal hub")
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result with zero-value internal hub")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/register-swarm", args)
+	if directErr == nil {
+		t.Fatal("expected ExecuteTool to fail with zero-value internal hub")
+	}
+
+	const expectedErr = "federation hub is not configured"
+	if execErr.Error() != expectedErr {
+		t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
+	}
+	if directErr.Error() != expectedErr {
+		t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
+	}
+	if execResult.Error != expectedErr {
+		t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
+	}
+	if directResult.Error != expectedErr {
+		t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
+	}
+	if execResult.Success || directResult.Success {
+		t.Fatalf("expected both paths to fail, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+}
+
 func TestFederationTools_GetTools_HaveObjectSchemasAndRequiredFields(t *testing.T) {
 	ft := &FederationTools{}
 
