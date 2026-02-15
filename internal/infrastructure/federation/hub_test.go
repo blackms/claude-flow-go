@@ -51,6 +51,49 @@ func TestFederationHub_RegisterSwarmRejectsDuplicateIDs(t *testing.T) {
 	}
 }
 
+func TestFederationHub_RegisterSwarmRejectsTrimmedDuplicateIDs(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-dup-trim",
+		Name:      "First Trimmed Swarm",
+		MaxAgents: 3,
+	}); err != nil {
+		t.Fatalf("failed to register initial swarm: %v", err)
+	}
+
+	err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "  swarm-dup-trim  ",
+		Name:      "Second Trimmed Swarm",
+		MaxAgents: 5,
+	})
+	if err == nil {
+		t.Fatal("expected duplicate trimmed swarm registration to fail")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("expected duplicate error to mention already exists, got %v", err)
+	}
+
+	swarm, ok := hub.GetSwarm("swarm-dup-trim")
+	if !ok {
+		t.Fatal("expected original trimmed swarm to remain registered")
+	}
+	if swarm.Name != "First Trimmed Swarm" {
+		t.Fatalf("expected original trimmed swarm name to remain intact, got %q", swarm.Name)
+	}
+
+	stats := hub.GetStats()
+	if stats.TotalSwarms != 1 {
+		t.Fatalf("expected total swarms to remain 1 after duplicate trimmed attempt, got %d", stats.TotalSwarms)
+	}
+}
+
 func TestFederationHub_SpawnEphemeralRejectsTTLOverflow(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
