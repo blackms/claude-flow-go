@@ -179,7 +179,7 @@ func (fh *FederationHub) checkQuorum(proposal *shared.FederationProposal) {
 	}
 
 	// Calculate required votes for quorum
-	requiredVotes := int(float64(activeSwarms) * fh.config.ConsensusQuorum)
+	requiredVotes := int(math.Ceil(float64(activeSwarms) * fh.config.ConsensusQuorum))
 	if requiredVotes < 1 {
 		requiredVotes = 1
 	}
@@ -351,7 +351,7 @@ func (fh *FederationHub) GetQuorumInfo() (activeSwarms int, requiredVotes int, q
 		}
 	}
 
-	requiredVotes = int(float64(activeSwarms) * fh.config.ConsensusQuorum)
+	requiredVotes = int(math.Ceil(float64(activeSwarms) * fh.config.ConsensusQuorum))
 	if requiredVotes < 1 && activeSwarms > 0 {
 		requiredVotes = 1
 	}

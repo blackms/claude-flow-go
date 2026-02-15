@@ -224,6 +224,50 @@ func TestFederationHub_VoteRejectsDuplicateVotes(t *testing.T) {
 	}
 }
 
+func TestFederationHub_ConsensusQuorumUsesCeilingRule(t *testing.T) {
+	cfg := shared.DefaultFederationConfig()
+	cfg.ConsensusQuorum = 0.66
+	hub := NewFederationHub(cfg)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	registerTestSwarm(t, hub, "swarm-quorum-proposer", "Quorum Proposer")
+	registerTestSwarm(t, hub, "swarm-quorum-voter1", "Quorum Voter 1")
+	registerTestSwarm(t, hub, "swarm-quorum-voter2", "Quorum Voter 2")
+
+	activeSwarms, requiredVotes, quorum := hub.GetQuorumInfo()
+	if activeSwarms != 3 {
+		t.Fatalf("expected 3 active swarms, got %d", activeSwarms)
+	}
+	if requiredVotes != 2 {
+		t.Fatalf("expected quorum required votes to be ceiling(3*0.66)=2, got %d (quorum=%v)", requiredVotes, quorum)
+	}
+
+	proposal, err := hub.Propose("swarm-quorum-proposer", "quorum-check", map[string]interface{}{"value": "on"})
+	if err != nil {
+		t.Fatalf("failed to create proposal: %v", err)
+	}
+	if proposal.Status != shared.FederationProposalPending {
+		t.Fatalf("expected proposal to remain pending after proposer auto-vote, got %q", proposal.Status)
+	}
+
+	if err := hub.Vote("swarm-quorum-voter1", proposal.ID, true); err != nil {
+		t.Fatalf("expected second approval vote to succeed, got %v", err)
+	}
+
+	storedProposal, ok := hub.GetProposal(proposal.ID)
+	if !ok {
+		t.Fatal("expected stored proposal")
+	}
+	if storedProposal.Status != shared.FederationProposalAccepted {
+		t.Fatalf("expected proposal to be accepted after second vote under ceiling quorum rule, got %q", storedProposal.Status)
+	}
+}
+
 func TestFederationHub_ProposeRejectsInvalidProposalTimeoutConfiguration(t *testing.T) {
 	zeroTimeoutCfg := shared.DefaultFederationConfig()
 	zeroTimeoutCfg.ProposalTimeout = 0
