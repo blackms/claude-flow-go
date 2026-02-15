@@ -553,7 +553,7 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 
 	// Find the tool provider that can handle this request
 	for _, provider := range providers {
-		result, err := providerExecute(provider, ctx, method, request.Params)
+		result, err := providerExecute(provider, ctx, method, cloneMapStringInterface(request.Params))
 		if err != nil {
 			continue // Try next provider
 		}
@@ -642,7 +642,7 @@ func (s *Server) handleToolsCall(ctx context.Context, request shared.MCPRequest)
 	s.mu.RUnlock()
 
 	for _, provider := range providers {
-		result, err := providerExecute(provider, ctx, toolName, arguments)
+		result, err := providerExecute(provider, ctx, toolName, cloneMapStringInterface(arguments))
 		if err != nil {
 			continue
 		}

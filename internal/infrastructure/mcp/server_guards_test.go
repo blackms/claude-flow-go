@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
@@ -69,6 +70,46 @@ func (p panicProvider) Execute(ctx context.Context, toolName string, params map[
 		panic("panic provider Execute")
 	}
 	return nil, nil
+}
+
+type mutatingProvider struct {
+	methodName string
+	paramKey   string
+}
+
+func (p mutatingProvider) GetTools() []shared.MCPTool {
+	return []shared.MCPTool{{Name: p.methodName}}
+}
+
+func (p mutatingProvider) Execute(ctx context.Context, toolName string, params map[string]interface{}) (*shared.MCPToolResult, error) {
+	if toolName != p.methodName {
+		return nil, nil
+	}
+	if params != nil {
+		params[p.paramKey] = "mutated"
+	}
+	return nil, fmt.Errorf("intentionally unhandled")
+}
+
+type expectingProvider struct {
+	methodName    string
+	paramKey      string
+	expectedValue string
+}
+
+func (p expectingProvider) GetTools() []shared.MCPTool {
+	return []shared.MCPTool{{Name: p.methodName}}
+}
+
+func (p expectingProvider) Execute(ctx context.Context, toolName string, params map[string]interface{}) (*shared.MCPToolResult, error) {
+	if toolName != p.methodName {
+		return nil, nil
+	}
+	actual, _ := params[p.paramKey].(string)
+	if actual != p.expectedValue {
+		return nil, fmt.Errorf("expected %s=%q, got %q", p.paramKey, p.expectedValue, actual)
+	}
+	return &shared.MCPToolResult{Success: true, Data: map[string]interface{}{"ok": true}}, nil
 }
 
 func TestServer_NilReceiverMethodsFailGracefully(t *testing.T) {
@@ -541,6 +582,57 @@ func TestServer_PanickingProviderIsIsolated(t *testing.T) {
 	}
 	if resp.Result == nil {
 		t.Fatal("expected non-nil result from fallback provider")
+	}
+}
+
+func TestServer_HandleRequestProviderParamsAreDefensivelyCopied(t *testing.T) {
+	const method = "guard/copied-params"
+
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			mutatingProvider{methodName: method, paramKey: "flag"},
+			expectingProvider{methodName: method, paramKey: "flag", expectedValue: "original"},
+		},
+	})
+
+	originalParams := map[string]interface{}{"flag": "original"}
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "copied-params",
+		Method: method,
+		Params: originalParams,
+	})
+	if resp.Error != nil {
+		t.Fatalf("expected provider chain success with copied params, got %v", resp.Error)
+	}
+	if got, _ := originalParams["flag"].(string); got != "original" {
+		t.Fatalf("expected caller params to remain unchanged, got %q", got)
+	}
+}
+
+func TestServer_HandleToolsCallProviderArgumentsAreDefensivelyCopied(t *testing.T) {
+	const method = "guard/copied-tool-args"
+
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			mutatingProvider{methodName: method, paramKey: "flag"},
+			expectingProvider{methodName: method, paramKey: "flag", expectedValue: "original"},
+		},
+	})
+
+	arguments := map[string]interface{}{"flag": "original"}
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "copied-tool-args",
+		Method: "tools/call",
+		Params: map[string]interface{}{
+			"name":      method,
+			"arguments": arguments,
+		},
+	})
+	if resp.Error != nil {
+		t.Fatalf("expected tools/call success with copied arguments, got %v", resp.Error)
+	}
+	if got, _ := arguments["flag"].(string); got != "original" {
+		t.Fatalf("expected caller arguments to remain unchanged, got %q", got)
 	}
 }
 
