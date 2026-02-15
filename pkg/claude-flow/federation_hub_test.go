@@ -143,3 +143,23 @@ func TestNewFederationTools_AllowsNilHubAndFailsGracefully(t *testing.T) {
 		t.Fatal("expected failed Execute result without configured hub")
 	}
 }
+
+func TestFederationHub_PublicLifecycleReadsAvailableBeforeInitialize(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+
+	if swarms := hub.GetSwarms(); len(swarms) != 0 {
+		t.Fatalf("expected zero swarms before initialize, got %d", len(swarms))
+	}
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected zero agents before initialize, got %d", len(agents))
+	}
+	if messages := hub.GetMessages(0); len(messages) != 0 {
+		t.Fatalf("expected zero messages before initialize, got %d", len(messages))
+	}
+	if proposals := hub.GetProposals(); len(proposals) != 0 {
+		t.Fatalf("expected zero proposals before initialize, got %d", len(proposals))
+	}
+	if events := hub.GetEvents(0); len(events) != 0 {
+		t.Fatalf("expected zero events before initialize, got %d", len(events))
+	}
+}
