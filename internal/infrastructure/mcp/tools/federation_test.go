@@ -3800,6 +3800,107 @@ func TestFederationTools_BroadcastAndProposeClonePointerMapKeys(t *testing.T) {
 	}
 }
 
+func TestFederationTools_BroadcastAndProposeKeepDistinctSiblingMaps(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	for _, swarmID := range []string{"sibling-source", "sibling-target", "sibling-proposer"} {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 5,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	leftBroadcast := map[string]interface{}{}
+	rightBroadcast := map[string]interface{}{}
+	execBroadcastResult, execBroadcastErr := ft.Execute(context.Background(), "federation/broadcast", map[string]interface{}{
+		"sourceSwarmId": "sibling-source",
+		"payload": map[string]interface{}{
+			"left":  leftBroadcast,
+			"right": rightBroadcast,
+		},
+	})
+	if execBroadcastErr != nil {
+		t.Fatalf("Execute broadcast with sibling maps should succeed, got %v", execBroadcastErr)
+	}
+	if execBroadcastResult == nil || !execBroadcastResult.Success {
+		t.Fatalf("expected Execute broadcast success, got %+v", execBroadcastResult)
+	}
+	execBroadcastMessage, ok := execBroadcastResult.Data.(*shared.FederationMessage)
+	if !ok {
+		t.Fatalf("expected Execute broadcast data type *shared.FederationMessage, got %T", execBroadcastResult.Data)
+	}
+	execBroadcastPayload, ok := execBroadcastMessage.Payload.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute broadcast payload map, got %T", execBroadcastMessage.Payload)
+	}
+	execLeft, ok := execBroadcastPayload["left"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute left sibling map, got %T", execBroadcastPayload["left"])
+	}
+	execRight, ok := execBroadcastPayload["right"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute right sibling map, got %T", execBroadcastPayload["right"])
+	}
+	if reflect.ValueOf(execLeft).Pointer() == reflect.ValueOf(execRight).Pointer() {
+		t.Fatal("expected Execute sibling maps to remain distinct instances")
+	}
+	execLeft["leftOnly"] = true
+	if _, exists := execRight["leftOnly"]; exists {
+		t.Fatal("expected Execute left sibling mutation to not affect right sibling map")
+	}
+
+	leftProposal := map[string]interface{}{}
+	rightProposal := map[string]interface{}{}
+	directProposalResult, directProposalErr := ft.ExecuteTool(context.Background(), "federation/propose", map[string]interface{}{
+		"proposerId":   "sibling-proposer",
+		"proposalType": "sibling-check",
+		"value": map[string]interface{}{
+			"left":  leftProposal,
+			"right": rightProposal,
+		},
+	})
+	if directProposalErr != nil {
+		t.Fatalf("ExecuteTool propose with sibling maps should succeed, got %v", directProposalErr)
+	}
+	if !directProposalResult.Success {
+		t.Fatalf("expected ExecuteTool propose success, got %+v", directProposalResult)
+	}
+	directProposalCopy, ok := directProposalResult.Data.(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected ExecuteTool propose data type *shared.FederationProposal, got %T", directProposalResult.Data)
+	}
+	directProposalValue, ok := directProposalCopy.Value.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool proposal value map, got %T", directProposalCopy.Value)
+	}
+	directLeft, ok := directProposalValue["left"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool left sibling map, got %T", directProposalValue["left"])
+	}
+	directRight, ok := directProposalValue["right"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool right sibling map, got %T", directProposalValue["right"])
+	}
+	if reflect.ValueOf(directLeft).Pointer() == reflect.ValueOf(directRight).Pointer() {
+		t.Fatal("expected ExecuteTool sibling maps to remain distinct instances")
+	}
+	directLeft["leftOnly"] = true
+	if _, exists := directRight["leftOnly"]; exists {
+		t.Fatal("expected ExecuteTool left sibling mutation to not affect right sibling map")
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_ProposeSuccessParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {

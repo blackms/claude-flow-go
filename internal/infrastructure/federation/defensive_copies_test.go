@@ -1,6 +1,7 @@
 package federation
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
@@ -334,11 +335,11 @@ func TestFederationHub_InputMutationsAfterCallsDoNotAffectStoredState(t *testing
 		},
 	}
 	spawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
-		SwarmID:   "swarm-ingress-source",
-		Type:      "coder",
-		Task:      "ingress-mutation-test",
-		Metadata:  agentMetadata,
-		TTL:       60000,
+		SwarmID:  "swarm-ingress-source",
+		Type:     "coder",
+		Task:     "ingress-mutation-test",
+		Metadata: agentMetadata,
+		TTL:      60000,
 	})
 	if err != nil {
 		t.Fatalf("failed to spawn agent: %v", err)
@@ -645,6 +646,55 @@ func TestFederationHub_CloningDetachesPointerMapKeys(t *testing.T) {
 		if value != "payload-value" {
 			t.Fatalf("expected keyed payload value to remain payload-value, got %q", value)
 		}
+	}
+}
+
+func TestFederationHub_CloningKeepsDistinctSiblingMaps(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	registerTestSwarm(t, hub, "swarm-distinct-source", "Distinct Source")
+	registerTestSwarm(t, hub, "swarm-distinct-target", "Distinct Target")
+
+	left := map[string]interface{}{}
+	right := map[string]interface{}{}
+	message, err := hub.SendMessage("swarm-distinct-source", "swarm-distinct-target", map[string]interface{}{
+		"left":  left,
+		"right": right,
+	})
+	if err != nil {
+		t.Fatalf("failed to send message with sibling maps: %v", err)
+	}
+
+	left["origin"] = "mutated-left"
+	right["origin"] = "mutated-right"
+
+	storedMessage, ok := hub.GetMessage(message.ID)
+	if !ok {
+		t.Fatal("expected stored message")
+	}
+	storedPayload := requireMap(t, storedMessage.Payload, "stored sibling-map payload")
+	leftStored := requireMap(t, storedPayload["left"], "stored left sibling map")
+	rightStored := requireMap(t, storedPayload["right"], "stored right sibling map")
+
+	if reflect.ValueOf(leftStored).Pointer() == reflect.ValueOf(rightStored).Pointer() {
+		t.Fatal("expected stored sibling maps to remain distinct instances")
+	}
+	if _, exists := leftStored["origin"]; exists {
+		t.Fatalf("expected stored left map to ignore input mutation, got %v", leftStored["origin"])
+	}
+	if _, exists := rightStored["origin"]; exists {
+		t.Fatalf("expected stored right map to ignore input mutation, got %v", rightStored["origin"])
+	}
+
+	leftStored["after"] = "left-only"
+	if _, exists := rightStored["after"]; exists {
+		t.Fatal("expected left sibling mutation to not affect right sibling map")
 	}
 }
 

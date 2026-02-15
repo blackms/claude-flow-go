@@ -104,12 +104,16 @@ func cloneReflectValue(value reflect.Value, seen map[cloneVisit]reflect.Value) r
 		}
 
 		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
-		if cached, ok := seen[visit]; ok {
-			return cached
+		if visit.ptr != 0 {
+			if cached, ok := seen[visit]; ok {
+				return cached
+			}
 		}
 
 		clonedMap := reflect.MakeMapWithSize(value.Type(), value.Len())
-		seen[visit] = clonedMap
+		if visit.ptr != 0 {
+			seen[visit] = clonedMap
+		}
 		for _, key := range value.MapKeys() {
 			clonedKey := cloneReflectValue(key, seen)
 			clonedMap.SetMapIndex(clonedKey, cloneReflectValue(value.MapIndex(key), seen))
