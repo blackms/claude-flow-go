@@ -4,6 +4,7 @@ package federation
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
@@ -19,6 +20,22 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+
+	opts.SwarmID = strings.TrimSpace(opts.SwarmID)
+	opts.Type = strings.TrimSpace(opts.Type)
+	opts.Task = strings.TrimSpace(opts.Task)
+	if opts.Type == "" {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  "type is required",
+		}, fmt.Errorf("type is required")
+	}
+	if opts.Task == "" {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  "task is required",
+		}, fmt.Errorf("task is required")
+	}
 
 	// Set default TTL
 	if opts.TTL <= 0 {

@@ -167,6 +167,110 @@ func TestFederationHub_SpawnEphemeralRejectsOverflowDefaultTTL(t *testing.T) {
 	}
 }
 
+func TestFederationHub_SpawnEphemeralRejectsBlankTypeOrTask(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "spawn-validation-swarm",
+		Name:      "Spawn Validation Swarm",
+		MaxAgents: 3,
+	}); err != nil {
+		t.Fatalf("failed to register swarm: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		opts      shared.SpawnEphemeralOptions
+		expected  string
+	}{
+		{
+			name: "blank type",
+			opts: shared.SpawnEphemeralOptions{
+				SwarmID: "spawn-validation-swarm",
+				Type:    "   ",
+				Task:    "task",
+			},
+			expected: "type is required",
+		},
+		{
+			name: "blank task",
+			opts: shared.SpawnEphemeralOptions{
+				SwarmID: "spawn-validation-swarm",
+				Type:    "coder",
+				Task:    "   ",
+			},
+			expected: "task is required",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := hub.SpawnEphemeralAgent(tc.opts)
+			if err == nil {
+				t.Fatalf("expected spawn validation error %q", tc.expected)
+			}
+			if err.Error() != tc.expected {
+				t.Fatalf("expected error %q, got %q", tc.expected, err.Error())
+			}
+		})
+	}
+
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected no agents to be created on blank type/task, got %d", len(agents))
+	}
+}
+
+func TestFederationHub_SpawnEphemeralTrimsStringInputs(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "spawn-trim-swarm",
+		Name:      "Spawn Trim Swarm",
+		MaxAgents: 3,
+	}); err != nil {
+		t.Fatalf("failed to register swarm: %v", err)
+	}
+
+	result, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "  spawn-trim-swarm  ",
+		Type:    "  coder  ",
+		Task:    "  implement feature  ",
+		TTL:     1234,
+	})
+	if err != nil {
+		t.Fatalf("expected spawn with padded fields to succeed, got %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected spawn result")
+	}
+
+	agent, ok := hub.GetAgent(result.AgentID)
+	if !ok {
+		t.Fatalf("expected spawned agent %s to be retrievable", result.AgentID)
+	}
+	if agent.SwarmID != "spawn-trim-swarm" {
+		t.Fatalf("expected trimmed swarm ID, got %q", agent.SwarmID)
+	}
+	if agent.Type != "coder" {
+		t.Fatalf("expected trimmed type, got %q", agent.Type)
+	}
+	if agent.Task != "implement feature" {
+		t.Fatalf("expected trimmed task, got %q", agent.Task)
+	}
+}
+
 func TestFederationHub_RegisterSwarmRejectsInvalidInputs(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
