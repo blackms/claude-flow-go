@@ -39,6 +39,21 @@ type TemplateEntry struct {
 	Handler  ResourceHandler
 }
 
+func cloneResource(resource *shared.MCPResource) *shared.MCPResource {
+	if resource == nil {
+		return nil
+	}
+
+	cloned := *resource
+	if resource.Annotations != nil {
+		cloned.Annotations = make(map[string]interface{}, len(resource.Annotations))
+		for key, value := range resource.Annotations {
+			cloned.Annotations[key] = value
+		}
+	}
+	return &cloned
+}
+
 // NewResourceRegistry creates a new ResourceRegistry.
 func NewResourceRegistry(cacheConfig shared.ResourceCacheConfig) *ResourceRegistry {
 	return &ResourceRegistry{
@@ -61,7 +76,7 @@ func (rr *ResourceRegistry) RegisterResource(resource *shared.MCPResource, handl
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 
-	rr.resources[resource.URI] = resource
+	rr.resources[resource.URI] = cloneResource(resource)
 	rr.handlers[resource.URI] = handler
 
 	return nil
@@ -158,7 +173,7 @@ func (rr *ResourceRegistry) List(cursor string, pageSize int) *shared.ResourceLi
 	page := allResources[startIdx:endIdx]
 	resources := make([]shared.MCPResource, len(page))
 	for i, res := range page {
-		resources[i] = *res
+		resources[i] = *cloneResource(res)
 	}
 
 	result := &shared.ResourceListResult{

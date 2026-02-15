@@ -19,6 +19,18 @@ type PromptDefinition struct {
 	Handler PromptHandler
 }
 
+func clonePrompt(prompt *shared.MCPPrompt) *shared.MCPPrompt {
+	if prompt == nil {
+		return nil
+	}
+
+	cloned := *prompt
+	if prompt.Arguments != nil {
+		cloned.Arguments = append([]shared.PromptArgument(nil), prompt.Arguments...)
+	}
+	return &cloned
+}
+
 // PromptRegistry manages MCP prompts.
 type PromptRegistry struct {
 	mu         sync.RWMutex
@@ -52,7 +64,7 @@ func (pr *PromptRegistry) Register(prompt *shared.MCPPrompt, handler PromptHandl
 	}
 
 	pr.prompts[prompt.Name] = &PromptDefinition{
-		Prompt:  prompt,
+		Prompt:  clonePrompt(prompt),
 		Handler: handler,
 	}
 
@@ -112,7 +124,7 @@ func (pr *PromptRegistry) List(cursor string, pageSize int) *shared.PromptListRe
 	page := allPrompts[startIdx:endIdx]
 	prompts := make([]shared.MCPPrompt, len(page))
 	for i, p := range page {
-		prompts[i] = *p
+		prompts[i] = *clonePrompt(p)
 	}
 
 	result := &shared.PromptListResult{
