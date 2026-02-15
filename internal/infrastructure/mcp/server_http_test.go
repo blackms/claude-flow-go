@@ -78,6 +78,25 @@ func TestServer_HTTPHandleRequestClosesBodyWhenReadFails(t *testing.T) {
 	}
 }
 
+func TestServer_HTTPHandleRequestHandlesNilBody(t *testing.T) {
+	server := NewServer(Options{})
+	recorder := httptest.NewRecorder()
+	request := &http.Request{
+		Method: http.MethodPost,
+		Body:   nil,
+	}
+
+	server.handleRequest(recorder, request)
+
+	var response shared.MCPResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("expected parse-error response body, got %v", err)
+	}
+	if response.Error == nil || response.Error.Code != -32700 || response.Error.Message != "Parse error" {
+		t.Fatalf("expected parse error for nil request body, got %+v", response.Error)
+	}
+}
+
 func TestServer_HTTPHandleRequestInitializeRoundTrip(t *testing.T) {
 	server := NewServer(Options{})
 	recorder := httptest.NewRecorder()

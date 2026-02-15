@@ -1132,10 +1132,12 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	if r.Body != nil {
-		defer r.Body.Close()
+	if r.Body == nil {
+		s.writeError(w, "", -32700, "Parse error")
+		return
 	}
+
+	defer r.Body.Close()
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
