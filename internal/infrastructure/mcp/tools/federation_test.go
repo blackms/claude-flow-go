@@ -654,6 +654,7 @@ func TestFederationTools_ListEphemeralReturnsDefensiveCopies(t *testing.T) {
 		Metadata: map[string]interface{}{
 			"role":   "original",
 			"nested": map[string]interface{}{"k": "v"},
+			"tags":   map[string]string{"owner": "team-a"},
 		},
 	})
 	if err != nil {
@@ -701,6 +702,11 @@ func TestFederationTools_ListEphemeralReturnsDefensiveCopies(t *testing.T) {
 		t.Fatalf("expected Execute nested metadata map, got %T", execListed.Metadata["nested"])
 	}
 	nestedExec["k"] = "mutated-execute-nested"
+	execTags, ok := execListed.Metadata["tags"].(map[string]string)
+	if !ok {
+		t.Fatalf("expected Execute tags metadata map[string]string, got %T", execListed.Metadata["tags"])
+	}
+	execTags["owner"] = "team-exec"
 	execResultMap, ok := execListed.Result.(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected Execute result map, got %T", execListed.Result)
@@ -741,6 +747,11 @@ func TestFederationTools_ListEphemeralReturnsDefensiveCopies(t *testing.T) {
 		t.Fatalf("expected ExecuteTool nested metadata map, got %T", directListed.Metadata["nested"])
 	}
 	nestedDirect["k"] = "mutated-direct-nested"
+	directTags, ok := directListed.Metadata["tags"].(map[string]string)
+	if !ok {
+		t.Fatalf("expected ExecuteTool tags metadata map[string]string, got %T", directListed.Metadata["tags"])
+	}
+	directTags["owner"] = "team-direct"
 	directResultMap, ok := directListed.Result.(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected ExecuteTool result map, got %T", directListed.Result)
@@ -767,6 +778,13 @@ func TestFederationTools_ListEphemeralReturnsDefensiveCopies(t *testing.T) {
 	}
 	if storedNested["k"] != "v" {
 		t.Fatalf("expected stored nested metadata to remain original, got %v", storedNested["k"])
+	}
+	storedTags, ok := stored.Metadata["tags"].(map[string]string)
+	if !ok {
+		t.Fatalf("expected stored tags metadata map[string]string, got %T", stored.Metadata["tags"])
+	}
+	if storedTags["owner"] != "team-a" {
+		t.Fatalf("expected stored tags owner to remain team-a, got %v", storedTags["owner"])
 	}
 	storedResult, ok := stored.Result.(map[string]interface{})
 	if !ok {
@@ -1982,8 +2000,9 @@ func TestFederationTools_BroadcastReturnsDefensiveMessageCopies(t *testing.T) {
 	ft := NewFederationTools(hub)
 
 	execPayload := map[string]interface{}{
-		"event": "execute-original",
-		"meta":  map[string]interface{}{"version": "1.0.0"},
+		"event":  "execute-original",
+		"meta":   map[string]interface{}{"version": "1.0.0"},
+		"labels": map[string]string{"env": "prod"},
 	}
 	execResult, execErr := ft.Execute(context.Background(), "federation/broadcast", map[string]interface{}{
 		"sourceSwarmId": "swarm-broadcast-source",
@@ -2003,16 +2022,19 @@ func TestFederationTools_BroadcastReturnsDefensiveMessageCopies(t *testing.T) {
 	// Mutate original input payload and returned payload copy.
 	execPayload["event"] = "execute-mutated-input"
 	execPayload["meta"].(map[string]interface{})["version"] = "9.9.9"
+	execPayload["labels"].(map[string]string)["env"] = "staging"
 	execResultPayload, ok := execMsg.Payload.(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected Execute message payload map, got %T", execMsg.Payload)
 	}
 	execResultPayload["event"] = "execute-mutated-output"
 	execResultPayload["meta"].(map[string]interface{})["version"] = "8.8.8"
+	execResultPayload["labels"].(map[string]string)["env"] = "qa"
 
 	directPayload := map[string]interface{}{
-		"event": "direct-original",
-		"meta":  map[string]interface{}{"version": "2.0.0"},
+		"event":  "direct-original",
+		"meta":   map[string]interface{}{"version": "2.0.0"},
+		"labels": map[string]string{"env": "dev"},
 	}
 	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/broadcast", map[string]interface{}{
 		"sourceSwarmId": "swarm-broadcast-source",
@@ -2028,12 +2050,14 @@ func TestFederationTools_BroadcastReturnsDefensiveMessageCopies(t *testing.T) {
 
 	directPayload["event"] = "direct-mutated-input"
 	directPayload["meta"].(map[string]interface{})["version"] = "7.7.7"
+	directPayload["labels"].(map[string]string)["env"] = "local"
 	directResultPayload, ok := directMsg.Payload.(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected ExecuteTool message payload map, got %T", directMsg.Payload)
 	}
 	directResultPayload["event"] = "direct-mutated-output"
 	directResultPayload["meta"].(map[string]interface{})["version"] = "6.6.6"
+	directResultPayload["labels"].(map[string]string)["env"] = "ci"
 
 	storedExec, ok := hub.GetMessage(execMsg.ID)
 	if !ok {
@@ -2053,6 +2077,13 @@ func TestFederationTools_BroadcastReturnsDefensiveMessageCopies(t *testing.T) {
 	if storedExecMeta["version"] != "1.0.0" {
 		t.Fatalf("expected stored Execute payload meta version to remain original, got %v", storedExecMeta["version"])
 	}
+	storedExecLabels, ok := storedExecPayload["labels"].(map[string]string)
+	if !ok {
+		t.Fatalf("expected stored Execute labels map[string]string, got %T", storedExecPayload["labels"])
+	}
+	if storedExecLabels["env"] != "prod" {
+		t.Fatalf("expected stored Execute labels env to remain prod, got %v", storedExecLabels["env"])
+	}
 
 	storedDirect, ok := hub.GetMessage(directMsg.ID)
 	if !ok {
@@ -2071,6 +2102,13 @@ func TestFederationTools_BroadcastReturnsDefensiveMessageCopies(t *testing.T) {
 	}
 	if storedDirectMeta["version"] != "2.0.0" {
 		t.Fatalf("expected stored ExecuteTool payload meta version to remain original, got %v", storedDirectMeta["version"])
+	}
+	storedDirectLabels, ok := storedDirectPayload["labels"].(map[string]string)
+	if !ok {
+		t.Fatalf("expected stored ExecuteTool labels map[string]string, got %T", storedDirectPayload["labels"])
+	}
+	if storedDirectLabels["env"] != "dev" {
+		t.Fatalf("expected stored ExecuteTool labels env to remain dev, got %v", storedDirectLabels["env"])
 	}
 }
 
@@ -2256,6 +2294,7 @@ func TestFederationTools_ProposeAndVoteReturnDefensiveProposalCopies(t *testing.
 
 	value := map[string]interface{}{
 		"policy": map[string]interface{}{"mode": "balanced"},
+		"tags":   map[string]string{"tier": "gold"},
 	}
 	proposeResult, proposeErr := ft.Execute(context.Background(), "federation/propose", map[string]interface{}{
 		"proposerId":   "swarm-propose-source",
@@ -2276,12 +2315,14 @@ func TestFederationTools_ProposeAndVoteReturnDefensiveProposalCopies(t *testing.
 	// Mutate original input and returned proposal copy.
 	value["policy"].(map[string]interface{})["mode"] = "mutated-input"
 	value["newField"] = "mutated-input"
+	value["tags"].(map[string]string)["tier"] = "silver"
 	copyValue, ok := proposalCopy.Value.(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected proposal copy value map, got %T", proposalCopy.Value)
 	}
 	copyValue["policy"].(map[string]interface{})["mode"] = "mutated-output"
 	copyValue["newField"] = "mutated-output"
+	copyValue["tags"].(map[string]string)["tier"] = "platinum"
 	proposalCopy.Votes["external-mutated"] = true
 
 	storedProposal, ok := hub.GetProposal(proposalCopy.ID)
@@ -2301,6 +2342,13 @@ func TestFederationTools_ProposeAndVoteReturnDefensiveProposalCopies(t *testing.
 	}
 	if _, exists := storedValue["newField"]; exists {
 		t.Fatalf("expected stored proposal value to not include newField, got %v", storedValue["newField"])
+	}
+	storedTags, ok := storedValue["tags"].(map[string]string)
+	if !ok {
+		t.Fatalf("expected stored proposal tags map[string]string, got %T", storedValue["tags"])
+	}
+	if storedTags["tier"] != "gold" {
+		t.Fatalf("expected stored proposal tags tier to remain gold, got %v", storedTags["tier"])
 	}
 	if _, exists := storedProposal.Votes["external-mutated"]; exists {
 		t.Fatal("expected stored proposal votes to ignore external mutation")
@@ -2329,6 +2377,7 @@ func TestFederationTools_ProposeAndVoteReturnDefensiveProposalCopies(t *testing.
 		t.Fatalf("expected vote proposal value map, got %T", voteProposalCopy.Value)
 	}
 	voteProposalValue["policy"].(map[string]interface{})["mode"] = "mutated-after-vote"
+	voteProposalValue["tags"].(map[string]string)["tier"] = "diamond"
 
 	storedAfterVote, ok := hub.GetProposal(proposalCopy.ID)
 	if !ok {
@@ -2347,6 +2396,13 @@ func TestFederationTools_ProposeAndVoteReturnDefensiveProposalCopies(t *testing.
 	}
 	if storedAfterVotePolicy["mode"] != "balanced" {
 		t.Fatalf("expected stored policy mode to remain balanced after vote copy mutation, got %v", storedAfterVotePolicy["mode"])
+	}
+	storedAfterVoteTags, ok := storedAfterVoteValue["tags"].(map[string]string)
+	if !ok {
+		t.Fatalf("expected stored proposal tags map[string]string after vote, got %T", storedAfterVoteValue["tags"])
+	}
+	if storedAfterVoteTags["tier"] != "gold" {
+		t.Fatalf("expected stored proposal tags tier to remain gold after vote mutation, got %v", storedAfterVoteTags["tier"])
 	}
 }
 

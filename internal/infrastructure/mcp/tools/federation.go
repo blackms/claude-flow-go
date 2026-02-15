@@ -906,10 +906,32 @@ func cloneInterfaceValue(value interface{}) interface{} {
 	switch typed := value.(type) {
 	case map[string]interface{}:
 		return cloneStringInterfaceMap(typed)
+	case map[string]string:
+		cloned := make(map[string]string, len(typed))
+		for key, val := range typed {
+			cloned[key] = val
+		}
+		return cloned
 	case []interface{}:
 		cloned := make([]interface{}, len(typed))
 		for i := range typed {
 			cloned[i] = cloneInterfaceValue(typed[i])
+		}
+		return cloned
+	case []map[string]interface{}:
+		cloned := make([]map[string]interface{}, len(typed))
+		for i := range typed {
+			cloned[i] = cloneStringInterfaceMap(typed[i])
+		}
+		return cloned
+	case []map[string]string:
+		cloned := make([]map[string]string, len(typed))
+		for i := range typed {
+			item := make(map[string]string, len(typed[i]))
+			for key, val := range typed[i] {
+				item[key] = val
+			}
+			cloned[i] = item
 		}
 		return cloned
 	case []string:
