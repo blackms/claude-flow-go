@@ -126,6 +126,42 @@ func normalizeToolName(name string) string {
 	return strings.TrimSpace(name)
 }
 
+func cloneInterfaceValue(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		return cloneMapStringInterface(typed)
+	case []interface{}:
+		cloned := make([]interface{}, len(typed))
+		for i := range typed {
+			cloned[i] = cloneInterfaceValue(typed[i])
+		}
+		return cloned
+	default:
+		return typed
+	}
+}
+
+func cloneMapStringInterface(value map[string]interface{}) map[string]interface{} {
+	if value == nil {
+		return nil
+	}
+	cloned := make(map[string]interface{}, len(value))
+	for key, item := range value {
+		cloned[key] = cloneInterfaceValue(item)
+	}
+	return cloned
+}
+
+func normalizeAndCloneTool(tool shared.MCPTool) (shared.MCPTool, bool) {
+	toolName := normalizeToolName(tool.Name)
+	if toolName == "" {
+		return shared.MCPTool{}, false
+	}
+	tool.Name = toolName
+	tool.Parameters = cloneMapStringInterface(tool.Parameters)
+	return tool, true
+}
+
 // NewServer creates a new MCP server.
 func NewServer(opts Options) *Server {
 	port := opts.Port
@@ -275,12 +311,11 @@ func (s *Server) Start() error {
 			continue
 		}
 		for _, tool := range provider.GetTools() {
-			toolName := normalizeToolName(tool.Name)
-			if toolName == "" {
+			normalized, ok := normalizeAndCloneTool(tool)
+			if !ok {
 				continue
 			}
-			tool.Name = toolName
-			s.toolRegistry[toolName] = tool
+			s.toolRegistry[normalized.Name] = normalized
 		}
 	}
 
@@ -360,12 +395,11 @@ func (s *Server) RegisterTool(tool shared.MCPTool) {
 	if s.toolRegistry == nil {
 		s.toolRegistry = make(map[string]shared.MCPTool)
 	}
-	toolName := normalizeToolName(tool.Name)
-	if toolName == "" {
+	normalized, ok := normalizeAndCloneTool(tool)
+	if !ok {
 		return
 	}
-	tool.Name = toolName
-	s.toolRegistry[toolName] = tool
+	s.toolRegistry[normalized.Name] = normalized
 }
 
 // ListTools returns all available tools.
@@ -382,14 +416,13 @@ func (s *Server) ListTools() []shared.MCPTool {
 
 	// Add tools from registry
 	for _, tool := range s.toolRegistry {
-		toolName := normalizeToolName(tool.Name)
-		if toolName == "" {
+		normalized, ok := normalizeAndCloneTool(tool)
+		if !ok {
 			continue
 		}
-		tool.Name = toolName
-		if !seen[toolName] {
-			result = append(result, tool)
-			seen[toolName] = true
+		if !seen[normalized.Name] {
+			result = append(result, normalized)
+			seen[normalized.Name] = true
 		}
 	}
 
@@ -399,14 +432,13 @@ func (s *Server) ListTools() []shared.MCPTool {
 			continue
 		}
 		for _, tool := range provider.GetTools() {
-			toolName := normalizeToolName(tool.Name)
-			if toolName == "" {
+			normalized, ok := normalizeAndCloneTool(tool)
+			if !ok {
 				continue
 			}
-			tool.Name = toolName
-			if !seen[toolName] {
-				result = append(result, tool)
-				seen[toolName] = true
+			if !seen[normalized.Name] {
+				result = append(result, normalized)
+				seen[normalized.Name] = true
 			}
 		}
 	}
@@ -920,12 +952,11 @@ func (s *Server) AddToolProvider(provider shared.MCPToolProvider) {
 
 	// Register tools from the provider
 	for _, tool := range provider.GetTools() {
-		toolName := normalizeToolName(tool.Name)
-		if toolName == "" {
+		normalized, ok := normalizeAndCloneTool(tool)
+		if !ok {
 			continue
 		}
-		tool.Name = toolName
-		s.toolRegistry[toolName] = tool
+		s.toolRegistry[normalized.Name] = normalized
 	}
 }
 

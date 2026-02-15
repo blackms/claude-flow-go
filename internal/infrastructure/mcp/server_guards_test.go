@@ -460,3 +460,136 @@ func TestServer_HandleRequestValidationPrecedence(t *testing.T) {
 		t.Fatalf("expected initialization error precedence, got %q", resp.Error.Message)
 	}
 }
+
+func TestServer_ListToolsReturnsDefensiveToolSchemaCopies(t *testing.T) {
+	server := NewServer(Options{})
+	server.RegisterTool(shared.MCPTool{
+		Name:        "guard/schema-copy",
+		Description: "schema copy",
+		Parameters: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"value": map[string]interface{}{
+					"type": "string",
+				},
+			},
+			"required": []interface{}{"value"},
+		},
+	})
+
+	readSchema := func() map[string]interface{} {
+		tools := server.ListTools()
+		for _, tool := range tools {
+			if tool.Name == "guard/schema-copy" {
+				return tool.Parameters
+			}
+		}
+		return nil
+	}
+
+	firstSchema := readSchema()
+	if firstSchema == nil {
+		t.Fatal("expected tool schema")
+	}
+
+	// Mutate returned schema copy.
+	properties, _ := firstSchema["properties"].(map[string]interface{})
+	valueSchema, _ := properties["value"].(map[string]interface{})
+	valueSchema["type"] = "number"
+	required, _ := firstSchema["required"].([]interface{})
+	if len(required) > 0 {
+		required[0] = "mutated"
+	}
+	firstSchema["newField"] = "added"
+
+	secondSchema := readSchema()
+	if secondSchema == nil {
+		t.Fatal("expected tool schema on second read")
+	}
+	secondProperties, _ := secondSchema["properties"].(map[string]interface{})
+	secondValueSchema, _ := secondProperties["value"].(map[string]interface{})
+	if secondValueSchema["type"] != "string" {
+		t.Fatalf("expected original nested schema value type, got %v", secondValueSchema["type"])
+	}
+	secondRequired, _ := secondSchema["required"].([]interface{})
+	if len(secondRequired) == 0 || secondRequired[0] != "value" {
+		t.Fatalf("expected original required array, got %v", secondRequired)
+	}
+	if _, ok := secondSchema["newField"]; ok {
+		t.Fatalf("expected schema to exclude external mutation field, got %v", secondSchema["newField"])
+	}
+}
+
+func TestServer_HandleToolsListReturnsDefensiveSchemaCopies(t *testing.T) {
+	server := NewServer(Options{})
+	server.RegisterTool(shared.MCPTool{
+		Name:        "guard/tools-list-schema",
+		Description: "tools list schema",
+		Parameters: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"flag": map[string]interface{}{
+					"type": "boolean",
+				},
+			},
+		},
+	})
+
+	extractSchema := func(resp shared.MCPResponse) map[string]interface{} {
+		result, ok := resp.Result.(map[string]interface{})
+		if !ok {
+			return nil
+		}
+		rawTools, ok := result["tools"].([]map[string]interface{})
+		if !ok {
+			return nil
+		}
+		for _, tool := range rawTools {
+			if name, _ := tool["name"].(string); name == "guard/tools-list-schema" {
+				schema, _ := tool["inputSchema"].(map[string]interface{})
+				return schema
+			}
+		}
+		return nil
+	}
+
+	firstResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "tools-list-copy-1",
+		Method: "tools/list",
+		Params: map[string]interface{}{},
+	})
+	if firstResp.Error != nil {
+		t.Fatalf("expected first tools/list success, got %v", firstResp.Error)
+	}
+	firstSchema := extractSchema(firstResp)
+	if firstSchema == nil {
+		t.Fatal("expected first tools/list schema")
+	}
+
+	firstProps, _ := firstSchema["properties"].(map[string]interface{})
+	firstFlag, _ := firstProps["flag"].(map[string]interface{})
+	firstFlag["type"] = "string"
+	firstSchema["externallyMutated"] = true
+
+	secondResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "tools-list-copy-2",
+		Method: "tools/list",
+		Params: map[string]interface{}{},
+	})
+	if secondResp.Error != nil {
+		t.Fatalf("expected second tools/list success, got %v", secondResp.Error)
+	}
+	secondSchema := extractSchema(secondResp)
+	if secondSchema == nil {
+		t.Fatal("expected second tools/list schema")
+	}
+
+	secondProps, _ := secondSchema["properties"].(map[string]interface{})
+	secondFlag, _ := secondProps["flag"].(map[string]interface{})
+	if secondFlag["type"] != "boolean" {
+		t.Fatalf("expected original schema in second response, got %v", secondFlag["type"])
+	}
+	if _, ok := secondSchema["externallyMutated"]; ok {
+		t.Fatalf("expected second schema to omit external mutation field, got %v", secondSchema["externallyMutated"])
+	}
+}
