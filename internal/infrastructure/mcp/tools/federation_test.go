@@ -2418,6 +2418,62 @@ func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralDefaultTTLParity(t 
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralDefaultTTLOverflowParity(t *testing.T) {
+	config := shared.DefaultFederationConfig()
+	config.DefaultAgentTTL = math.MaxInt64
+
+	hub := federation.NewFederationHub(config)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	for _, swarmID := range []string{"swarm-default-overflow-exec", "swarm-default-overflow-direct"} {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 10,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/spawn-ephemeral", map[string]interface{}{
+		"swarmId": "swarm-default-overflow-exec",
+		"type":    "coder",
+		"task":    "overflow execute",
+	})
+	if execErr == nil {
+		t.Fatal("expected Execute to fail when default ttl overflows")
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+	if execResult.Error != "ttl is out of range" {
+		t.Fatalf("expected Execute error %q, got %q", "ttl is out of range", execResult.Error)
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/spawn-ephemeral", map[string]interface{}{
+		"swarmId": "swarm-default-overflow-direct",
+		"type":    "reviewer",
+		"task":    "overflow direct",
+	})
+	if directErr == nil {
+		t.Fatal("expected ExecuteTool to fail when default ttl overflows")
+	}
+	if directResult.Error != "ttl is out of range" {
+		t.Fatalf("expected ExecuteTool error %q, got %q", "ttl is out of range", directResult.Error)
+	}
+
+	if execResult.Error != directResult.Error {
+		t.Fatalf("expected error parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralTrimsWhitespaceInputsParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {

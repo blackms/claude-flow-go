@@ -87,6 +87,43 @@ func TestFederationHub_SpawnEphemeralRejectsTTLOverflow(t *testing.T) {
 	}
 }
 
+func TestFederationHub_SpawnEphemeralRejectsOverflowDefaultTTL(t *testing.T) {
+	config := shared.DefaultFederationConfig()
+	config.DefaultAgentTTL = math.MaxInt64
+
+	hub := NewFederationHub(config)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-default-ttl-overflow",
+		Name:      "Default TTL Overflow Swarm",
+		MaxAgents: 4,
+	}); err != nil {
+		t.Fatalf("failed to register swarm: %v", err)
+	}
+
+	_, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-default-ttl-overflow",
+		Type:    "coder",
+		Task:    "overflow via default ttl",
+		TTL:     0, // trigger default TTL
+	})
+	if err == nil {
+		t.Fatal("expected spawn to fail when default ttl overflows")
+	}
+	if !strings.Contains(err.Error(), "ttl is out of range") {
+		t.Fatalf("expected ttl overflow error, got %v", err)
+	}
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected no agents to be created on default ttl overflow, got %d", len(agents))
+	}
+}
+
 func TestFederationHub_RegisterSwarmRejectsInvalidInputs(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
