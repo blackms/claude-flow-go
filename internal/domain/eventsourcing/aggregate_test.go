@@ -304,3 +304,15 @@ func TestRebuildFromSnapshot_SetVersionAppliedWithoutEvents(t *testing.T) {
 		t.Fatalf("expected version from snapshot (9), got %d", agg.Version())
 	}
 }
+
+func TestRebuildFromSnapshot_NilSnapshot(t *testing.T) {
+	agg := &snapshotSetterOnlyAggregate{
+		id:            "agg-nil",
+		aggregateType: "test-aggregate",
+	}
+
+	err := RebuildFromSnapshot(agg, nil, nil)
+	if !errors.Is(err, ErrSnapshotNotFound) {
+		t.Fatalf("expected ErrSnapshotNotFound for nil snapshot, got %v", err)
+	}
+}

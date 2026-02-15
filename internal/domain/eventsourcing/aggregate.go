@@ -195,6 +195,10 @@ func RebuildFromEvents(aggregate Aggregate, events []Event) error {
 
 // RebuildFromSnapshot rebuilds from snapshot plus subsequent events.
 func RebuildFromSnapshot(aggregate Aggregate, snapshot *Snapshot, events []Event) error {
+	if snapshot == nil {
+		return ErrSnapshotNotFound
+	}
+
 	// If aggregate implements AggregateState, restore from snapshot
 	if stateful, ok := aggregate.(AggregateState); ok {
 		if err := stateful.FromSnapshot(snapshot.State); err != nil {

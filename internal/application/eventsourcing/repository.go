@@ -104,7 +104,7 @@ func (r *AggregateRepository) Load(ctx context.Context, id string) (domain.Aggre
 	var fromVersion int
 	if r.snapshotStore != nil {
 		snapshot, err := r.snapshotStore.Load(ctx, id)
-		if err == nil && !r.snapshotConfig.IsExpired(snapshot) {
+		if err == nil && snapshot != nil && !r.snapshotConfig.IsExpired(snapshot) {
 			// Restore from snapshot
 			if stateful, ok := aggregate.(domain.AggregateState); ok {
 				if err := stateful.FromSnapshot(snapshot.State); err != nil {
