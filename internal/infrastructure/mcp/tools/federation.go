@@ -588,6 +588,12 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 	case int:
 		swarm.MaxAgents = maxAgents
 	case int64:
+		if maxAgents < int64(math.MinInt) || maxAgents > int64(math.MaxInt) {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "maxAgents is out of range",
+			}, fmt.Errorf("maxAgents is out of range")
+		}
 		swarm.MaxAgents = int(maxAgents)
 	default:
 		return shared.MCPToolResult{

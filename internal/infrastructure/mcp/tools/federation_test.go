@@ -5,6 +5,7 @@ import (
 	"context"
 	"math"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
@@ -1479,6 +1480,50 @@ func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmIntegerMaxAgentsPari
 	}
 	if directData["registered"] != "swarm-int64" {
 		t.Fatalf("expected ExecuteTool registered swarm-int64, got %v", directData["registered"])
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmInt64OutOfRangeParity(t *testing.T) {
+	if strconv.IntSize >= 64 {
+		t.Skip("int64 range matches int range on 64-bit platforms")
+	}
+
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{
+		"swarmId":   "swarm-overflow-int64",
+		"name":      "Overflow Int64 Swarm",
+		"maxAgents": int64(1 << 40),
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/register-swarm", args)
+	if execErr == nil {
+		t.Fatal("expected Execute validation error for out-of-range int64 maxAgents")
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+	if execResult.Error != "maxAgents is out of range" {
+		t.Fatalf("expected Execute error %q, got %q", "maxAgents is out of range", execResult.Error)
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/register-swarm", args)
+	if directErr == nil {
+		t.Fatal("expected ExecuteTool validation error for out-of-range int64 maxAgents")
+	}
+	if directResult.Error != "maxAgents is out of range" {
+		t.Fatalf("expected ExecuteTool error %q, got %q", "maxAgents is out of range", directResult.Error)
+	}
+
+	if execResult.Error != directResult.Error {
+		t.Fatalf("expected error parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
 	}
 }
 
