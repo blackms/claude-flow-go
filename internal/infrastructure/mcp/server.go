@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"reflect"
@@ -276,6 +277,43 @@ func cloneParamsOrEmpty(value map[string]interface{}) map[string]interface{} {
 		return map[string]interface{}{}
 	}
 	return cloned
+}
+
+func parsePageSize(value interface{}, fallback int) int {
+	switch typed := value.(type) {
+	case float64:
+		if math.IsNaN(typed) || math.IsInf(typed, 0) {
+			return fallback
+		}
+		if math.Trunc(typed) != typed {
+			return fallback
+		}
+		if typed <= 0 || typed > float64(math.MaxInt) {
+			return fallback
+		}
+		return int(typed)
+	case int:
+		if typed <= 0 {
+			return fallback
+		}
+		return typed
+	case int64:
+		if typed <= 0 || typed > int64(math.MaxInt) {
+			return fallback
+		}
+		return int(typed)
+	case json.Number:
+		parsed, err := typed.Int64()
+		if err != nil {
+			return fallback
+		}
+		if parsed <= 0 || parsed > int64(math.MaxInt) {
+			return fallback
+		}
+		return int(parsed)
+	default:
+		return fallback
+	}
 }
 
 func normalizeAndCloneTool(tool shared.MCPTool) (shared.MCPTool, bool) {
@@ -835,8 +873,8 @@ func (s *Server) handleResourcesList(request shared.MCPRequest) shared.MCPRespon
 		if c, ok := request.Params["cursor"].(string); ok {
 			cursor = c
 		}
-		if ps, ok := request.Params["pageSize"].(float64); ok {
-			pageSize = int(ps)
+		if rawPageSize, exists := request.Params["pageSize"]; exists {
+			pageSize = parsePageSize(rawPageSize, pageSize)
 		}
 	}
 
@@ -933,8 +971,8 @@ func (s *Server) handlePromptsList(request shared.MCPRequest) shared.MCPResponse
 		if c, ok := request.Params["cursor"].(string); ok {
 			cursor = c
 		}
-		if ps, ok := request.Params["pageSize"].(float64); ok {
-			pageSize = int(ps)
+		if rawPageSize, exists := request.Params["pageSize"]; exists {
+			pageSize = parsePageSize(rawPageSize, pageSize)
 		}
 	}
 

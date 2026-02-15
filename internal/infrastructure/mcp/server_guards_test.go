@@ -406,6 +406,115 @@ func TestServer_BuildListenAddressSupportsIPv6(t *testing.T) {
 	}
 }
 
+func TestServer_ParsePageSizeSupportsIntegralTypes(t *testing.T) {
+	server := NewServer(Options{})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	for _, uri := range []string{"resource://a", "resource://b", "resource://c"} {
+		err := server.resources.RegisterResource(&shared.MCPResource{
+			URI:  uri,
+			Name: uri,
+		}, func(uri string) (*shared.ResourceContent, error) {
+			return &shared.ResourceContent{
+				URI:  uri,
+				Text: "content",
+			}, nil
+		})
+		if err != nil {
+			t.Fatalf("failed to register test resource %s: %v", uri, err)
+		}
+	}
+
+	for _, promptName := range []string{"prompt-a", "prompt-b", "prompt-c"} {
+		err := server.prompts.Register(&shared.MCPPrompt{Name: promptName}, func(args map[string]string) ([]shared.PromptMessage, error) {
+			return []shared.PromptMessage{
+				{
+					Role: "user",
+					Content: []shared.PromptContent{
+						{Type: shared.PromptContentTypeText, Text: "ok"},
+					},
+				},
+			}, nil
+		})
+		if err != nil {
+			t.Fatalf("failed to register test prompt %s: %v", promptName, err)
+		}
+	}
+
+	resourceResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "resources-int-page-size",
+		Method: "resources/list",
+		Params: map[string]interface{}{"pageSize": 1},
+	})
+	if resourceResp.Error != nil {
+		t.Fatalf("expected resources/list success with int pageSize, got %v", resourceResp.Error)
+	}
+	resourceResult, ok := resourceResp.Result.(*shared.ResourceListResult)
+	if !ok {
+		t.Fatalf("expected resources/list result type, got %T", resourceResp.Result)
+	}
+	if len(resourceResult.Resources) != 1 {
+		t.Fatalf("expected int pageSize to return 1 resource, got %d", len(resourceResult.Resources))
+	}
+
+	promptResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "prompts-int64-page-size",
+		Method: "prompts/list",
+		Params: map[string]interface{}{"pageSize": int64(2)},
+	})
+	if promptResp.Error != nil {
+		t.Fatalf("expected prompts/list success with int64 pageSize, got %v", promptResp.Error)
+	}
+	promptResult, ok := promptResp.Result.(*shared.PromptListResult)
+	if !ok {
+		t.Fatalf("expected prompts/list result type, got %T", promptResp.Result)
+	}
+	if len(promptResult.Prompts) != 2 {
+		t.Fatalf("expected int64 pageSize to return 2 prompts, got %d", len(promptResult.Prompts))
+	}
+}
+
+func TestServer_ParsePageSizeRejectsInvalidValuesWithFallback(t *testing.T) {
+	server := NewServer(Options{})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	for _, uri := range []string{"resource://x", "resource://y", "resource://z"} {
+		err := server.resources.RegisterResource(&shared.MCPResource{
+			URI:  uri,
+			Name: uri,
+		}, func(uri string) (*shared.ResourceContent, error) {
+			return &shared.ResourceContent{
+				URI:  uri,
+				Text: "content",
+			}, nil
+		})
+		if err != nil {
+			t.Fatalf("failed to register test resource %s: %v", uri, err)
+		}
+	}
+
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "resources-invalid-page-size",
+		Method: "resources/list",
+		Params: map[string]interface{}{"pageSize": 1.5},
+	})
+	if resp.Error != nil {
+		t.Fatalf("expected resources/list success with invalid pageSize fallback, got %v", resp.Error)
+	}
+	result, ok := resp.Result.(*shared.ResourceListResult)
+	if !ok {
+		t.Fatalf("expected resources/list result type, got %T", resp.Result)
+	}
+	// fallback is 100, so all 3 registered resources should be returned.
+	if len(result.Resources) != 3 {
+		t.Fatalf("expected fallback pageSize to return all resources, got %d", len(result.Resources))
+	}
+}
+
 func TestServer_ListToolsReturnsDeterministicSortedNames(t *testing.T) {
 	server := &Server{
 		toolRegistry: map[string]shared.MCPTool{
