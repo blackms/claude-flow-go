@@ -492,27 +492,57 @@ func TestFederationTools_ExecuteAndExecuteTool_NilAndEmptyArgsEquivalent(t *test
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			nilResult, nilErr := ft.Execute(context.Background(), tc.tool, nil)
-			if nilResult == nil {
-				t.Fatalf("expected result for nil args on tool %s", tc.tool)
+			execNilResult, execNilErr := ft.Execute(context.Background(), tc.tool, nil)
+			if execNilResult == nil {
+				t.Fatalf("expected Execute result for nil args on tool %s", tc.tool)
 			}
 
-			emptyResult, emptyErr := ft.Execute(context.Background(), tc.tool, map[string]interface{}{})
-			if emptyResult == nil {
-				t.Fatalf("expected result for empty args on tool %s", tc.tool)
+			execEmptyResult, execEmptyErr := ft.Execute(context.Background(), tc.tool, map[string]interface{}{})
+			if execEmptyResult == nil {
+				t.Fatalf("expected Execute result for empty args on tool %s", tc.tool)
 			}
 
-			if (nilErr == nil) != (emptyErr == nil) {
-				t.Fatalf("expected nil-vs-empty error parity for %s, got nilErr=%v emptyErr=%v", tc.tool, nilErr, emptyErr)
+			directNilResult, directNilErr := ft.ExecuteTool(context.Background(), tc.tool, nil)
+			directEmptyResult, directEmptyErr := ft.ExecuteTool(context.Background(), tc.tool, map[string]interface{}{})
+
+			compareErrText := func(label string, leftErr, rightErr error) {
+				t.Helper()
+				if (leftErr == nil) != (rightErr == nil) {
+					t.Fatalf("expected %s error parity for %s, got left=%v right=%v", label, tc.tool, leftErr, rightErr)
+				}
+				if leftErr != nil && rightErr != nil && leftErr.Error() != rightErr.Error() {
+					t.Fatalf("expected %s error text parity for %s, got left=%q right=%q", label, tc.tool, leftErr.Error(), rightErr.Error())
+				}
 			}
-			if nilErr != nil && emptyErr != nil && nilErr.Error() != emptyErr.Error() {
-				t.Fatalf("expected nil-vs-empty error text parity for %s, got nilErr=%q emptyErr=%q", tc.tool, nilErr.Error(), emptyErr.Error())
+
+			compareErrText("Execute nil-vs-empty", execNilErr, execEmptyErr)
+			compareErrText("ExecuteTool nil-vs-empty", directNilErr, directEmptyErr)
+			compareErrText("Execute-vs-ExecuteTool nil", execNilErr, directNilErr)
+			compareErrText("Execute-vs-ExecuteTool empty", execEmptyErr, directEmptyErr)
+
+			if execNilResult.Success != execEmptyResult.Success {
+				t.Fatalf("expected Execute nil-vs-empty success parity for %s, got nil=%v empty=%v", tc.tool, execNilResult.Success, execEmptyResult.Success)
 			}
-			if nilResult.Success != emptyResult.Success {
-				t.Fatalf("expected nil-vs-empty success parity for %s, got nil=%v empty=%v", tc.tool, nilResult.Success, emptyResult.Success)
+			if execNilResult.Error != execEmptyResult.Error {
+				t.Fatalf("expected Execute nil-vs-empty result error parity for %s, got nil=%q empty=%q", tc.tool, execNilResult.Error, execEmptyResult.Error)
 			}
-			if nilResult.Error != emptyResult.Error {
-				t.Fatalf("expected nil-vs-empty result error parity for %s, got nil=%q empty=%q", tc.tool, nilResult.Error, emptyResult.Error)
+			if directNilResult.Success != directEmptyResult.Success {
+				t.Fatalf("expected ExecuteTool nil-vs-empty success parity for %s, got nil=%v empty=%v", tc.tool, directNilResult.Success, directEmptyResult.Success)
+			}
+			if directNilResult.Error != directEmptyResult.Error {
+				t.Fatalf("expected ExecuteTool nil-vs-empty result error parity for %s, got nil=%q empty=%q", tc.tool, directNilResult.Error, directEmptyResult.Error)
+			}
+			if execNilResult.Success != directNilResult.Success {
+				t.Fatalf("expected Execute-vs-ExecuteTool nil success parity for %s, got Execute=%v ExecuteTool=%v", tc.tool, execNilResult.Success, directNilResult.Success)
+			}
+			if execNilResult.Error != directNilResult.Error {
+				t.Fatalf("expected Execute-vs-ExecuteTool nil result error parity for %s, got Execute=%q ExecuteTool=%q", tc.tool, execNilResult.Error, directNilResult.Error)
+			}
+			if execEmptyResult.Success != directEmptyResult.Success {
+				t.Fatalf("expected Execute-vs-ExecuteTool empty success parity for %s, got Execute=%v ExecuteTool=%v", tc.tool, execEmptyResult.Success, directEmptyResult.Success)
+			}
+			if execEmptyResult.Error != directEmptyResult.Error {
+				t.Fatalf("expected Execute-vs-ExecuteTool empty result error parity for %s, got Execute=%q ExecuteTool=%q", tc.tool, execEmptyResult.Error, directEmptyResult.Error)
 			}
 		})
 	}
