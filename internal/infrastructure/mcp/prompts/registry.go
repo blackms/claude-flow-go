@@ -186,7 +186,7 @@ func (pr *PromptRegistry) GetPrompt(name string) *shared.MCPPrompt {
 	if !exists {
 		return nil
 	}
-	return def.Prompt
+	return clonePrompt(def.Prompt)
 }
 
 // HasPrompt checks if a prompt exists.

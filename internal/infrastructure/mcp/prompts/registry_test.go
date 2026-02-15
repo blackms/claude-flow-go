@@ -100,3 +100,43 @@ func TestPromptRegistry_ListReturnsDefensiveCopies(t *testing.T) {
 		t.Fatalf("expected defensive copy for prompt arguments, got %+v", secondPrompt.Arguments)
 	}
 }
+
+func TestPromptRegistry_GetPromptReturnsDefensiveCopy(t *testing.T) {
+	registry := NewPromptRegistryWithDefaults()
+
+	err := registry.Register(&shared.MCPPrompt{
+		Name: "prompt-get-copy",
+		Arguments: []shared.PromptArgument{
+			{Name: "arg-one", Required: true},
+		},
+	}, func(args map[string]string) ([]shared.PromptMessage, error) {
+		return []shared.PromptMessage{
+			{
+				Role: "user",
+				Content: []shared.PromptContent{
+					{
+						Type: shared.PromptContentTypeText,
+						Text: "ok",
+					},
+				},
+			},
+		}, nil
+	})
+	if err != nil {
+		t.Fatalf("failed to register prompt: %v", err)
+	}
+
+	first := registry.GetPrompt("prompt-get-copy")
+	if first == nil {
+		t.Fatal("expected first GetPrompt result")
+	}
+	first.Arguments[0].Name = "mutated"
+
+	second := registry.GetPrompt("prompt-get-copy")
+	if second == nil {
+		t.Fatal("expected second GetPrompt result")
+	}
+	if len(second.Arguments) != 1 || second.Arguments[0].Name != "arg-one" {
+		t.Fatalf("expected defensive copy for GetPrompt arguments, got %+v", second.Arguments)
+	}
+}

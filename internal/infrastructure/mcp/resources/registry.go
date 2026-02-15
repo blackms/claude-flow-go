@@ -54,6 +54,27 @@ func cloneResource(resource *shared.MCPResource) *shared.MCPResource {
 	return &cloned
 }
 
+func cloneResourceContent(content *shared.ResourceContent) *shared.ResourceContent {
+	if content == nil {
+		return nil
+	}
+
+	cloned := *content
+	if content.Blob != nil {
+		cloned.Blob = append([]byte(nil), content.Blob...)
+	}
+	return &cloned
+}
+
+func cloneResourceTemplate(template *shared.ResourceTemplate) *shared.ResourceTemplate {
+	if template == nil {
+		return nil
+	}
+
+	cloned := *template
+	return &cloned
+}
+
 // NewResourceRegistry creates a new ResourceRegistry.
 func NewResourceRegistry(cacheConfig shared.ResourceCacheConfig) *ResourceRegistry {
 	return &ResourceRegistry{
@@ -97,7 +118,7 @@ func (rr *ResourceRegistry) RegisterTemplate(template *shared.ResourceTemplate, 
 	}
 
 	rr.templates[template.URITemplate] = &TemplateEntry{
-		Template: template,
+		Template: cloneResourceTemplate(template),
 		Pattern:  regex,
 		Handler:  handler,
 	}
@@ -191,8 +212,9 @@ func (rr *ResourceRegistry) List(cursor string, pageSize int) *shared.ResourceLi
 func (rr *ResourceRegistry) Read(uri string) (*shared.ResourceReadResult, error) {
 	// Check cache first
 	if content, found := rr.cache.Get(uri); found {
+		cloned := cloneResourceContent(content)
 		return &shared.ResourceReadResult{
-			Contents: []shared.ResourceContent{*content},
+			Contents: []shared.ResourceContent{*cloned},
 		}, nil
 	}
 
@@ -213,11 +235,13 @@ func (rr *ResourceRegistry) Read(uri string) (*shared.ResourceReadResult, error)
 		return nil, err
 	}
 
+	cloned := cloneResourceContent(content)
+
 	// Cache the result
-	rr.cache.Set(uri, content)
+	rr.cache.Set(uri, cloned)
 
 	return &shared.ResourceReadResult{
-		Contents: []shared.ResourceContent{*content},
+		Contents: []shared.ResourceContent{*cloneResourceContent(cloned)},
 	}, nil
 }
 
@@ -297,7 +321,8 @@ func (rr *ResourceRegistry) NotifyUpdate(uri string) {
 
 	// Notify subscribers
 	for _, sub := range subs {
-		go sub.Callback(uri, content)
+		contentCopy := cloneResourceContent(content)
+		go sub.Callback(uri, contentCopy)
 	}
 }
 
@@ -305,7 +330,7 @@ func (rr *ResourceRegistry) NotifyUpdate(uri string) {
 func (rr *ResourceRegistry) GetResource(uri string) *shared.MCPResource {
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
-	return rr.resources[uri]
+	return cloneResource(rr.resources[uri])
 }
 
 // HasResource checks if a resource exists.
@@ -373,7 +398,7 @@ func (rr *ResourceRegistry) ListResourcesByPrefix(prefix string) []shared.MCPRes
 	result := make([]shared.MCPResource, 0)
 	for _, res := range rr.resources {
 		if strings.HasPrefix(res.URI, prefix) {
-			result = append(result, *res)
+			result = append(result, *cloneResource(res))
 		}
 	}
 	return result

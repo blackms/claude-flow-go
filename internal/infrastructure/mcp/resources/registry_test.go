@@ -96,3 +96,103 @@ func TestResourceRegistry_ListReturnsDefensiveCopies(t *testing.T) {
 		t.Fatalf("expected defensive copy to exclude injected annotation key, got %v", secondResource.Annotations["new"])
 	}
 }
+
+func TestResourceRegistry_GetResourceReturnsDefensiveCopy(t *testing.T) {
+	registry := NewResourceRegistryWithDefaults()
+
+	err := registry.RegisterResource(&shared.MCPResource{
+		URI:  "resource://get-copy",
+		Name: "get-copy",
+		Annotations: map[string]interface{}{
+			"owner": "alpha",
+		},
+	}, func(uri string) (*shared.ResourceContent, error) {
+		return &shared.ResourceContent{URI: uri, Text: "ok"}, nil
+	})
+	if err != nil {
+		t.Fatalf("failed to register resource: %v", err)
+	}
+
+	first := registry.GetResource("resource://get-copy")
+	if first == nil {
+		t.Fatal("expected first GetResource result")
+	}
+	first.Name = "mutated"
+	first.Annotations["owner"] = "mutated"
+
+	second := registry.GetResource("resource://get-copy")
+	if second == nil {
+		t.Fatal("expected second GetResource result")
+	}
+	if second.Name != "get-copy" {
+		t.Fatalf("expected defensive copy for resource name, got %q", second.Name)
+	}
+	if got := second.Annotations["owner"]; got != "alpha" {
+		t.Fatalf("expected defensive copy for annotations owner, got %v", got)
+	}
+}
+
+func TestResourceRegistry_ReadReturnsDefensiveBlobCopy(t *testing.T) {
+	registry := NewResourceRegistryWithDefaults()
+
+	err := registry.RegisterResource(&shared.MCPResource{
+		URI:  "resource://blob-copy",
+		Name: "blob-copy",
+	}, func(uri string) (*shared.ResourceContent, error) {
+		return &shared.ResourceContent{
+			URI:  uri,
+			Blob: []byte("abc"),
+		}, nil
+	})
+	if err != nil {
+		t.Fatalf("failed to register resource: %v", err)
+	}
+
+	first, err := registry.Read("resource://blob-copy")
+	if err != nil {
+		t.Fatalf("failed to read first resource snapshot: %v", err)
+	}
+	if len(first.Contents) != 1 {
+		t.Fatalf("expected one content in first read, got %d", len(first.Contents))
+	}
+	first.Contents[0].Blob[0] = 'z'
+
+	second, err := registry.Read("resource://blob-copy")
+	if err != nil {
+		t.Fatalf("failed to read second resource snapshot: %v", err)
+	}
+	if len(second.Contents) != 1 {
+		t.Fatalf("expected one content in second read, got %d", len(second.Contents))
+	}
+	if string(second.Contents[0].Blob) != "abc" {
+		t.Fatalf("expected defensive copy for blob contents, got %q", string(second.Contents[0].Blob))
+	}
+}
+
+func TestResourceRegistry_RegisterTemplateClonesTemplateInput(t *testing.T) {
+	registry := NewResourceRegistryWithDefaults()
+
+	template := &shared.ResourceTemplate{
+		URITemplate: "resource://template/{id}",
+		Name:        "template-original",
+	}
+	err := registry.RegisterTemplate(template, func(uri string) (*shared.ResourceContent, error) {
+		return &shared.ResourceContent{
+			URI:  uri,
+			Text: "ok",
+		}, nil
+	})
+	if err != nil {
+		t.Fatalf("failed to register template: %v", err)
+	}
+
+	template.Name = "template-mutated"
+
+	templates := registry.GetTemplates()
+	if len(templates) != 1 {
+		t.Fatalf("expected one registered template, got %d", len(templates))
+	}
+	if templates[0].Name != "template-original" {
+		t.Fatalf("expected template name to remain unchanged after caller mutation, got %q", templates[0].Name)
+	}
+}
