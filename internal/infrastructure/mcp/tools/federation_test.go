@@ -1340,6 +1340,93 @@ func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralCombinedFilterParity
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralBlankFiltersNoopParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-blank-a", Name: "Blank A", MaxAgents: 5}); err != nil {
+		t.Fatalf("failed to register blank swarm A: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-blank-b", Name: "Blank B", MaxAgents: 5}); err != nil {
+		t.Fatalf("failed to register blank swarm B: %v", err)
+	}
+
+	if _, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-blank-a",
+		Type:    "coder",
+		Task:    "blank filter agent A",
+	}); err != nil {
+		t.Fatalf("failed to spawn blank filter agent A: %v", err)
+	}
+	if _, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-list-blank-b",
+		Type:    "reviewer",
+		Task:    "blank filter agent B",
+	}); err != nil {
+		t.Fatalf("failed to spawn blank filter agent B: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+	blankArgs := map[string]interface{}{
+		"swarmId": "   ",
+		"status":  "   ",
+	}
+
+	baselineExec, baselineExecErr := ft.Execute(context.Background(), "federation/list-ephemeral", map[string]interface{}{})
+	if baselineExecErr != nil {
+		t.Fatalf("baseline Execute without filters should succeed, got error: %v", baselineExecErr)
+	}
+	baselineDirect, baselineDirectErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", map[string]interface{}{})
+	if baselineDirectErr != nil {
+		t.Fatalf("baseline ExecuteTool without filters should succeed, got error: %v", baselineDirectErr)
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/list-ephemeral", blankArgs)
+	if execErr != nil {
+		t.Fatalf("Execute should treat blank filters as no-op, got error: %v", execErr)
+	}
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", blankArgs)
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should treat blank filters as no-op, got error: %v", directErr)
+	}
+
+	extractIDs := func(result shared.MCPToolResult) []string {
+		t.Helper()
+		agents, ok := result.Data.([]*shared.EphemeralAgent)
+		if !ok {
+			t.Fatalf("expected result data type []*shared.EphemeralAgent, got %T", result.Data)
+		}
+		ids := make([]string, 0, len(agents))
+		for _, agent := range agents {
+			if agent == nil {
+				continue
+			}
+			ids = append(ids, agent.ID)
+		}
+		return ids
+	}
+
+	baselineExecIDs := extractIDs(*baselineExec)
+	baselineDirectIDs := extractIDs(baselineDirect)
+	execIDs := extractIDs(*execResult)
+	directIDs := extractIDs(directResult)
+
+	if !reflect.DeepEqual(execIDs, baselineExecIDs) {
+		t.Fatalf("expected Execute blank-filter IDs %v to match baseline no-filter IDs %v", execIDs, baselineExecIDs)
+	}
+	if !reflect.DeepEqual(directIDs, baselineDirectIDs) {
+		t.Fatalf("expected ExecuteTool blank-filter IDs %v to match baseline no-filter IDs %v", directIDs, baselineDirectIDs)
+	}
+	if !reflect.DeepEqual(execIDs, directIDs) {
+		t.Fatalf("expected Execute and ExecuteTool blank-filter ID parity, got Execute=%v ExecuteTool=%v", execIDs, directIDs)
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralInvalidStatusParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
