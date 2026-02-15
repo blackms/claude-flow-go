@@ -256,3 +256,92 @@ func TestFederationHub_IsConfigured(t *testing.T) {
 		t.Fatal("expected shutdown hub to remain structurally configured")
 	}
 }
+
+func TestFederationHub_IsConfiguredRejectsPartiallyConstructedHub(t *testing.T) {
+	base := NewFederationHubWithDefaults()
+	if !base.IsConfigured() {
+		t.Fatal("expected baseline constructor hub to be configured")
+	}
+
+	testCases := []struct {
+		name   string
+		mutate func(h *FederationHub)
+	}{
+		{
+			name: "missing context",
+			mutate: func(h *FederationHub) {
+				h.ctx = nil
+			},
+		},
+		{
+			name: "missing cancel function",
+			mutate: func(h *FederationHub) {
+				h.cancel = nil
+			},
+		},
+		{
+			name: "missing swarms map",
+			mutate: func(h *FederationHub) {
+				h.swarms = nil
+			},
+		},
+		{
+			name: "missing agents map",
+			mutate: func(h *FederationHub) {
+				h.ephemeralAgents = nil
+			},
+		},
+		{
+			name: "missing agentsBySwarm index",
+			mutate: func(h *FederationHub) {
+				h.agentsBySwarm = nil
+			},
+		},
+		{
+			name: "missing agentsByStatus index",
+			mutate: func(h *FederationHub) {
+				h.agentsByStatus = nil
+			},
+		},
+		{
+			name: "missing messages history",
+			mutate: func(h *FederationHub) {
+				h.messages = nil
+			},
+		},
+		{
+			name: "missing proposals map",
+			mutate: func(h *FederationHub) {
+				h.proposals = nil
+			},
+		},
+		{
+			name: "missing events history",
+			mutate: func(h *FederationHub) {
+				h.events = nil
+			},
+		},
+		{
+			name: "missing spawnTimes buffer",
+			mutate: func(h *FederationHub) {
+				h.spawnTimes = nil
+			},
+		},
+		{
+			name: "missing messageTimes buffer",
+			mutate: func(h *FederationHub) {
+				h.messageTimes = nil
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			hubCopy := *base
+			tc.mutate(&hubCopy)
+			if hubCopy.IsConfigured() {
+				t.Fatalf("expected partially constructed hub to be unconfigured when %s", tc.name)
+			}
+		})
+	}
+}
