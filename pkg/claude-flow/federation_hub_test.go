@@ -279,26 +279,74 @@ func TestNewFederationTools_WithShutdownHubPreservesLifecycleContracts(t *testin
 		t.Fatalf("expected status success after shutdown, got %+v", statusResult)
 	}
 
-	registerResult, registerErr := fedTools.Execute(context.Background(), "federation/register-swarm", map[string]interface{}{
-		"swarmId":   "shutdown-tools-blocked",
-		"name":      "Shutdown Tools Blocked",
-		"maxAgents": 1,
-	})
-	if registerErr == nil {
-		t.Fatal("expected register-swarm to fail after shutdown")
+	mutatingToolCases := []struct {
+		tool string
+		args map[string]interface{}
+	}{
+		{
+			tool: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "shutdown-tools-blocked",
+				"name":      "Shutdown Tools Blocked",
+				"maxAgents": 1,
+			},
+		},
+		{
+			tool: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "shutdown spawn blocked",
+			},
+		},
+		{
+			tool: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": "shutdown-agent",
+			},
+		},
+		{
+			tool: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": "shutdown-tools-existing",
+				"payload":       map[string]interface{}{"event": "shutdown"},
+			},
+		},
+		{
+			tool: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "shutdown-tools-existing",
+				"proposalType": "shutdown-check",
+				"value":        map[string]interface{}{"ok": true},
+			},
+		},
+		{
+			tool: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "shutdown-tools-existing",
+				"proposalId": "shutdown-proposal",
+				"approve":    true,
+			},
+		},
 	}
-	if registerResult == nil {
-		t.Fatal("expected register-swarm result after shutdown")
-	}
+
 	const expectedErr = "federation hub is shut down"
-	if registerErr.Error() != expectedErr {
-		t.Fatalf("expected shutdown error %q, got %q", expectedErr, registerErr.Error())
-	}
-	if registerResult.Error != expectedErr {
-		t.Fatalf("expected register result error %q, got %q", expectedErr, registerResult.Error)
-	}
-	if registerResult.Success {
-		t.Fatal("expected register-swarm failure after shutdown")
+	for _, tc := range mutatingToolCases {
+		result, err := fedTools.Execute(context.Background(), tc.tool, tc.args)
+		if err == nil {
+			t.Fatalf("expected %s to fail after shutdown", tc.tool)
+		}
+		if result == nil {
+			t.Fatalf("expected %s result after shutdown", tc.tool)
+		}
+		if err.Error() != expectedErr {
+			t.Fatalf("expected %s shutdown error %q, got %q", tc.tool, expectedErr, err.Error())
+		}
+		if result.Error != expectedErr {
+			t.Fatalf("expected %s result error %q, got %q", tc.tool, expectedErr, result.Error)
+		}
+		if result.Success {
+			t.Fatalf("expected %s failure after shutdown", tc.tool)
+		}
 	}
 
 	unknownResult, unknownErr := fedTools.Execute(context.Background(), "federation/not-real", map[string]interface{}{})
