@@ -244,6 +244,64 @@ func TestNewFederationTools_UnknownToolErrorsTakePrecedence(t *testing.T) {
 	}
 }
 
+func TestNewFederationTools_WithShutdownHubPreservesLifecycleContracts(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if hub == nil {
+		t.Fatal("expected federation hub wrapper")
+	}
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub wrapper: %v", err)
+	}
+	if err := hub.RegisterSwarm(SwarmRegistration{
+		SwarmID:   "shutdown-tools-existing",
+		Name:      "Shutdown Tools Existing",
+		MaxAgents: 1,
+	}); err != nil {
+		t.Fatalf("failed to register initial swarm: %v", err)
+	}
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("failed to shutdown federation hub wrapper: %v", err)
+	}
+
+	fedTools := NewFederationTools(hub)
+	if fedTools == nil {
+		t.Fatal("expected federation tools wrapper for shutdown hub")
+	}
+
+	statusResult, statusErr := fedTools.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if statusErr != nil {
+		t.Fatalf("expected status read to succeed after shutdown, got %v", statusErr)
+	}
+	if statusResult == nil {
+		t.Fatal("expected status result after shutdown")
+	}
+	if !statusResult.Success {
+		t.Fatalf("expected status success after shutdown, got %+v", statusResult)
+	}
+
+	registerResult, registerErr := fedTools.Execute(context.Background(), "federation/register-swarm", map[string]interface{}{
+		"swarmId":   "shutdown-tools-blocked",
+		"name":      "Shutdown Tools Blocked",
+		"maxAgents": 1,
+	})
+	if registerErr == nil {
+		t.Fatal("expected register-swarm to fail after shutdown")
+	}
+	if registerResult == nil {
+		t.Fatal("expected register-swarm result after shutdown")
+	}
+	const expectedErr = "federation hub is shut down"
+	if registerErr.Error() != expectedErr {
+		t.Fatalf("expected shutdown error %q, got %q", expectedErr, registerErr.Error())
+	}
+	if registerResult.Error != expectedErr {
+		t.Fatalf("expected register result error %q, got %q", expectedErr, registerResult.Error)
+	}
+	if registerResult.Success {
+		t.Fatal("expected register-swarm failure after shutdown")
+	}
+}
+
 func TestFederationHub_PublicLifecycleReadsAvailableBeforeInitialize(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 
