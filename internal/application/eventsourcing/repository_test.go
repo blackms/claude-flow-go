@@ -2,6 +2,7 @@ package eventsourcing
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -23,6 +24,14 @@ type repositoryNoSetterAggregate struct {
 	version          int
 	appliedVersions  []int
 	fromSnapshotCall bool
+}
+
+type repositorySnapshotFailAggregate struct {
+	id                string
+	version           int
+	appliedVersions   []int
+	fromSnapshotCalls *int
+	setVersionCall    bool
 }
 
 func (a *repositoryTestAggregate) ID() string { return a.id }
@@ -75,6 +84,36 @@ func (a *repositoryNoSetterAggregate) ToSnapshot() ([]byte, error) { return []by
 func (a *repositoryNoSetterAggregate) FromSnapshot(data []byte) error {
 	a.fromSnapshotCall = true
 	return nil
+}
+
+func (a *repositorySnapshotFailAggregate) ID() string { return a.id }
+
+func (a *repositorySnapshotFailAggregate) Type() string { return "repository-test" }
+
+func (a *repositorySnapshotFailAggregate) Version() int { return a.version }
+
+func (a *repositorySnapshotFailAggregate) ApplyEvent(event domain.Event) error {
+	a.appliedVersions = append(a.appliedVersions, event.Version())
+	a.version = event.Version()
+	return nil
+}
+
+func (a *repositorySnapshotFailAggregate) UncommittedEvents() []domain.Event { return nil }
+
+func (a *repositorySnapshotFailAggregate) ClearUncommittedEvents() {}
+
+func (a *repositorySnapshotFailAggregate) ToSnapshot() ([]byte, error) { return []byte(`{"ok":true}`), nil }
+
+func (a *repositorySnapshotFailAggregate) FromSnapshot(data []byte) error {
+	if a.fromSnapshotCalls != nil {
+		(*a.fromSnapshotCalls)++
+	}
+	return errors.New("snapshot decode failed")
+}
+
+func (a *repositorySnapshotFailAggregate) SetVersion(version int) {
+	a.setVersionCall = true
+	a.version = version
 }
 
 func TestAggregateRepository_Load_UsesSetVersionCapability(t *testing.T) {
@@ -204,5 +243,74 @@ func TestAggregateRepository_Load_WithoutSetVersionCapability(t *testing.T) {
 
 	if agg.Version() != 6 {
 		t.Fatalf("expected final aggregate version 6, got %d", agg.Version())
+	}
+}
+
+func TestAggregateRepository_Load_SnapshotRestoreFailureFallsBackToFullReplay(t *testing.T) {
+	ctx := context.Background()
+	aggregateID := "aggregate-3"
+
+	eventStore := infra.NewInMemoryEventStore()
+	snapshotStore := infra.NewInMemorySnapshotStore()
+	serializer := infra.NewJSONEventSerializer()
+
+	for version := 1; version <= 3; version++ {
+		event := domain.NewBaseEvent("repo:event", aggregateID, "repository-test", version, map[string]interface{}{"version": version})
+		stored, err := serializer.Serialize(event)
+		if err != nil {
+			t.Fatalf("failed to serialize event version %d: %v", version, err)
+		}
+		if err := eventStore.Append(ctx, []*domain.StoredEvent{stored}); err != nil {
+			t.Fatalf("failed to append event version %d: %v", version, err)
+		}
+	}
+
+	if err := snapshotStore.Save(ctx, &domain.Snapshot{
+		AggregateID:   aggregateID,
+		AggregateType: "repository-test",
+		Version:       2,
+		State:         []byte(`{"restored":true}`),
+		CreatedAt:     time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("failed to save snapshot: %v", err)
+	}
+
+	snapshotCalls := 0
+	repo := NewAggregateRepository(RepositoryConfig{
+		EventStore:    eventStore,
+		SnapshotStore: snapshotStore,
+		Serializer:    serializer,
+		Factory: func(id string) domain.Aggregate {
+			return &repositorySnapshotFailAggregate{
+				id:                id,
+				fromSnapshotCalls: &snapshotCalls,
+			}
+		},
+	})
+
+	loaded, err := repo.Load(ctx, aggregateID)
+	if err != nil {
+		t.Fatalf("unexpected load error: %v", err)
+	}
+
+	agg, ok := loaded.(*repositorySnapshotFailAggregate)
+	if !ok {
+		t.Fatalf("expected *repositorySnapshotFailAggregate, got %T", loaded)
+	}
+
+	if snapshotCalls != 1 {
+		t.Fatalf("expected one snapshot restoration attempt, got %d", snapshotCalls)
+	}
+
+	if agg.setVersionCall {
+		t.Fatal("setVersion should not be called when snapshot restoration fails")
+	}
+
+	if len(agg.appliedVersions) != 3 || agg.appliedVersions[0] != 1 || agg.appliedVersions[1] != 2 || agg.appliedVersions[2] != 3 {
+		t.Fatalf("expected full replay of versions [1 2 3], got %v", agg.appliedVersions)
+	}
+
+	if agg.Version() != 3 {
+		t.Fatalf("expected final aggregate version 3, got %d", agg.Version())
 	}
 }

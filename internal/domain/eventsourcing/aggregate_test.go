@@ -1,6 +1,9 @@
 package eventsourcing
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 type snapshotTestAggregate struct {
 	id               string
@@ -17,6 +20,14 @@ type snapshotNoSetterAggregate struct {
 	version          int
 	appliedVersions  []int
 	fromSnapshotCall bool
+}
+
+type snapshotFailAggregate struct {
+	id               string
+	aggregateType    string
+	version          int
+	fromSnapshotCall bool
+	setVersionCall   bool
 }
 
 func (a *snapshotTestAggregate) ID() string { return a.id }
@@ -68,6 +79,33 @@ func (a *snapshotNoSetterAggregate) ToSnapshot() ([]byte, error) { return []byte
 func (a *snapshotNoSetterAggregate) FromSnapshot(data []byte) error {
 	a.fromSnapshotCall = true
 	return nil
+}
+
+func (a *snapshotFailAggregate) ID() string { return a.id }
+
+func (a *snapshotFailAggregate) Type() string { return a.aggregateType }
+
+func (a *snapshotFailAggregate) Version() int { return a.version }
+
+func (a *snapshotFailAggregate) ApplyEvent(event Event) error {
+	a.version = event.Version()
+	return nil
+}
+
+func (a *snapshotFailAggregate) UncommittedEvents() []Event { return nil }
+
+func (a *snapshotFailAggregate) ClearUncommittedEvents() {}
+
+func (a *snapshotFailAggregate) ToSnapshot() ([]byte, error) { return []byte(`{"ok":true}`), nil }
+
+func (a *snapshotFailAggregate) FromSnapshot(data []byte) error {
+	a.fromSnapshotCall = true
+	return errors.New("snapshot decode failed")
+}
+
+func (a *snapshotFailAggregate) SetVersion(version int) {
+	a.setVersionCall = true
+	a.version = version
 }
 
 func TestRebuildFromSnapshot_UsesSetVersionCapability(t *testing.T) {
@@ -144,5 +182,36 @@ func TestRebuildFromSnapshot_WithoutSetVersionCapability(t *testing.T) {
 
 	if agg.Version() != 6 {
 		t.Fatalf("expected final version 6, got %d", agg.Version())
+	}
+}
+
+func TestRebuildFromSnapshot_FromSnapshotError(t *testing.T) {
+	agg := &snapshotFailAggregate{
+		id:            "agg-3",
+		aggregateType: "test-aggregate",
+	}
+
+	snapshot := &Snapshot{
+		AggregateID:   "agg-3",
+		AggregateType: "test-aggregate",
+		Version:       5,
+		State:         []byte(`{"state":"snapshot"}`),
+	}
+
+	events := []Event{
+		NewBaseEvent("evt-1", "agg-3", "test-aggregate", 6, map[string]interface{}{"k": "v"}),
+	}
+
+	err := RebuildFromSnapshot(agg, snapshot, events)
+	if err == nil {
+		t.Fatal("expected snapshot restoration error")
+	}
+
+	if !agg.fromSnapshotCall {
+		t.Fatal("expected snapshot restoration to be attempted")
+	}
+
+	if agg.setVersionCall {
+		t.Fatal("setVersion should not be called when snapshot restoration fails")
 	}
 }
