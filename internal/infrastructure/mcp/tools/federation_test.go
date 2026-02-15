@@ -1924,6 +1924,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "spawn out-of-range ttl",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  1e20,
+			},
+		},
+		{
 			name:     "spawn blank type",
 			toolName: "federation/spawn-ephemeral",
 			args: map[string]interface{}{
@@ -2086,6 +2095,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 				"swarmId":   "swarm-1",
 				"name":      "swarm-one",
 				"maxAgents": math.Inf(1),
+			},
+		},
+		{
+			name:     "register swarm out-of-range maxAgents",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      "swarm-one",
+				"maxAgents": float64(math.MaxInt) + 1024,
 			},
 		},
 		{

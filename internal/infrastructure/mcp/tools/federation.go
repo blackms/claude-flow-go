@@ -291,6 +291,12 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 				Error:   "ttl must be an integer",
 			}, fmt.Errorf("ttl must be an integer")
 		}
+		if ttl < float64(math.MinInt64) || ttl > float64(math.MaxInt64) {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "ttl is out of range",
+			}, fmt.Errorf("ttl is out of range")
+		}
 		opts.TTL = int64(ttl)
 	case int:
 		opts.TTL = int64(ttl)
@@ -447,6 +453,12 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 				Success: false,
 				Error:   "maxAgents must be an integer",
 			}, fmt.Errorf("maxAgents must be an integer")
+		}
+		if maxAgents < float64(math.MinInt) || maxAgents > float64(math.MaxInt) {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "maxAgents is out of range",
+			}, fmt.Errorf("maxAgents is out of range")
 		}
 		swarm.MaxAgents = int(maxAgents)
 	case int:
