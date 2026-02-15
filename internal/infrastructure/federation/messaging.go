@@ -14,6 +14,10 @@ import (
 
 // SendMessage sends a direct message to a specific swarm.
 func (fh *FederationHub) SendMessage(sourceSwarmID, targetSwarmID string, payload interface{}) (*shared.FederationMessage, error) {
+	if err := fh.configuredOrError(); err != nil {
+		return nil, err
+	}
+
 	startTime := shared.Now()
 
 	fh.mu.Lock()
@@ -95,6 +99,10 @@ func (fh *FederationHub) SendMessage(sourceSwarmID, targetSwarmID string, payloa
 
 // Broadcast sends a message to all active swarms except the sender.
 func (fh *FederationHub) Broadcast(sourceSwarmID string, payload interface{}) (*shared.FederationMessage, error) {
+	if err := fh.configuredOrError(); err != nil {
+		return nil, err
+	}
+
 	startTime := shared.Now()
 
 	fh.mu.Lock()
@@ -171,6 +179,10 @@ func (fh *FederationHub) Broadcast(sourceSwarmID string, payload interface{}) (*
 
 // SendHeartbeat sends a heartbeat message to a swarm.
 func (fh *FederationHub) SendHeartbeat(sourceSwarmID, targetSwarmID string) (*shared.FederationMessage, error) {
+	if err := fh.configuredOrError(); err != nil {
+		return nil, err
+	}
+
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
@@ -228,6 +240,10 @@ func (fh *FederationHub) SendHeartbeat(sourceSwarmID, targetSwarmID string) (*sh
 
 // SendConsensusMessage sends a consensus-related message.
 func (fh *FederationHub) SendConsensusMessage(sourceSwarmID string, payload interface{}, targetSwarmID string) (*shared.FederationMessage, error) {
+	if err := fh.configuredOrError(); err != nil {
+		return nil, err
+	}
+
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
@@ -296,6 +312,10 @@ func (fh *FederationHub) addMessage(msg *shared.FederationMessage) {
 
 // GetMessages returns recent messages.
 func (fh *FederationHub) GetMessages(limit int) []*shared.FederationMessage {
+	if !fh.isConfigured() {
+		return []*shared.FederationMessage{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -314,6 +334,10 @@ func (fh *FederationHub) GetMessages(limit int) []*shared.FederationMessage {
 
 // GetMessagesBySwarm returns messages for a specific swarm.
 func (fh *FederationHub) GetMessagesBySwarm(swarmID string, limit int) []*shared.FederationMessage {
+	if !fh.isConfigured() {
+		return []*shared.FederationMessage{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -344,6 +368,10 @@ func (fh *FederationHub) GetMessagesBySwarm(swarmID string, limit int) []*shared
 
 // GetMessagesByType returns messages of a specific type.
 func (fh *FederationHub) GetMessagesByType(msgType shared.FederationMessageType, limit int) []*shared.FederationMessage {
+	if !fh.isConfigured() {
+		return []*shared.FederationMessage{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -366,6 +394,10 @@ func (fh *FederationHub) GetMessagesByType(msgType shared.FederationMessageType,
 
 // GetMessage returns a message by ID.
 func (fh *FederationHub) GetMessage(messageID string) (*shared.FederationMessage, bool) {
+	if !fh.isConfigured() {
+		return nil, false
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 

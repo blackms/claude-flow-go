@@ -15,6 +15,10 @@ import (
 
 // Propose creates a new consensus proposal.
 func (fh *FederationHub) Propose(proposerID, proposalType string, value interface{}) (*shared.FederationProposal, error) {
+	if err := fh.configuredOrError(); err != nil {
+		return nil, err
+	}
+
 	if !fh.config.EnableConsensus {
 		return nil, fmt.Errorf("consensus is disabled")
 	}
@@ -99,6 +103,10 @@ func (fh *FederationHub) Propose(proposerID, proposalType string, value interfac
 
 // Vote submits a vote on a proposal.
 func (fh *FederationHub) Vote(voterID, proposalID string, approve bool) error {
+	if err := fh.configuredOrError(); err != nil {
+		return err
+	}
+
 	if !fh.config.EnableConsensus {
 		return fmt.Errorf("consensus is disabled")
 	}
@@ -271,6 +279,10 @@ func (fh *FederationHub) broadcastConsensusRequest(proposal *shared.FederationPr
 
 // GetProposal returns a proposal by ID.
 func (fh *FederationHub) GetProposal(proposalID string) (*shared.FederationProposal, bool) {
+	if !fh.isConfigured() {
+		return nil, false
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 	proposalID = strings.TrimSpace(proposalID)
@@ -286,6 +298,10 @@ func (fh *FederationHub) GetProposal(proposalID string) (*shared.FederationPropo
 
 // GetProposals returns all proposals.
 func (fh *FederationHub) GetProposals() []*shared.FederationProposal {
+	if !fh.isConfigured() {
+		return []*shared.FederationProposal{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -299,6 +315,10 @@ func (fh *FederationHub) GetProposals() []*shared.FederationProposal {
 
 // GetPendingProposals returns all pending proposals.
 func (fh *FederationHub) GetPendingProposals() []*shared.FederationProposal {
+	if !fh.isConfigured() {
+		return []*shared.FederationProposal{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -314,6 +334,10 @@ func (fh *FederationHub) GetPendingProposals() []*shared.FederationProposal {
 
 // GetProposalsByStatus returns proposals by status.
 func (fh *FederationHub) GetProposalsByStatus(status shared.FederationProposalStatus) []*shared.FederationProposal {
+	if !fh.isConfigured() {
+		return []*shared.FederationProposal{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -329,6 +353,10 @@ func (fh *FederationHub) GetProposalsByStatus(status shared.FederationProposalSt
 
 // GetProposalVotes returns the vote breakdown for a proposal.
 func (fh *FederationHub) GetProposalVotes(proposalID string) (approvals, rejections int, err error) {
+	if err := fh.configuredOrError(); err != nil {
+		return 0, 0, err
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -355,6 +383,10 @@ func (fh *FederationHub) GetProposalVotes(proposalID string) (approvals, rejecti
 
 // GetQuorumInfo returns information about quorum requirements.
 func (fh *FederationHub) GetQuorumInfo() (activeSwarms int, requiredVotes int, quorumPercentage float64) {
+	if !fh.isConfigured() {
+		return 0, 0, 0
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 

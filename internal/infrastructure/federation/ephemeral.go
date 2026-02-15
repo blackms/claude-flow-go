@@ -16,6 +16,13 @@ import (
 
 // SpawnEphemeralAgent spawns a new ephemeral agent.
 func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) (*shared.SpawnResult, error) {
+	if err := fh.configuredOrError(); err != nil {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  err.Error(),
+		}, err
+	}
+
 	startTime := shared.Now()
 
 	fh.mu.Lock()
@@ -178,6 +185,10 @@ func (fh *FederationHub) activateAgent(agentID string) {
 
 // CompleteAgent marks an agent as completing with a result.
 func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error {
+	if err := fh.configuredOrError(); err != nil {
+		return err
+	}
+
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
@@ -231,6 +242,10 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 
 // TerminateAgent terminates an agent with an optional error.
 func (fh *FederationHub) TerminateAgent(agentID string, errorMsg string) error {
+	if err := fh.configuredOrError(); err != nil {
+		return err
+	}
+
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
@@ -304,6 +319,10 @@ func (fh *FederationHub) terminateAgentInternal(agentID string, errorMsg string)
 
 // GetAgent returns an agent by ID.
 func (fh *FederationHub) GetAgent(agentID string) (*shared.EphemeralAgent, bool) {
+	if !fh.isConfigured() {
+		return nil, false
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 	agentID = strings.TrimSpace(agentID)
@@ -319,6 +338,10 @@ func (fh *FederationHub) GetAgent(agentID string) (*shared.EphemeralAgent, bool)
 
 // GetAgents returns all ephemeral agents.
 func (fh *FederationHub) GetAgents() []*shared.EphemeralAgent {
+	if !fh.isConfigured() {
+		return []*shared.EphemeralAgent{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -332,6 +355,10 @@ func (fh *FederationHub) GetAgents() []*shared.EphemeralAgent {
 
 // GetActiveAgents returns all active ephemeral agents.
 func (fh *FederationHub) GetActiveAgents() []*shared.EphemeralAgent {
+	if !fh.isConfigured() {
+		return []*shared.EphemeralAgent{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -347,6 +374,10 @@ func (fh *FederationHub) GetActiveAgents() []*shared.EphemeralAgent {
 
 // GetAgentsBySwarm returns all agents in a swarm. O(1) lookup.
 func (fh *FederationHub) GetAgentsBySwarm(swarmID string) []*shared.EphemeralAgent {
+	if !fh.isConfigured() {
+		return []*shared.EphemeralAgent{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -369,6 +400,10 @@ func (fh *FederationHub) GetAgentsBySwarm(swarmID string) []*shared.EphemeralAge
 
 // GetAgentsByStatus returns all agents with a given status. O(1) lookup.
 func (fh *FederationHub) GetAgentsByStatus(status shared.EphemeralAgentStatus) []*shared.EphemeralAgent {
+	if !fh.isConfigured() {
+		return []*shared.EphemeralAgent{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
