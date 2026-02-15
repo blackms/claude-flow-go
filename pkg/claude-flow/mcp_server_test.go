@@ -138,3 +138,50 @@ func TestNewMCPServer_WithCoordinator_RegistersCoordinatorTools(t *testing.T) {
 		)
 	}
 }
+
+func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	hasAgentSpawn := false
+	hasConfigGet := false
+	hasOrchestratePlan := false
+	hasFederationStatus := false
+	hasHooksList := false
+
+	for _, tool := range tools {
+		switch tool.Name {
+		case "agent_spawn":
+			hasAgentSpawn = true
+		case "config_get":
+			hasConfigGet = true
+		case "orchestrate_plan":
+			hasOrchestratePlan = true
+		case "federation/status":
+			hasFederationStatus = true
+		case "hooks/list":
+			hasHooksList = true
+		}
+	}
+
+	if hasAgentSpawn || hasConfigGet || hasOrchestratePlan {
+		t.Fatalf(
+			"expected coordinator-dependent tools to be absent; got agent=%v config=%v orchestrate=%v",
+			hasAgentSpawn, hasConfigGet, hasOrchestratePlan,
+		)
+	}
+
+	if !hasFederationStatus || !hasHooksList {
+		t.Fatalf(
+			"expected federation/hooks tools even without coordinator; got federation=%v hooks=%v",
+			hasFederationStatus, hasHooksList,
+		)
+	}
+}
