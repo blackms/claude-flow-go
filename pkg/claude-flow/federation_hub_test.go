@@ -170,6 +170,49 @@ func TestNewFederationTools_AllowsZeroValueHubWrapperAndFailsGracefully(t *testi
 	}
 }
 
+func TestNewFederationTools_UnknownToolErrorsTakePrecedence(t *testing.T) {
+	tests := []struct {
+		name string
+		hub  *FederationHub
+	}{
+		{
+			name: "nil wrapper",
+			hub:  nil,
+		},
+		{
+			name: "zero-value wrapper",
+			hub:  &FederationHub{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fedTools := NewFederationTools(tc.hub)
+			if fedTools == nil {
+				t.Fatal("expected federation tools wrapper")
+			}
+
+			result, err := fedTools.Execute(context.Background(), "federation/not-real", map[string]interface{}{})
+			if err == nil {
+				t.Fatal("expected Execute unknown-tool error")
+			}
+			if result == nil {
+				t.Fatal("expected Execute result for unknown tool")
+			}
+			expectedErr := "unknown tool: federation/not-real"
+			if err.Error() != expectedErr {
+				t.Fatalf("expected unknown-tool error %q, got %q", expectedErr, err.Error())
+			}
+			if result.Error != expectedErr {
+				t.Fatalf("expected unknown-tool result error %q, got %q", expectedErr, result.Error)
+			}
+			if result.Success {
+				t.Fatal("expected failed Execute result for unknown tool")
+			}
+		})
+	}
+}
+
 func TestFederationHub_PublicLifecycleReadsAvailableBeforeInitialize(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 
