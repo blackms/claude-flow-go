@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/hooks"
@@ -119,6 +120,10 @@ func cloneCapabilities(c *shared.MCPCapabilities) *shared.MCPCapabilities {
 		cloned.Sampling = &sampling
 	}
 	return &cloned
+}
+
+func normalizeToolName(name string) string {
+	return strings.TrimSpace(name)
 }
 
 // NewServer creates a new MCP server.
@@ -270,7 +275,12 @@ func (s *Server) Start() error {
 			continue
 		}
 		for _, tool := range provider.GetTools() {
-			s.toolRegistry[tool.Name] = tool
+			toolName := normalizeToolName(tool.Name)
+			if toolName == "" {
+				continue
+			}
+			tool.Name = toolName
+			s.toolRegistry[toolName] = tool
 		}
 	}
 
@@ -350,7 +360,12 @@ func (s *Server) RegisterTool(tool shared.MCPTool) {
 	if s.toolRegistry == nil {
 		s.toolRegistry = make(map[string]shared.MCPTool)
 	}
-	s.toolRegistry[tool.Name] = tool
+	toolName := normalizeToolName(tool.Name)
+	if toolName == "" {
+		return
+	}
+	tool.Name = toolName
+	s.toolRegistry[toolName] = tool
 }
 
 // ListTools returns all available tools.
@@ -367,9 +382,14 @@ func (s *Server) ListTools() []shared.MCPTool {
 
 	// Add tools from registry
 	for _, tool := range s.toolRegistry {
-		if !seen[tool.Name] {
+		toolName := normalizeToolName(tool.Name)
+		if toolName == "" {
+			continue
+		}
+		tool.Name = toolName
+		if !seen[toolName] {
 			result = append(result, tool)
-			seen[tool.Name] = true
+			seen[toolName] = true
 		}
 	}
 
@@ -379,9 +399,14 @@ func (s *Server) ListTools() []shared.MCPTool {
 			continue
 		}
 		for _, tool := range provider.GetTools() {
-			if !seen[tool.Name] {
+			toolName := normalizeToolName(tool.Name)
+			if toolName == "" {
+				continue
+			}
+			tool.Name = toolName
+			if !seen[toolName] {
 				result = append(result, tool)
-				seen[tool.Name] = true
+				seen[toolName] = true
 			}
 		}
 	}
@@ -405,8 +430,10 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 		}
 	}
 
+	method := strings.TrimSpace(request.Method)
+
 	// Handle MCP protocol methods first
-	switch request.Method {
+	switch method {
 	case "initialize":
 		return s.handleInitialize(request)
 	case "notifications/initialized":
@@ -444,7 +471,7 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 		if provider == nil {
 			continue // Ignore malformed provider entries
 		}
-		result, err := provider.Execute(ctx, request.Method, request.Params)
+		result, err := provider.Execute(ctx, method, request.Params)
 		if err != nil {
 			continue // Try next provider
 		}
@@ -459,7 +486,7 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 		ID: request.ID,
 		Error: &shared.MCPError{
 			Code:    -32601,
-			Message: fmt.Sprintf("Method not found: %s", request.Method),
+			Message: fmt.Sprintf("Method not found: %s", method),
 		},
 	}
 }
@@ -512,6 +539,7 @@ func (s *Server) handleToolsList(request shared.MCPRequest) shared.MCPResponse {
 
 func (s *Server) handleToolsCall(ctx context.Context, request shared.MCPRequest) shared.MCPResponse {
 	toolName, _ := request.Params["name"].(string)
+	toolName = normalizeToolName(toolName)
 	arguments, _ := request.Params["arguments"].(map[string]interface{})
 
 	if toolName == "" {
@@ -883,7 +911,12 @@ func (s *Server) AddToolProvider(provider shared.MCPToolProvider) {
 
 	// Register tools from the provider
 	for _, tool := range provider.GetTools() {
-		s.toolRegistry[tool.Name] = tool
+		toolName := normalizeToolName(tool.Name)
+		if toolName == "" {
+			continue
+		}
+		tool.Name = toolName
+		s.toolRegistry[toolName] = tool
 	}
 }
 

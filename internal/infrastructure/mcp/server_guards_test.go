@@ -40,6 +40,18 @@ func (p orderedProvider) Execute(ctx context.Context, toolName string, params ma
 	return nil, nil
 }
 
+type mixedNameProvider struct {
+	tools []shared.MCPTool
+}
+
+func (p mixedNameProvider) GetTools() []shared.MCPTool {
+	return p.tools
+}
+
+func (p mixedNameProvider) Execute(ctx context.Context, toolName string, params map[string]interface{}) (*shared.MCPToolResult, error) {
+	return nil, nil
+}
+
 func TestServer_NilReceiverMethodsFailGracefully(t *testing.T) {
 	var server *Server
 
@@ -325,5 +337,89 @@ func TestServer_GetCapabilitiesReturnsDefensiveCopy(t *testing.T) {
 	}
 	if _, ok := refetched.Experimental["beta"]; ok {
 		t.Fatalf("expected experimental beta key to be absent, got %v", refetched.Experimental["beta"])
+	}
+}
+
+func TestServer_RegisterToolAndProviderToolsNormalizeNames(t *testing.T) {
+	server := NewServer(Options{})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	server.RegisterTool(shared.MCPTool{
+		Name:        "  guard/trimmed-register  ",
+		Description: "trimmed",
+		Parameters:  map[string]interface{}{"type": "object"},
+	})
+	server.RegisterTool(shared.MCPTool{
+		Name:        "   ",
+		Description: "should be ignored",
+	})
+	server.AddToolProvider(mixedNameProvider{
+		tools: []shared.MCPTool{
+			{Name: "  guard/trimmed-provider  "},
+			{Name: ""},
+			{Name: "   "},
+		},
+	})
+
+	tools := server.ListTools()
+	var sawTrimmedRegister, sawTrimmedProvider bool
+	for _, tool := range tools {
+		if tool.Name != normalizeToolName(tool.Name) {
+			t.Fatalf("expected normalized tool name, got %q", tool.Name)
+		}
+		if tool.Name == "guard/trimmed-register" {
+			sawTrimmedRegister = true
+		}
+		if tool.Name == "guard/trimmed-provider" {
+			sawTrimmedProvider = true
+		}
+		if tool.Name == "" {
+			t.Fatalf("expected blank tool names to be excluded, got %+v", tools)
+		}
+	}
+	if !sawTrimmedRegister || !sawTrimmedProvider {
+		t.Fatalf("expected normalized names to be present, saw register=%v provider=%v", sawTrimmedRegister, sawTrimmedProvider)
+	}
+}
+
+func TestServer_HandleRequestAndToolsCallTrimNames(t *testing.T) {
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			guardTestProvider{},
+		},
+	})
+
+	trimmedMethodResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "trimmed-method",
+		Method: "  tools/list  ",
+		Params: map[string]interface{}{},
+	})
+	if trimmedMethodResp.Error != nil {
+		t.Fatalf("expected trimmed tools/list method to succeed, got %v", trimmedMethodResp.Error)
+	}
+
+	trimmedToolCallResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "trimmed-tool-name",
+		Method: "tools/call",
+		Params: map[string]interface{}{
+			"name":      "  guard/provider-tool  ",
+			"arguments": map[string]interface{}{},
+		},
+	})
+	if trimmedToolCallResp.Error != nil {
+		t.Fatalf("expected trimmed tool name to dispatch, got %v", trimmedToolCallResp.Error)
+	}
+
+	missingToolCallResp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "missing-tool-name",
+		Method: "tools/call",
+		Params: map[string]interface{}{
+			"name": "   ",
+		},
+	})
+	if missingToolCallResp.Error == nil || missingToolCallResp.Error.Message != "Missing tool name" {
+		t.Fatalf("expected missing-tool-name validation for whitespace names, got %v", missingToolCallResp.Error)
 	}
 }
