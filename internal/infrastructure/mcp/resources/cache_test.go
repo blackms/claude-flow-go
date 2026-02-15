@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"math"
 	"testing"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
@@ -44,5 +45,35 @@ func TestResourceCache_SetGetUsesDefensiveCopies(t *testing.T) {
 	}
 	if second.Text != "ok" {
 		t.Fatalf("expected defensive copy for text field on cache Get, got %q", second.Text)
+	}
+}
+
+func TestResourceCache_NormalizesInvalidConfig(t *testing.T) {
+	cache := NewResourceCache(shared.ResourceCacheConfig{
+		MaxEntries: 0,
+		TTLSeconds: 0,
+	})
+
+	config := cache.GetConfig()
+	defaults := shared.DefaultResourceCacheConfig()
+	if config.MaxEntries != defaults.MaxEntries {
+		t.Fatalf("expected default MaxEntries %d, got %d", defaults.MaxEntries, config.MaxEntries)
+	}
+	if config.TTLSeconds != defaults.TTLSeconds {
+		t.Fatalf("expected default TTLSeconds %d, got %d", defaults.TTLSeconds, config.TTLSeconds)
+	}
+}
+
+func TestResourceCache_NormalizesOverflowTTLSeconds(t *testing.T) {
+	maxTTLSec := int64(math.MaxInt64/1000) + 1
+	cache := NewResourceCache(shared.ResourceCacheConfig{
+		MaxEntries: 1,
+		TTLSeconds: maxTTLSec,
+	})
+
+	config := cache.GetConfig()
+	expectedMax := int64(math.MaxInt64 / 1000)
+	if config.TTLSeconds != expectedMax {
+		t.Fatalf("expected clamped TTLSeconds %d, got %d", expectedMax, config.TTLSeconds)
 	}
 }
