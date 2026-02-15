@@ -22,6 +22,48 @@ func TestFederationTools_GetTools(t *testing.T) {
 	}
 }
 
+func TestFederationTools_GetTools_ExpectedUniqueNames(t *testing.T) {
+	ft := &FederationTools{}
+
+	tools := ft.GetTools()
+	if len(tools) == 0 {
+		t.Fatal("expected federation tools to be registered")
+	}
+
+	expectedNames := map[string]bool{
+		"federation/status":              true,
+		"federation/spawn-ephemeral":     true,
+		"federation/terminate-ephemeral": true,
+		"federation/list-ephemeral":      true,
+		"federation/register-swarm":      true,
+		"federation/broadcast":           true,
+		"federation/propose":             true,
+		"federation/vote":                true,
+	}
+
+	if len(tools) != len(expectedNames) {
+		t.Fatalf("expected %d federation tools, got %d", len(expectedNames), len(tools))
+	}
+
+	seen := make(map[string]bool, len(tools))
+	for _, tool := range tools {
+		if seen[tool.Name] {
+			t.Fatalf("duplicate federation tool name: %s", tool.Name)
+		}
+		seen[tool.Name] = true
+
+		if !expectedNames[tool.Name] {
+			t.Fatalf("unexpected federation tool name: %s", tool.Name)
+		}
+	}
+
+	for name := range expectedNames {
+		if !seen[name] {
+			t.Fatalf("expected federation tool missing: %s", name)
+		}
+	}
+}
+
 func TestFederationTools_Execute_UnknownTool(t *testing.T) {
 	ft := &FederationTools{}
 
