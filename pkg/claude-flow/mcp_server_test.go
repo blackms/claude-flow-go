@@ -290,6 +290,41 @@ func TestMCPServer_StopWithoutInternalStillShutsDownFederationHub(t *testing.T) 
 	}
 }
 
+func TestMCPServer_StopWithMalformedInternalStillShutsDownFederationHub(t *testing.T) {
+	fedHub := federation.NewFederationHubWithDefaults()
+	if err := fedHub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize standalone federation hub: %v", err)
+	}
+
+	server := MCPServer{
+		internal:      &mcp.Server{},
+		federationHub: fedHub,
+	}
+
+	err := server.Stop()
+	if err == nil {
+		t.Fatal("expected stop to fail with malformed internal server")
+	}
+	if err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected primary stop error, got %q", err.Error())
+	}
+	if server.federationHub != nil {
+		t.Fatal("expected stop to clear federation hub reference")
+	}
+
+	registerErr := fedHub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "post-stop-malformed-internal",
+		Name:      "Post Stop Malformed Internal",
+		MaxAgents: 1,
+	})
+	if registerErr == nil {
+		t.Fatal("expected federation hub to reject mutations after stop with malformed internal server")
+	}
+	if registerErr.Error() != "federation hub is shut down" {
+		t.Fatalf("expected shutdown lifecycle error, got %q", registerErr.Error())
+	}
+}
+
 func TestMCPServer_ZeroValueMethodsFailGracefully(t *testing.T) {
 	var server MCPServer
 
