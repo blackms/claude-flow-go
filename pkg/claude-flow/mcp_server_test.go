@@ -114,6 +114,28 @@ func TestMCPServer_StopShutsDownFederationHub(t *testing.T) {
 	}
 }
 
+func TestNewMCPServer_InitializesFederationHubLifecycle(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server")
+	}
+	if server.federationHub == nil {
+		t.Fatal("expected federation hub to be attached")
+	}
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+
+	err := server.federationHub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "mcp-server-init-swarm",
+		Name:      "MCP Server Init Swarm",
+		MaxAgents: 1,
+	})
+	if err != nil {
+		t.Fatalf("expected federation hub to be initialized in NewMCPServer, got %v", err)
+	}
+}
+
 func TestNewMCPServer_RegistersAllFederationTools(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
 	if server == nil {
