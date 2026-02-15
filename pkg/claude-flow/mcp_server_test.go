@@ -60,3 +60,23 @@ func TestNewMCPServer_RegistersBuiltInHooksAndUniqueTools(t *testing.T) {
 		t.Fatalf("expected exactly one federation/status tool, got %d", toolCounts["federation/status"])
 	}
 }
+
+func TestNewMCPServer_NoDuplicateToolNames(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	seen := make(map[string]bool, len(tools))
+	for _, tool := range tools {
+		if seen[tool.Name] {
+			t.Fatalf("duplicate tool name found: %s", tool.Name)
+		}
+		seen[tool.Name] = true
+	}
+}
