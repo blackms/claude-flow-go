@@ -1120,6 +1120,7 @@ func (s *Server) handleCompletionComplete(request shared.MCPRequest) shared.MCPR
 
 func (s *Server) handleLoggingSetLevel(request shared.MCPRequest) shared.MCPResponse {
 	level, ok := request.Params["level"].(string)
+	level = strings.TrimSpace(level)
 	if !ok || level == "" {
 		return shared.MCPResponse{
 			ID: request.ID,
@@ -1142,7 +1143,7 @@ func (s *Server) handleLoggingSetLevel(request shared.MCPRequest) shared.MCPResp
 
 	// Update capabilities
 	s.mu.Lock()
-	s.capabilities.Logging.Level = shared.MCPLogLevel(level)
+	s.capabilities.Logging.Level = s.logging.GetLevel()
 	s.mu.Unlock()
 
 	return shared.MCPResponse{

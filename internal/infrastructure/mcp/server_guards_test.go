@@ -732,6 +732,33 @@ func TestServer_GetCapabilitiesReturnsDefensiveCopy(t *testing.T) {
 	}
 }
 
+func TestServer_HandleLoggingSetLevelNormalizesCapabilityValue(t *testing.T) {
+	server := NewServer(Options{})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "logging-set-level-normalized",
+		Method: "logging/setLevel",
+		Params: map[string]interface{}{"level": "  WARNING  "},
+	})
+	if resp.Error != nil {
+		t.Fatalf("expected logging/setLevel success, got %v", resp.Error)
+	}
+
+	caps := server.GetCapabilities()
+	if caps == nil || caps.Logging == nil {
+		t.Fatalf("expected capabilities logging after setLevel, got %+v", caps)
+	}
+	if caps.Logging.Level != shared.MCPLogLevelWarning {
+		t.Fatalf("expected normalized logging capability level %q, got %q", shared.MCPLogLevelWarning, caps.Logging.Level)
+	}
+	if server.logging.GetLevel() != shared.MCPLogLevelWarning {
+		t.Fatalf("expected internal logging manager level %q, got %q", shared.MCPLogLevelWarning, server.logging.GetLevel())
+	}
+}
+
 func TestServer_RegisterToolAndProviderToolsNormalizeNames(t *testing.T) {
 	server := NewServer(Options{})
 	if server == nil {
