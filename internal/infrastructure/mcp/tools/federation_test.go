@@ -501,6 +501,47 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	}
 }
 
+func TestCloneInterfaceValue_ReflectionFallbackForTypedContainers(t *testing.T) {
+	originalMapOfSlices := map[string][]string{
+		"roles": {"dev", "ops"},
+	}
+	clonedMapOfSlicesRaw := cloneInterfaceValue(originalMapOfSlices)
+	clonedMapOfSlices, ok := clonedMapOfSlicesRaw.(map[string][]string)
+	if !ok {
+		t.Fatalf("expected cloned map[string][]string, got %T", clonedMapOfSlicesRaw)
+	}
+	clonedMapOfSlices["roles"][0] = "mutated"
+	if originalMapOfSlices["roles"][0] != "dev" {
+		t.Fatalf("expected original map[string][]string to remain unchanged, got %v", originalMapOfSlices["roles"][0])
+	}
+
+	originalSliceOfTypedMaps := []map[string][]string{
+		{"labels": {"alpha", "beta"}},
+	}
+	clonedSliceOfTypedMapsRaw := cloneInterfaceValue(originalSliceOfTypedMaps)
+	clonedSliceOfTypedMaps, ok := clonedSliceOfTypedMapsRaw.([]map[string][]string)
+	if !ok {
+		t.Fatalf("expected cloned []map[string][]string, got %T", clonedSliceOfTypedMapsRaw)
+	}
+	clonedSliceOfTypedMaps[0]["labels"][0] = "mutated"
+	if originalSliceOfTypedMaps[0]["labels"][0] != "alpha" {
+		t.Fatalf("expected original []map[string][]string to remain unchanged, got %v", originalSliceOfTypedMaps[0]["labels"][0])
+	}
+
+	originalNestedTypedMap := map[string]map[string]int{
+		"quota": {"hard": 2},
+	}
+	clonedNestedTypedMapRaw := cloneInterfaceValue(originalNestedTypedMap)
+	clonedNestedTypedMap, ok := clonedNestedTypedMapRaw.(map[string]map[string]int)
+	if !ok {
+		t.Fatalf("expected cloned map[string]map[string]int, got %T", clonedNestedTypedMapRaw)
+	}
+	clonedNestedTypedMap["quota"]["hard"] = 99
+	if originalNestedTypedMap["quota"]["hard"] != 2 {
+		t.Fatalf("expected original map[string]map[string]int to remain unchanged, got %v", originalNestedTypedMap["quota"]["hard"])
+	}
+}
+
 func TestCloneFederationMessage_DeepCopiesPayload(t *testing.T) {
 	original := &shared.FederationMessage{
 		ID:            "msg-1",

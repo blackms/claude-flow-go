@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -1060,8 +1061,78 @@ func cloneInterfaceValue(value interface{}) interface{} {
 		copy(cloned, typed)
 		return cloned
 	default:
+		return cloneReflectContainer(value)
+	}
+}
+
+func cloneReflectContainer(value interface{}) interface{} {
+	if value == nil {
+		return nil
+	}
+
+	reflected := reflect.ValueOf(value)
+	switch reflected.Kind() {
+	case reflect.Map:
+		return cloneMapValue(reflected).Interface()
+	case reflect.Slice:
+		return cloneSliceValue(reflected).Interface()
+	default:
 		return value
 	}
+}
+
+func cloneMapValue(value reflect.Value) reflect.Value {
+	if value.IsNil() {
+		return reflect.Zero(value.Type())
+	}
+
+	cloned := reflect.MakeMapWithSize(value.Type(), value.Len())
+	elemType := value.Type().Elem()
+	iter := value.MapRange()
+	for iter.Next() {
+		cloned.SetMapIndex(iter.Key(), cloneValueForType(elemType, iter.Value()))
+	}
+	return cloned
+}
+
+func cloneSliceValue(value reflect.Value) reflect.Value {
+	if value.IsNil() {
+		return reflect.Zero(value.Type())
+	}
+
+	cloned := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+	elemType := value.Type().Elem()
+	for i := 0; i < value.Len(); i++ {
+		cloned.Index(i).Set(cloneValueForType(elemType, value.Index(i)))
+	}
+	return cloned
+}
+
+func cloneValueForType(targetType reflect.Type, value reflect.Value) reflect.Value {
+	if !value.IsValid() {
+		return reflect.Zero(targetType)
+	}
+
+	clonedInterface := cloneInterfaceValue(value.Interface())
+	if clonedInterface != nil {
+		clonedValue := reflect.ValueOf(clonedInterface)
+		if clonedValue.IsValid() {
+			if clonedValue.Type().AssignableTo(targetType) {
+				return clonedValue
+			}
+			if clonedValue.Type().ConvertibleTo(targetType) {
+				return clonedValue.Convert(targetType)
+			}
+		}
+	}
+
+	if value.Type().AssignableTo(targetType) {
+		return value
+	}
+	if value.Type().ConvertibleTo(targetType) {
+		return value.Convert(targetType)
+	}
+	return reflect.Zero(targetType)
 }
 
 func cloneFederationMessage(msg *shared.FederationMessage) *shared.FederationMessage {
