@@ -24,6 +24,9 @@ func (fh *FederationHub) Propose(proposerID, proposalType string, value interfac
 	if fh.shutdown {
 		return nil, fmt.Errorf("federation hub is shut down")
 	}
+	if !fh.initialized {
+		return nil, fmt.Errorf("federation hub is not initialized")
+	}
 
 	proposerID = strings.TrimSpace(proposerID)
 	proposalType = strings.TrimSpace(proposalType)
@@ -104,6 +107,9 @@ func (fh *FederationHub) Vote(voterID, proposalID string, approve bool) error {
 	defer fh.mu.Unlock()
 	if fh.shutdown {
 		return fmt.Errorf("federation hub is shut down")
+	}
+	if !fh.initialized {
+		return fmt.Errorf("federation hub is not initialized")
 	}
 
 	voterID = strings.TrimSpace(voterID)

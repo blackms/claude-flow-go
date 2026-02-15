@@ -26,6 +26,12 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 			Error:  "federation hub is shut down",
 		}, fmt.Errorf("federation hub is shut down")
 	}
+	if !fh.initialized {
+		return &shared.SpawnResult{
+			Status: "failed",
+			Error:  "federation hub is not initialized",
+		}, fmt.Errorf("federation hub is not initialized")
+	}
 
 	opts.SwarmID = strings.TrimSpace(opts.SwarmID)
 	opts.Type = strings.TrimSpace(opts.Type)
@@ -177,6 +183,9 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 	if fh.shutdown {
 		return fmt.Errorf("federation hub is shut down")
 	}
+	if !fh.initialized {
+		return fmt.Errorf("federation hub is not initialized")
+	}
 
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {
@@ -226,6 +235,9 @@ func (fh *FederationHub) TerminateAgent(agentID string, errorMsg string) error {
 	defer fh.mu.Unlock()
 	if fh.shutdown {
 		return fmt.Errorf("federation hub is shut down")
+	}
+	if !fh.initialized {
+		return fmt.Errorf("federation hub is not initialized")
 	}
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {

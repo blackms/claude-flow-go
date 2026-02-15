@@ -387,6 +387,60 @@ func TestFederationHub_MutatingOperationsRejectAfterShutdown(t *testing.T) {
 	}
 }
 
+func TestFederationHub_MutatingOperationsRejectBeforeInitialize(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+
+	const expectedErr = "federation hub is not initialized"
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected register swarm pre-init error %q, got %v", expectedErr, err)
+	}
+	if err := hub.UnregisterSwarm("swarm"); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected unregister swarm pre-init error %q, got %v", expectedErr, err)
+	}
+	if err := hub.Heartbeat("swarm"); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected heartbeat pre-init error %q, got %v", expectedErr, err)
+	}
+
+	spawnResult, spawnErr := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		Type: "coder",
+		Task: "pre-init-check",
+	})
+	if spawnErr == nil || spawnErr.Error() != expectedErr {
+		t.Fatalf("expected spawn pre-init error %q, got %v", expectedErr, spawnErr)
+	}
+	if spawnResult == nil || spawnResult.Error != expectedErr {
+		t.Fatalf("expected spawn result pre-init error %q, got %+v", expectedErr, spawnResult)
+	}
+
+	if err := hub.CompleteAgent("agent-id", nil); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected complete agent pre-init error %q, got %v", expectedErr, err)
+	}
+	if err := hub.TerminateAgent("agent-id", ""); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected terminate agent pre-init error %q, got %v", expectedErr, err)
+	}
+
+	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected send message pre-init error %q, got %v", expectedErr, err)
+	}
+	if _, err := hub.Broadcast("source", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected broadcast pre-init error %q, got %v", expectedErr, err)
+	}
+	if _, err := hub.SendHeartbeat("source", "target"); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected send heartbeat pre-init error %q, got %v", expectedErr, err)
+	}
+	if _, err := hub.SendConsensusMessage("source", map[string]interface{}{"ok": true}, "target"); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected send consensus message pre-init error %q, got %v", expectedErr, err)
+	}
+
+	if _, err := hub.Propose("source", "proposal", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected propose pre-init error %q, got %v", expectedErr, err)
+	}
+	if err := hub.Vote("source", "proposal", true); err == nil || err.Error() != expectedErr {
+		t.Fatalf("expected vote pre-init error %q, got %v", expectedErr, err)
+	}
+}
+
 func TestFederationHub_BackgroundMaintenanceNoOpsAfterShutdown(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {

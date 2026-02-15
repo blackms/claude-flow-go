@@ -86,3 +86,33 @@ func TestFederationHub_PublicLifecycleShutdownBlocksMutationsButKeepsReads(t *te
 		t.Fatalf("expected two historical swarms after shutdown, got %d", len(swarms))
 	}
 }
+
+func TestFederationHub_PublicLifecycleMutationsRequireInitialize(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+
+	err := hub.RegisterSwarm(SwarmRegistration{
+		SwarmID:   "preinit-public-swarm",
+		Name:      "Preinit Public Swarm",
+		MaxAgents: 1,
+	})
+	if err == nil {
+		t.Fatal("expected register swarm to fail before initialize")
+	}
+	if err.Error() != "federation hub is not initialized" {
+		t.Fatalf("expected pre-init lifecycle error, got %q", err.Error())
+	}
+
+	spawnResult, spawnErr := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{
+		Type: "coder",
+		Task: "preinit-public-spawn",
+	})
+	if spawnErr == nil {
+		t.Fatal("expected spawn to fail before initialize")
+	}
+	if spawnErr.Error() != "federation hub is not initialized" {
+		t.Fatalf("expected pre-init lifecycle error, got %q", spawnErr.Error())
+	}
+	if spawnResult == nil || spawnResult.Error != "federation hub is not initialized" {
+		t.Fatalf("expected spawn result pre-init error, got %+v", spawnResult)
+	}
+}

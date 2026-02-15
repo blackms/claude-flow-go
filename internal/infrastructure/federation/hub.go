@@ -183,6 +183,9 @@ func (fh *FederationHub) RegisterSwarm(swarm shared.SwarmRegistration) error {
 	if fh.shutdown {
 		return fmt.Errorf("federation hub is shut down")
 	}
+	if !fh.initialized {
+		return fmt.Errorf("federation hub is not initialized")
+	}
 
 	swarmID := strings.TrimSpace(swarm.SwarmID)
 	if swarmID == "" {
@@ -233,6 +236,9 @@ func (fh *FederationHub) UnregisterSwarm(swarmID string) error {
 	if fh.shutdown {
 		return fmt.Errorf("federation hub is shut down")
 	}
+	if !fh.initialized {
+		return fmt.Errorf("federation hub is not initialized")
+	}
 
 	swarmID = strings.TrimSpace(swarmID)
 	if swarmID == "" {
@@ -271,6 +277,9 @@ func (fh *FederationHub) Heartbeat(swarmID string) error {
 	defer fh.mu.Unlock()
 	if fh.shutdown {
 		return fmt.Errorf("federation hub is shut down")
+	}
+	if !fh.initialized {
+		return fmt.Errorf("federation hub is not initialized")
 	}
 
 	swarmID = strings.TrimSpace(swarmID)

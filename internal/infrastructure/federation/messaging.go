@@ -21,6 +21,9 @@ func (fh *FederationHub) SendMessage(sourceSwarmID, targetSwarmID string, payloa
 	if fh.shutdown {
 		return nil, fmt.Errorf("federation hub is shut down")
 	}
+	if !fh.initialized {
+		return nil, fmt.Errorf("federation hub is not initialized")
+	}
 
 	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
 	targetSwarmID = strings.TrimSpace(targetSwarmID)
@@ -99,6 +102,9 @@ func (fh *FederationHub) Broadcast(sourceSwarmID string, payload interface{}) (*
 	if fh.shutdown {
 		return nil, fmt.Errorf("federation hub is shut down")
 	}
+	if !fh.initialized {
+		return nil, fmt.Errorf("federation hub is not initialized")
+	}
 
 	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
 	if sourceSwarmID == "" {
@@ -170,6 +176,9 @@ func (fh *FederationHub) SendHeartbeat(sourceSwarmID, targetSwarmID string) (*sh
 	if fh.shutdown {
 		return nil, fmt.Errorf("federation hub is shut down")
 	}
+	if !fh.initialized {
+		return nil, fmt.Errorf("federation hub is not initialized")
+	}
 
 	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
 	targetSwarmID = strings.TrimSpace(targetSwarmID)
@@ -223,6 +232,9 @@ func (fh *FederationHub) SendConsensusMessage(sourceSwarmID string, payload inte
 	defer fh.mu.Unlock()
 	if fh.shutdown {
 		return nil, fmt.Errorf("federation hub is shut down")
+	}
+	if !fh.initialized {
+		return nil, fmt.Errorf("federation hub is not initialized")
 	}
 
 	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
