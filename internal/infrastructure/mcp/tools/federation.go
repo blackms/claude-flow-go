@@ -274,8 +274,13 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 	if task, ok := args["task"].(string); ok {
 		opts.Task = task
 	}
-	if ttl, ok := args["ttl"].(float64); ok {
+	switch ttl := args["ttl"].(type) {
+	case float64:
 		opts.TTL = int64(ttl)
+	case int:
+		opts.TTL = int64(ttl)
+	case int64:
+		opts.TTL = ttl
 	}
 	if caps, ok := args["capabilities"].([]interface{}); ok {
 		opts.Capabilities = make([]string, len(caps))

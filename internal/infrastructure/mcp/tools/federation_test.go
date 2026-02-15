@@ -439,6 +439,71 @@ func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralSuccessParity(t *te
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralIntegerTTLParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	for _, swarmID := range []string{"swarm-ttl-exec", "swarm-ttl-direct"} {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 10,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/spawn-ephemeral", map[string]interface{}{
+		"swarmId": "swarm-ttl-exec",
+		"type":    "coder",
+		"task":    "implement ttl-int case",
+		"ttl":     12345, // int
+	})
+	if execErr != nil {
+		t.Fatalf("Execute should accept int ttl, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/spawn-ephemeral", map[string]interface{}{
+		"swarmId": "swarm-ttl-direct",
+		"type":    "reviewer",
+		"task":    "implement ttl-int64 case",
+		"ttl":     int64(23456), // int64
+	})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should accept int64 ttl, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execSpawn, ok := execResult.Data.(*shared.SpawnResult)
+	if !ok {
+		t.Fatalf("expected Execute data type *shared.SpawnResult, got %T", execResult.Data)
+	}
+	directSpawn, ok := directResult.Data.(*shared.SpawnResult)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type *shared.SpawnResult, got %T", directResult.Data)
+	}
+
+	if execSpawn.EstimatedTTL != 12345 {
+		t.Fatalf("expected Execute estimated ttl 12345, got %d", execSpawn.EstimatedTTL)
+	}
+	if directSpawn.EstimatedTTL != 23456 {
+		t.Fatalf("expected ExecuteTool estimated ttl 23456, got %d", directSpawn.EstimatedTTL)
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_TerminateEphemeralSuccessParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
