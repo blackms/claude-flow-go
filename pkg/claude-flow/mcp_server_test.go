@@ -250,6 +250,24 @@ func TestMCPServer_NilReceiverMethodsFailGracefully(t *testing.T) {
 	}
 }
 
+func TestMCPServer_RunStdioRejectsNilContext(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server")
+	}
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+
+	err := server.RunStdio(nil, bytes.NewBuffer(nil), bytes.NewBuffer(nil))
+	if err == nil {
+		t.Fatal("expected RunStdio to reject nil context")
+	}
+	if err.Error() != "context is required" {
+		t.Fatalf("expected context-required error, got %q", err.Error())
+	}
+}
+
 func TestNewMCPServer_InitializesFederationHubLifecycle(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
 	if server == nil {

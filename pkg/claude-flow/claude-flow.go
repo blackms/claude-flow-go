@@ -740,6 +740,9 @@ func (ms *MCPServer) RunStdio(ctx context.Context, reader io.Reader, writer io.W
 	if ms == nil || ms.internal == nil {
 		return fmt.Errorf("mcp server is not initialized")
 	}
+	if ctx == nil {
+		return fmt.Errorf("context is required")
+	}
 	transport := mcp.NewStdioTransport(ms.internal, reader, writer)
 	return transport.Run(ctx)
 }
