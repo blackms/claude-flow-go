@@ -362,6 +362,49 @@ func TestFederationHub_BackgroundMaintenanceNoOpsAfterShutdown(t *testing.T) {
 	}
 }
 
+func TestFederationHub_ShutdownPreventsPendingSpawnActivation(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "shutdown-spawn-swarm",
+		Name:      "Shutdown Spawn Swarm",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register swarm: %v", err)
+	}
+
+	spawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "shutdown-spawn-swarm",
+		Type:    "coder",
+		Task:    "shutdown-before-activation",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn agent: %v", err)
+	}
+
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("failed to shutdown federation hub: %v", err)
+	}
+
+	time.Sleep(30 * time.Millisecond)
+
+	agent, ok := hub.GetAgent(spawn.AgentID)
+	if !ok {
+		t.Fatalf("expected spawned agent %s to remain in history", spawn.AgentID)
+	}
+	if agent.Status != shared.EphemeralStatusTerminated {
+		t.Fatalf("expected spawned agent to remain terminated after shutdown, got %q", agent.Status)
+	}
+
+	stats := hub.GetStats()
+	if stats.ActiveAgents != 0 {
+		t.Fatalf("expected no active agents after shutdown, got %d", stats.ActiveAgents)
+	}
+}
+
 func TestFederationHub_RegisterSwarmRejectsTrimmedDuplicateIDs(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
