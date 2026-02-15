@@ -101,6 +101,9 @@ func (fh *FederationHub) Initialize() error {
 	if fh.config.AutoCleanupEnabled && fh.config.CleanupInterval <= 0 {
 		return fmt.Errorf("cleanup interval must be greater than 0")
 	}
+	if fh.config.MaxMessageHistory <= 0 {
+		return fmt.Errorf("max message history must be greater than 0")
+	}
 
 	// Start sync loop
 	fh.syncTicker = time.NewTicker(time.Duration(fh.config.SyncInterval) * time.Millisecond)

@@ -82,6 +82,13 @@ func TestFederationHub_InitializeRejectsInvalidIntervals(t *testing.T) {
 			},
 			expectedErr: "cleanup interval must be greater than 0",
 		},
+		{
+			name: "non-positive max message history",
+			configure: func(cfg *shared.FederationConfig) {
+				cfg.MaxMessageHistory = 0
+			},
+			expectedErr: "max message history must be greater than 0",
+		},
 	}
 
 	for _, tc := range tests {
