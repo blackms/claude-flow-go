@@ -542,6 +542,28 @@ func TestServer_HandleRequestValidationPrecedence(t *testing.T) {
 	}
 }
 
+func TestServer_HandleRequestRejectsBlankMethod(t *testing.T) {
+	server := NewServer(Options{})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "blank-method",
+		Method: "   ",
+		Params: map[string]interface{}{},
+	})
+	if resp.Error == nil {
+		t.Fatal("expected blank method error")
+	}
+	if resp.Error.Code != -32600 {
+		t.Fatalf("expected invalid request code for blank method, got %d", resp.Error.Code)
+	}
+	if resp.Error.Message != "Method is required" {
+		t.Fatalf("expected method-required error message, got %q", resp.Error.Message)
+	}
+}
+
 func TestServer_HandleRequestIgnoresNilResultProviders(t *testing.T) {
 	server := NewServer(Options{
 		Tools: []shared.MCPToolProvider{
@@ -682,6 +704,32 @@ func TestServer_HandleToolsCallReturnsSerializationError(t *testing.T) {
 	}
 	if !strings.HasPrefix(resp.Error.Message, "Failed to serialize tool result:") {
 		t.Fatalf("expected serialization error message prefix, got %q", resp.Error.Message)
+	}
+}
+
+func TestServer_HandleToolsCallRejectsNonObjectArguments(t *testing.T) {
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			guardTestProvider{},
+		},
+	})
+
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "non-object-arguments",
+		Method: "tools/call",
+		Params: map[string]interface{}{
+			"name":      "guard/provider-tool",
+			"arguments": "not-an-object",
+		},
+	})
+	if resp.Error == nil {
+		t.Fatal("expected invalid arguments error")
+	}
+	if resp.Error.Code != -32602 {
+		t.Fatalf("expected invalid params code for non-object arguments, got %d", resp.Error.Code)
+	}
+	if resp.Error.Message != "Invalid params: arguments must be an object" {
+		t.Fatalf("expected non-object arguments validation message, got %q", resp.Error.Message)
 	}
 }
 

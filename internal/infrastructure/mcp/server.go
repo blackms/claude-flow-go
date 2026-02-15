@@ -516,6 +516,15 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 	}
 
 	method := strings.TrimSpace(request.Method)
+	if method == "" {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32600,
+				Message: "Method is required",
+			},
+		}
+	}
 
 	// Handle MCP protocol methods first
 	switch method {
@@ -625,7 +634,20 @@ func (s *Server) handleToolsList(request shared.MCPRequest) shared.MCPResponse {
 func (s *Server) handleToolsCall(ctx context.Context, request shared.MCPRequest) shared.MCPResponse {
 	toolName, _ := request.Params["name"].(string)
 	toolName = normalizeToolName(toolName)
-	arguments, _ := request.Params["arguments"].(map[string]interface{})
+	var arguments map[string]interface{}
+	if rawArgs, exists := request.Params["arguments"]; exists && rawArgs != nil {
+		var ok bool
+		arguments, ok = rawArgs.(map[string]interface{})
+		if !ok {
+			return shared.MCPResponse{
+				ID: request.ID,
+				Error: &shared.MCPError{
+					Code:    -32602,
+					Message: "Invalid params: arguments must be an object",
+				},
+			}
+		}
+	}
 
 	if toolName == "" {
 		return shared.MCPResponse{
