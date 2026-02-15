@@ -3190,6 +3190,111 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	tests := []struct {
+		name          string
+		toolName      string
+		args          map[string]interface{}
+		expectedError string
+	}{
+		{
+			name:     "spawn ttl wrong type",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  "1000",
+			},
+			expectedError: "ttl must be an integer",
+		},
+		{
+			name:     "spawn capabilities non-string entry",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type":         "coder",
+				"task":         "implement feature",
+				"capabilities": []interface{}{"go", 1},
+			},
+			expectedError: "capabilities must contain only strings",
+		},
+		{
+			name:     "register endpoint wrong type",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      "swarm-one",
+				"endpoint":  true,
+				"maxAgents": float64(5),
+			},
+			expectedError: "endpoint must be a string",
+		},
+		{
+			name:     "vote approve wrong type",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "swarm-1",
+				"proposalId": "proposal-1",
+				"approve":    "true",
+			},
+			expectedError: "approve must be a boolean",
+		},
+		{
+			name:     "list status wrong type",
+			toolName: "federation/list-ephemeral",
+			args: map[string]interface{}{
+				"status": true,
+			},
+			expectedError: "status must be a string",
+		},
+		{
+			name:     "terminate error wrong type",
+			toolName: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": "agent-1",
+				"error":   true,
+			},
+			expectedError: "error must be a string",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			execResult, execErr := ft.Execute(context.Background(), tc.toolName, tc.args)
+			if execErr == nil {
+				t.Fatalf("expected Execute error for %s", tc.toolName)
+			}
+			if execResult == nil {
+				t.Fatalf("expected Execute result for %s", tc.toolName)
+			}
+			if execResult.Error != tc.expectedError {
+				t.Fatalf("expected Execute error %q, got %q", tc.expectedError, execResult.Error)
+			}
+
+			directResult, directErr := ft.ExecuteTool(context.Background(), tc.toolName, tc.args)
+			if directErr == nil {
+				t.Fatalf("expected ExecuteTool error for %s", tc.toolName)
+			}
+			if directResult.Error != tc.expectedError {
+				t.Fatalf("expected ExecuteTool error %q, got %q", tc.expectedError, directResult.Error)
+			}
+
+			if execResult.Error != directResult.Error {
+				t.Fatalf("expected error parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
+			}
+		})
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_RuntimeErrorParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
