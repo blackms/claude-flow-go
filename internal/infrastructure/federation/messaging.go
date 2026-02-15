@@ -3,6 +3,7 @@ package federation
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
@@ -17,6 +18,18 @@ func (fh *FederationHub) SendMessage(sourceSwarmID, targetSwarmID string, payloa
 
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+
+	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
+	targetSwarmID = strings.TrimSpace(targetSwarmID)
+	if sourceSwarmID == "" {
+		return nil, fmt.Errorf("sourceSwarmId is required")
+	}
+	if targetSwarmID == "" {
+		return nil, fmt.Errorf("targetSwarmId is required")
+	}
+	if payload == nil {
+		return nil, fmt.Errorf("payload is required")
+	}
 
 	// Validate source swarm
 	sourceSwarm, exists := fh.swarms[sourceSwarmID]
@@ -81,6 +94,14 @@ func (fh *FederationHub) Broadcast(sourceSwarmID string, payload interface{}) (*
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
+	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
+	if sourceSwarmID == "" {
+		return nil, fmt.Errorf("sourceSwarmId is required")
+	}
+	if payload == nil {
+		return nil, fmt.Errorf("payload is required")
+	}
+
 	// Validate source swarm
 	sourceSwarm, exists := fh.swarms[sourceSwarmID]
 	if !exists {
@@ -141,6 +162,33 @@ func (fh *FederationHub) SendHeartbeat(sourceSwarmID, targetSwarmID string) (*sh
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
+	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
+	targetSwarmID = strings.TrimSpace(targetSwarmID)
+	if sourceSwarmID == "" {
+		return nil, fmt.Errorf("sourceSwarmId is required")
+	}
+	if targetSwarmID == "" {
+		return nil, fmt.Errorf("targetSwarmId is required")
+	}
+
+	// Validate source swarm
+	sourceSwarm, exists := fh.swarms[sourceSwarmID]
+	if !exists {
+		return nil, fmt.Errorf("source swarm %s not found", sourceSwarmID)
+	}
+	if sourceSwarm.Status != shared.SwarmStatusActive {
+		return nil, fmt.Errorf("source swarm %s is not active", sourceSwarmID)
+	}
+
+	// Validate target swarm
+	targetSwarm, exists := fh.swarms[targetSwarmID]
+	if !exists {
+		return nil, fmt.Errorf("target swarm %s not found", targetSwarmID)
+	}
+	if targetSwarm.Status == shared.SwarmStatusInactive {
+		return nil, fmt.Errorf("target swarm %s is inactive", targetSwarmID)
+	}
+
 	now := shared.Now()
 	msg := &shared.FederationMessage{
 		ID:            generateID("heartbeat"),
@@ -155,9 +203,7 @@ func (fh *FederationHub) SendHeartbeat(sourceSwarmID, targetSwarmID string) (*sh
 	fh.addMessage(msg)
 
 	// Update heartbeat for source swarm
-	if swarm, exists := fh.swarms[sourceSwarmID]; exists {
-		swarm.LastHeartbeat = now
-	}
+	sourceSwarm.LastHeartbeat = now
 
 	return msg, nil
 }
@@ -166,6 +212,35 @@ func (fh *FederationHub) SendHeartbeat(sourceSwarmID, targetSwarmID string) (*sh
 func (fh *FederationHub) SendConsensusMessage(sourceSwarmID string, payload interface{}, targetSwarmID string) (*shared.FederationMessage, error) {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+
+	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
+	targetSwarmID = strings.TrimSpace(targetSwarmID)
+	if sourceSwarmID == "" {
+		return nil, fmt.Errorf("sourceSwarmId is required")
+	}
+	if payload == nil {
+		return nil, fmt.Errorf("payload is required")
+	}
+
+	// Validate source swarm
+	sourceSwarm, exists := fh.swarms[sourceSwarmID]
+	if !exists {
+		return nil, fmt.Errorf("source swarm %s not found", sourceSwarmID)
+	}
+	if sourceSwarm.Status != shared.SwarmStatusActive {
+		return nil, fmt.Errorf("source swarm %s is not active", sourceSwarmID)
+	}
+
+	// Validate target swarm if provided
+	if targetSwarmID != "" {
+		targetSwarm, exists := fh.swarms[targetSwarmID]
+		if !exists {
+			return nil, fmt.Errorf("target swarm %s not found", targetSwarmID)
+		}
+		if targetSwarm.Status == shared.SwarmStatusInactive {
+			return nil, fmt.Errorf("target swarm %s is inactive", targetSwarmID)
+		}
+	}
 
 	now := shared.Now()
 	msg := &shared.FederationMessage{
@@ -216,6 +291,14 @@ func (fh *FederationHub) GetMessagesBySwarm(swarmID string, limit int) []*shared
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
+	swarmID = strings.TrimSpace(swarmID)
+	if swarmID == "" {
+		return []*shared.FederationMessage{}
+	}
+	if limit <= 0 || limit > len(fh.messages) {
+		limit = len(fh.messages)
+	}
+
 	result := make([]*shared.FederationMessage, 0)
 
 	// Iterate in reverse for most recent first
@@ -235,6 +318,10 @@ func (fh *FederationHub) GetMessagesByType(msgType shared.FederationMessageType,
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
+	if limit <= 0 || limit > len(fh.messages) {
+		limit = len(fh.messages)
+	}
+
 	result := make([]*shared.FederationMessage, 0)
 
 	// Iterate in reverse for most recent first
@@ -252,6 +339,11 @@ func (fh *FederationHub) GetMessagesByType(msgType shared.FederationMessageType,
 func (fh *FederationHub) GetMessage(messageID string) (*shared.FederationMessage, bool) {
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
+
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil, false
+	}
 
 	for _, msg := range fh.messages {
 		if msg.ID == messageID {

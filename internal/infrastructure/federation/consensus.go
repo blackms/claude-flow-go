@@ -3,6 +3,8 @@ package federation
 
 import (
 	"fmt"
+	"math"
+	"strings"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
@@ -20,6 +22,21 @@ func (fh *FederationHub) Propose(proposerID, proposalType string, value interfac
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
+	proposerID = strings.TrimSpace(proposerID)
+	proposalType = strings.TrimSpace(proposalType)
+	if proposerID == "" {
+		return nil, fmt.Errorf("proposerId is required")
+	}
+	if proposalType == "" {
+		return nil, fmt.Errorf("proposalType is required")
+	}
+	if value == nil {
+		return nil, fmt.Errorf("value is required")
+	}
+	if fh.config.ProposalTimeout <= 0 {
+		return nil, fmt.Errorf("proposal timeout must be greater than 0")
+	}
+
 	// Validate proposer swarm
 	proposerSwarm, exists := fh.swarms[proposerID]
 	if !exists {
@@ -30,6 +47,9 @@ func (fh *FederationHub) Propose(proposerID, proposalType string, value interfac
 	}
 
 	now := shared.Now()
+	if fh.config.ProposalTimeout > math.MaxInt64-now {
+		return nil, fmt.Errorf("proposal timeout is out of range")
+	}
 	proposalID := generateID("proposal")
 
 	proposal := &shared.FederationProposal{
@@ -75,6 +95,15 @@ func (fh *FederationHub) Vote(voterID, proposalID string, approve bool) error {
 
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+
+	voterID = strings.TrimSpace(voterID)
+	proposalID = strings.TrimSpace(proposalID)
+	if voterID == "" {
+		return fmt.Errorf("voterId is required")
+	}
+	if proposalID == "" {
+		return fmt.Errorf("proposalId is required")
+	}
 
 	// Validate voter swarm
 	voterSwarm, exists := fh.swarms[voterID]
@@ -224,6 +253,10 @@ func (fh *FederationHub) broadcastConsensusRequest(proposal *shared.FederationPr
 func (fh *FederationHub) GetProposal(proposalID string) (*shared.FederationProposal, bool) {
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
+	proposalID = strings.TrimSpace(proposalID)
+	if proposalID == "" {
+		return nil, false
+	}
 	proposal, exists := fh.proposals[proposalID]
 	return proposal, exists
 }
@@ -272,6 +305,11 @@ func (fh *FederationHub) GetProposalsByStatus(status shared.FederationProposalSt
 func (fh *FederationHub) GetProposalVotes(proposalID string) (approvals, rejections int, err error) {
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
+
+	proposalID = strings.TrimSpace(proposalID)
+	if proposalID == "" {
+		return 0, 0, fmt.Errorf("proposalId is required")
+	}
 
 	proposal, exists := fh.proposals[proposalID]
 	if !exists {
