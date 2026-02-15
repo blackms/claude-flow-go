@@ -6,6 +6,11 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
+type cyclicNode struct {
+	Value string
+	Next  *cyclicNode
+}
+
 func TestFederationHub_GettersReturnDefensiveCopies(t *testing.T) {
 	cfg := shared.DefaultFederationConfig()
 	cfg.ConsensusQuorum = 1.0
@@ -513,6 +518,77 @@ func TestFederationHub_CloningHandlesCyclicInputPayloads(t *testing.T) {
 	}
 	if nestedSelf := requireMap(t, storedProposalValue["self"], "stored cyclic proposal self reference"); nestedSelf["mode"] != "proposal-cycle" {
 		t.Fatalf("expected stored cyclic proposal self reference to be cloned, got %v", nestedSelf["mode"])
+	}
+}
+
+func TestFederationHub_CloningHandlesPointerCycles(t *testing.T) {
+	cfg := shared.DefaultFederationConfig()
+	cfg.ConsensusQuorum = 1.0
+
+	hub := NewFederationHub(cfg)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	registerTestSwarm(t, hub, "swarm-pointer-source", "Pointer Source")
+	registerTestSwarm(t, hub, "swarm-pointer-target", "Pointer Target")
+
+	messageNode := &cyclicNode{Value: "message-initial"}
+	messageNode.Next = messageNode
+
+	sentMessage, err := hub.SendMessage("swarm-pointer-source", "swarm-pointer-target", map[string]interface{}{
+		"node": messageNode,
+	})
+	if err != nil {
+		t.Fatalf("expected send with pointer-cycle payload to succeed, got %v", err)
+	}
+
+	proposalNode := &cyclicNode{Value: "proposal-initial"}
+	proposalNode.Next = proposalNode
+
+	proposal, err := hub.Propose("swarm-pointer-source", "pointer-cycle", map[string]interface{}{
+		"node": proposalNode,
+	})
+	if err != nil {
+		t.Fatalf("expected propose with pointer-cycle value to succeed, got %v", err)
+	}
+
+	messageNode.Value = "message-mutated"
+	proposalNode.Value = "proposal-mutated"
+
+	storedMessage, ok := hub.GetMessage(sentMessage.ID)
+	if !ok {
+		t.Fatal("expected stored message")
+	}
+	messagePayload := requireMap(t, storedMessage.Payload, "stored pointer-cycle message payload")
+	storedMessageNode, ok := messagePayload["node"].(*cyclicNode)
+	if !ok {
+		t.Fatalf("expected stored message node to be *cyclicNode, got %T", messagePayload["node"])
+	}
+	if storedMessageNode.Value != "message-initial" {
+		t.Fatalf("expected stored message node value to remain initial, got %q", storedMessageNode.Value)
+	}
+	if storedMessageNode.Next != storedMessageNode {
+		t.Fatal("expected stored message node cycle to be preserved")
+	}
+
+	storedProposal, ok := hub.GetProposal(proposal.ID)
+	if !ok {
+		t.Fatal("expected stored proposal")
+	}
+	proposalValue := requireMap(t, storedProposal.Value, "stored pointer-cycle proposal value")
+	storedProposalNode, ok := proposalValue["node"].(*cyclicNode)
+	if !ok {
+		t.Fatalf("expected stored proposal node to be *cyclicNode, got %T", proposalValue["node"])
+	}
+	if storedProposalNode.Value != "proposal-initial" {
+		t.Fatalf("expected stored proposal node value to remain initial, got %q", storedProposalNode.Value)
+	}
+	if storedProposalNode.Next != storedProposalNode {
+		t.Fatal("expected stored proposal node cycle to be preserved")
 	}
 }
 
