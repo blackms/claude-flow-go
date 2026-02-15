@@ -253,6 +253,42 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 	}
 }
 
+func TestNewMCPServer_WithoutCoordinator_RegistersAllFederationTools(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	expectedFederation := map[string]bool{
+		"federation/status":              true,
+		"federation/spawn-ephemeral":     true,
+		"federation/terminate-ephemeral": true,
+		"federation/list-ephemeral":      true,
+		"federation/register-swarm":      true,
+		"federation/broadcast":           true,
+		"federation/propose":             true,
+		"federation/vote":                true,
+	}
+
+	counts := make(map[string]int, len(expectedFederation))
+	for _, tool := range tools {
+		if expectedFederation[tool.Name] {
+			counts[tool.Name]++
+		}
+	}
+
+	for name := range expectedFederation {
+		if counts[name] != 1 {
+			t.Fatalf("expected exactly one %s tool in no-coordinator config, got %d", name, counts[name])
+		}
+	}
+}
+
 func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 	backend, err := NewSQLiteBackend(":memory:")
 	if err != nil {
