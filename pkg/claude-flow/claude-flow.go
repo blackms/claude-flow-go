@@ -1893,45 +1893,81 @@ func NewFederationHubWithDefaults() *FederationHub {
 	return &FederationHub{internal: federation.NewFederationHubWithDefaults()}
 }
 
+func (fh *FederationHub) internalOrError() (*federation.FederationHub, error) {
+	if fh == nil || fh.internal == nil {
+		return nil, fmt.Errorf("federation hub is not configured")
+	}
+	return fh.internal, nil
+}
+
 // Initialize starts the federation hub background processes.
 func (fh *FederationHub) Initialize() error {
-	return fh.internal.Initialize()
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.Initialize()
 }
 
 // Shutdown stops the federation hub and cleans up resources.
 func (fh *FederationHub) Shutdown() error {
-	return fh.internal.Shutdown()
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.Shutdown()
 }
 
 // Swarm Registration
 
 // RegisterSwarm registers a swarm with the federation.
 func (fh *FederationHub) RegisterSwarm(swarm SwarmRegistration) error {
-	return fh.internal.RegisterSwarm(swarm)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.RegisterSwarm(swarm)
 }
 
 // UnregisterSwarm removes a swarm from the federation.
 func (fh *FederationHub) UnregisterSwarm(swarmID string) error {
-	return fh.internal.UnregisterSwarm(swarmID)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.UnregisterSwarm(swarmID)
 }
 
 // Heartbeat updates the heartbeat for a swarm.
 func (fh *FederationHub) Heartbeat(swarmID string) error {
-	return fh.internal.Heartbeat(swarmID)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.Heartbeat(swarmID)
 }
 
 // GetSwarm returns a swarm by ID.
 func (fh *FederationHub) GetSwarm(swarmID string) (*SwarmRegistration, bool) {
+	if fh == nil || fh.internal == nil {
+		return nil, false
+	}
 	return fh.internal.GetSwarm(swarmID)
 }
 
 // GetSwarms returns all registered swarms.
 func (fh *FederationHub) GetSwarms() []*SwarmRegistration {
+	if fh == nil || fh.internal == nil {
+		return []*SwarmRegistration{}
+	}
 	return fh.internal.GetSwarms()
 }
 
 // GetActiveSwarms returns all active swarms.
 func (fh *FederationHub) GetActiveSwarms() []*SwarmRegistration {
+	if fh == nil || fh.internal == nil {
+		return []*SwarmRegistration{}
+	}
 	return fh.internal.GetActiveSwarms()
 }
 
@@ -1939,41 +1975,71 @@ func (fh *FederationHub) GetActiveSwarms() []*SwarmRegistration {
 
 // SpawnEphemeralAgent spawns a new ephemeral agent.
 func (fh *FederationHub) SpawnEphemeralAgent(opts SpawnEphemeralOptions) (*SpawnResult, error) {
-	return fh.internal.SpawnEphemeralAgent(opts)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return &SpawnResult{
+			Status: "failed",
+			Error:  err.Error(),
+		}, err
+	}
+	return internal.SpawnEphemeralAgent(opts)
 }
 
 // CompleteAgent marks an agent as completing with a result.
 func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error {
-	return fh.internal.CompleteAgent(agentID, result)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.CompleteAgent(agentID, result)
 }
 
 // TerminateAgent terminates an agent with an optional error.
 func (fh *FederationHub) TerminateAgent(agentID string, errorMsg string) error {
-	return fh.internal.TerminateAgent(agentID, errorMsg)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.TerminateAgent(agentID, errorMsg)
 }
 
 // GetAgent returns an agent by ID.
 func (fh *FederationHub) GetAgent(agentID string) (*EphemeralAgent, bool) {
+	if fh == nil || fh.internal == nil {
+		return nil, false
+	}
 	return fh.internal.GetAgent(agentID)
 }
 
 // GetAgents returns all ephemeral agents.
 func (fh *FederationHub) GetAgents() []*EphemeralAgent {
+	if fh == nil || fh.internal == nil {
+		return []*EphemeralAgent{}
+	}
 	return fh.internal.GetAgents()
 }
 
 // GetActiveAgents returns all active ephemeral agents.
 func (fh *FederationHub) GetActiveAgents() []*EphemeralAgent {
+	if fh == nil || fh.internal == nil {
+		return []*EphemeralAgent{}
+	}
 	return fh.internal.GetActiveAgents()
 }
 
 // GetAgentsBySwarm returns all agents in a swarm. O(1) lookup.
 func (fh *FederationHub) GetAgentsBySwarm(swarmID string) []*EphemeralAgent {
+	if fh == nil || fh.internal == nil {
+		return []*EphemeralAgent{}
+	}
 	return fh.internal.GetAgentsBySwarm(swarmID)
 }
 
 // GetAgentsByStatus returns all agents with a given status. O(1) lookup.
 func (fh *FederationHub) GetAgentsByStatus(status EphemeralAgentStatus) []*EphemeralAgent {
+	if fh == nil || fh.internal == nil {
+		return []*EphemeralAgent{}
+	}
 	return fh.internal.GetAgentsByStatus(status)
 }
 
@@ -1981,26 +2047,43 @@ func (fh *FederationHub) GetAgentsByStatus(status EphemeralAgentStatus) []*Ephem
 
 // SendMessage sends a direct message to a specific swarm.
 func (fh *FederationHub) SendMessage(sourceSwarmID, targetSwarmID string, payload interface{}) (*FederationMessage, error) {
-	return fh.internal.SendMessage(sourceSwarmID, targetSwarmID, payload)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return nil, err
+	}
+	return internal.SendMessage(sourceSwarmID, targetSwarmID, payload)
 }
 
 // Broadcast sends a message to all active swarms except the sender.
 func (fh *FederationHub) Broadcast(sourceSwarmID string, payload interface{}) (*FederationMessage, error) {
-	return fh.internal.Broadcast(sourceSwarmID, payload)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return nil, err
+	}
+	return internal.Broadcast(sourceSwarmID, payload)
 }
 
 // GetMessages returns recent messages.
 func (fh *FederationHub) GetMessages(limit int) []*FederationMessage {
+	if fh == nil || fh.internal == nil {
+		return []*FederationMessage{}
+	}
 	return fh.internal.GetMessages(limit)
 }
 
 // GetMessagesBySwarm returns messages for a specific swarm.
 func (fh *FederationHub) GetMessagesBySwarm(swarmID string, limit int) []*FederationMessage {
+	if fh == nil || fh.internal == nil {
+		return []*FederationMessage{}
+	}
 	return fh.internal.GetMessagesBySwarm(swarmID, limit)
 }
 
 // GetMessage returns a message by ID.
 func (fh *FederationHub) GetMessage(messageID string) (*FederationMessage, bool) {
+	if fh == nil || fh.internal == nil {
+		return nil, false
+	}
 	return fh.internal.GetMessage(messageID)
 }
 
@@ -2008,31 +2091,51 @@ func (fh *FederationHub) GetMessage(messageID string) (*FederationMessage, bool)
 
 // Propose creates a new consensus proposal.
 func (fh *FederationHub) Propose(proposerID, proposalType string, value interface{}) (*FederationProposal, error) {
-	return fh.internal.Propose(proposerID, proposalType, value)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return nil, err
+	}
+	return internal.Propose(proposerID, proposalType, value)
 }
 
 // Vote submits a vote on a proposal.
 func (fh *FederationHub) Vote(voterID, proposalID string, approve bool) error {
-	return fh.internal.Vote(voterID, proposalID, approve)
+	internal, err := fh.internalOrError()
+	if err != nil {
+		return err
+	}
+	return internal.Vote(voterID, proposalID, approve)
 }
 
 // GetProposal returns a proposal by ID.
 func (fh *FederationHub) GetProposal(proposalID string) (*FederationProposal, bool) {
+	if fh == nil || fh.internal == nil {
+		return nil, false
+	}
 	return fh.internal.GetProposal(proposalID)
 }
 
 // GetProposals returns all proposals.
 func (fh *FederationHub) GetProposals() []*FederationProposal {
+	if fh == nil || fh.internal == nil {
+		return []*FederationProposal{}
+	}
 	return fh.internal.GetProposals()
 }
 
 // GetPendingProposals returns all pending proposals.
 func (fh *FederationHub) GetPendingProposals() []*FederationProposal {
+	if fh == nil || fh.internal == nil {
+		return []*FederationProposal{}
+	}
 	return fh.internal.GetPendingProposals()
 }
 
 // GetQuorumInfo returns information about quorum requirements.
 func (fh *FederationHub) GetQuorumInfo() (activeSwarms int, requiredVotes int, quorumPercentage float64) {
+	if fh == nil || fh.internal == nil {
+		return 0, 0, 0
+	}
 	return fh.internal.GetQuorumInfo()
 }
 
@@ -2040,21 +2143,33 @@ func (fh *FederationHub) GetQuorumInfo() (activeSwarms int, requiredVotes int, q
 
 // SetEventHandler sets the event handler for federation events.
 func (fh *FederationHub) SetEventHandler(handler FederationEventHandler) {
+	if fh == nil || fh.internal == nil {
+		return
+	}
 	fh.internal.SetEventHandler(handler)
 }
 
 // GetEvents returns recent federation events.
 func (fh *FederationHub) GetEvents(limit int) []*FederationEvent {
+	if fh == nil || fh.internal == nil {
+		return []*FederationEvent{}
+	}
 	return fh.internal.GetEvents(limit)
 }
 
 // GetStats returns federation statistics.
 func (fh *FederationHub) GetStats() FederationStats {
+	if fh == nil || fh.internal == nil {
+		return FederationStats{}
+	}
 	return fh.internal.GetStats()
 }
 
 // GetConfig returns the federation configuration.
 func (fh *FederationHub) GetConfig() FederationConfig {
+	if fh == nil || fh.internal == nil {
+		return shared.DefaultFederationConfig()
+	}
 	return fh.internal.GetConfig()
 }
 

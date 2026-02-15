@@ -163,3 +163,70 @@ func TestFederationHub_PublicLifecycleReadsAvailableBeforeInitialize(t *testing.
 		t.Fatalf("expected zero events before initialize, got %d", len(events))
 	}
 }
+
+func TestFederationHub_PublicZeroValueMethodsFailGracefully(t *testing.T) {
+	var hub FederationHub
+
+	if err := hub.Initialize(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected initialize configuration error, got %v", err)
+	}
+	if err := hub.Shutdown(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected shutdown configuration error, got %v", err)
+	}
+	if err := hub.RegisterSwarm(SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected register configuration error, got %v", err)
+	}
+
+	spawnResult, spawnErr := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{Type: "coder", Task: "zero value"})
+	if spawnErr == nil || spawnErr.Error() != "federation hub is not configured" {
+		t.Fatalf("expected spawn configuration error, got %v", spawnErr)
+	}
+	if spawnResult == nil || spawnResult.Error != "federation hub is not configured" {
+		t.Fatalf("expected spawn result configuration error, got %+v", spawnResult)
+	}
+
+	if swarms := hub.GetSwarms(); len(swarms) != 0 {
+		t.Fatalf("expected zero-value swarms empty, got %d", len(swarms))
+	}
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected zero-value agents empty, got %d", len(agents))
+	}
+	if _, ok := hub.GetSwarm("swarm"); ok {
+		t.Fatal("expected zero-value GetSwarm to fail")
+	}
+	if _, ok := hub.GetAgent("agent"); ok {
+		t.Fatal("expected zero-value GetAgent to fail")
+	}
+}
+
+func TestFederationHub_PublicNilReceiverMethodsFailGracefully(t *testing.T) {
+	var hub *FederationHub
+
+	if err := hub.Initialize(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil initialize configuration error, got %v", err)
+	}
+	if err := hub.Shutdown(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil shutdown configuration error, got %v", err)
+	}
+
+	spawnResult, spawnErr := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{Type: "coder", Task: "nil receiver"})
+	if spawnErr == nil || spawnErr.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil spawn configuration error, got %v", spawnErr)
+	}
+	if spawnResult == nil || spawnResult.Error != "federation hub is not configured" {
+		t.Fatalf("expected nil spawn result configuration error, got %+v", spawnResult)
+	}
+
+	if swarms := hub.GetSwarms(); len(swarms) != 0 {
+		t.Fatalf("expected nil receiver swarms empty, got %d", len(swarms))
+	}
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected nil receiver agents empty, got %d", len(agents))
+	}
+	if _, ok := hub.GetSwarm("swarm"); ok {
+		t.Fatal("expected nil receiver GetSwarm to fail")
+	}
+	if _, ok := hub.GetAgent("agent"); ok {
+		t.Fatal("expected nil receiver GetAgent to fail")
+	}
+}
