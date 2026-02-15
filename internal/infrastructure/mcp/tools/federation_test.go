@@ -321,6 +321,59 @@ func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmSuccessParity(t *tes
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmIntegerMaxAgentsParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/register-swarm", map[string]interface{}{
+		"swarmId":   "swarm-int",
+		"name":      "Integer Swarm",
+		"maxAgents": 7, // int
+	})
+	if execErr != nil {
+		t.Fatalf("Execute should accept int maxAgents, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result to be non-nil")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/register-swarm", map[string]interface{}{
+		"swarmId":   "swarm-int64",
+		"name":      "Integer64 Swarm",
+		"maxAgents": int64(9), // int64
+	})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should accept int64 maxAgents, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execData, ok := execResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute data map, got %T", execResult.Data)
+	}
+	directData, ok := directResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool data map, got %T", directResult.Data)
+	}
+
+	if execData["registered"] != "swarm-int" {
+		t.Fatalf("expected Execute registered swarm-int, got %v", execData["registered"])
+	}
+	if directData["registered"] != "swarm-int64" {
+		t.Fatalf("expected ExecuteTool registered swarm-int64, got %v", directData["registered"])
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralSuccessParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
