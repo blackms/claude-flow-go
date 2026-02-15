@@ -2036,6 +2036,9 @@ func DefaultFederationConfig() FederationConfig {
 
 // NewFederationTools creates MCP tools for federation operations.
 func NewFederationTools(hub *FederationHub) *tools.FederationTools {
+	if hub == nil {
+		return tools.NewFederationTools(nil)
+	}
 	return tools.NewFederationTools(hub.internal)
 }
 

@@ -1,6 +1,9 @@
 package claudeflow
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestFederationHub_PublicLifecycleInitializeGuards(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
@@ -114,5 +117,29 @@ func TestFederationHub_PublicLifecycleMutationsRequireInitialize(t *testing.T) {
 	}
 	if spawnResult == nil || spawnResult.Error != "federation hub is not initialized" {
 		t.Fatalf("expected spawn result pre-init error, got %+v", spawnResult)
+	}
+}
+
+func TestNewFederationTools_AllowsNilHubAndFailsGracefully(t *testing.T) {
+	fedTools := NewFederationTools(nil)
+	if fedTools == nil {
+		t.Fatal("expected federation tools wrapper even with nil hub")
+	}
+
+	result, err := fedTools.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if err == nil {
+		t.Fatal("expected Execute to fail without configured hub")
+	}
+	if result == nil {
+		t.Fatal("expected Execute result without configured hub")
+	}
+	if err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected configured-hub error, got %q", err.Error())
+	}
+	if result.Error != "federation hub is not configured" {
+		t.Fatalf("expected result configured-hub error, got %q", result.Error)
+	}
+	if result.Success {
+		t.Fatal("expected failed Execute result without configured hub")
 	}
 }
