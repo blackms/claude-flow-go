@@ -541,7 +541,7 @@ func (t *FederationTools) broadcast(ctx context.Context, args map[string]interfa
 		}, fmt.Errorf("payload must be an object")
 	}
 
-	msg, err := t.hub.Broadcast(sourceSwarmID, payloadMap)
+	msg, err := t.hub.Broadcast(sourceSwarmID, cloneStringInterfaceMap(payloadMap))
 	if err != nil {
 		return shared.MCPToolResult{
 			Success: false,
@@ -551,7 +551,7 @@ func (t *FederationTools) broadcast(ctx context.Context, args map[string]interfa
 
 	return shared.MCPToolResult{
 		Success: true,
-		Data:    msg,
+		Data:    cloneFederationMessage(msg),
 	}, nil
 }
 
@@ -590,7 +590,7 @@ func (t *FederationTools) propose(ctx context.Context, args map[string]interface
 		}, fmt.Errorf("value must be an object")
 	}
 
-	proposal, err := t.hub.Propose(proposerID, proposalType, valueMap)
+	proposal, err := t.hub.Propose(proposerID, proposalType, cloneStringInterfaceMap(valueMap))
 	if err != nil {
 		return shared.MCPToolResult{
 			Success: false,
@@ -600,7 +600,7 @@ func (t *FederationTools) propose(ctx context.Context, args map[string]interface
 
 	return shared.MCPToolResult{
 		Success: true,
-		Data:    proposal,
+		Data:    cloneFederationProposal(proposal),
 	}, nil
 }
 
@@ -647,7 +647,7 @@ func (t *FederationTools) vote(ctx context.Context, args map[string]interface{})
 		Success: true,
 		Data: map[string]interface{}{
 			"voted":    true,
-			"proposal": proposal,
+			"proposal": cloneFederationProposal(proposal),
 		},
 	}, nil
 }
@@ -749,4 +749,28 @@ func cloneInterfaceValue(value interface{}) interface{} {
 	default:
 		return value
 	}
+}
+
+func cloneFederationMessage(msg *shared.FederationMessage) *shared.FederationMessage {
+	if msg == nil {
+		return nil
+	}
+	cloned := *msg
+	cloned.Payload = cloneInterfaceValue(msg.Payload)
+	return &cloned
+}
+
+func cloneFederationProposal(proposal *shared.FederationProposal) *shared.FederationProposal {
+	if proposal == nil {
+		return nil
+	}
+	cloned := *proposal
+	cloned.Value = cloneInterfaceValue(proposal.Value)
+	if proposal.Votes != nil {
+		cloned.Votes = make(map[string]bool, len(proposal.Votes))
+		for swarmID, vote := range proposal.Votes {
+			cloned.Votes[swarmID] = vote
+		}
+	}
+	return &cloned
 }

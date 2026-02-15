@@ -1955,6 +1955,125 @@ func TestFederationTools_ExecuteAndExecuteTool_BroadcastSuccessParity(t *testing
 	}
 }
 
+func TestFederationTools_BroadcastReturnsDefensiveMessageCopies(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-broadcast-source",
+		Name:      "Broadcast Source",
+		MaxAgents: 10,
+	}); err != nil {
+		t.Fatalf("failed to register source swarm: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-broadcast-target",
+		Name:      "Broadcast Target",
+		MaxAgents: 10,
+	}); err != nil {
+		t.Fatalf("failed to register target swarm: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+
+	execPayload := map[string]interface{}{
+		"event": "execute-original",
+		"meta":  map[string]interface{}{"version": "1.0.0"},
+	}
+	execResult, execErr := ft.Execute(context.Background(), "federation/broadcast", map[string]interface{}{
+		"sourceSwarmId": "swarm-broadcast-source",
+		"payload":       execPayload,
+	})
+	if execErr != nil {
+		t.Fatalf("Execute broadcast should succeed, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute broadcast result")
+	}
+	execMsg, ok := execResult.Data.(*shared.FederationMessage)
+	if !ok {
+		t.Fatalf("expected Execute data type *shared.FederationMessage, got %T", execResult.Data)
+	}
+
+	// Mutate original input payload and returned payload copy.
+	execPayload["event"] = "execute-mutated-input"
+	execPayload["meta"].(map[string]interface{})["version"] = "9.9.9"
+	execResultPayload, ok := execMsg.Payload.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute message payload map, got %T", execMsg.Payload)
+	}
+	execResultPayload["event"] = "execute-mutated-output"
+	execResultPayload["meta"].(map[string]interface{})["version"] = "8.8.8"
+
+	directPayload := map[string]interface{}{
+		"event": "direct-original",
+		"meta":  map[string]interface{}{"version": "2.0.0"},
+	}
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/broadcast", map[string]interface{}{
+		"sourceSwarmId": "swarm-broadcast-source",
+		"payload":       directPayload,
+	})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool broadcast should succeed, got error: %v", directErr)
+	}
+	directMsg, ok := directResult.Data.(*shared.FederationMessage)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type *shared.FederationMessage, got %T", directResult.Data)
+	}
+
+	directPayload["event"] = "direct-mutated-input"
+	directPayload["meta"].(map[string]interface{})["version"] = "7.7.7"
+	directResultPayload, ok := directMsg.Payload.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool message payload map, got %T", directMsg.Payload)
+	}
+	directResultPayload["event"] = "direct-mutated-output"
+	directResultPayload["meta"].(map[string]interface{})["version"] = "6.6.6"
+
+	storedExec, ok := hub.GetMessage(execMsg.ID)
+	if !ok {
+		t.Fatalf("expected stored Execute message %s", execMsg.ID)
+	}
+	storedExecPayload, ok := storedExec.Payload.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stored Execute payload map, got %T", storedExec.Payload)
+	}
+	if storedExecPayload["event"] != "execute-original" {
+		t.Fatalf("expected stored Execute payload event to remain original, got %v", storedExecPayload["event"])
+	}
+	storedExecMeta, ok := storedExecPayload["meta"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stored Execute payload meta map, got %T", storedExecPayload["meta"])
+	}
+	if storedExecMeta["version"] != "1.0.0" {
+		t.Fatalf("expected stored Execute payload meta version to remain original, got %v", storedExecMeta["version"])
+	}
+
+	storedDirect, ok := hub.GetMessage(directMsg.ID)
+	if !ok {
+		t.Fatalf("expected stored ExecuteTool message %s", directMsg.ID)
+	}
+	storedDirectPayload, ok := storedDirect.Payload.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stored ExecuteTool payload map, got %T", storedDirect.Payload)
+	}
+	if storedDirectPayload["event"] != "direct-original" {
+		t.Fatalf("expected stored ExecuteTool payload event to remain original, got %v", storedDirectPayload["event"])
+	}
+	storedDirectMeta, ok := storedDirectPayload["meta"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stored ExecuteTool payload meta map, got %T", storedDirectPayload["meta"])
+	}
+	if storedDirectMeta["version"] != "2.0.0" {
+		t.Fatalf("expected stored ExecuteTool payload meta version to remain original, got %v", storedDirectMeta["version"])
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_ProposeSuccessParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
@@ -2109,6 +2228,125 @@ func TestFederationTools_ExecuteAndExecuteTool_VoteSuccessParity(t *testing.T) {
 
 	if execData["voted"] != true || directData["voted"] != true {
 		t.Fatalf("expected voted=true for both paths, got Execute=%v ExecuteTool=%v", execData["voted"], directData["voted"])
+	}
+}
+
+func TestFederationTools_ProposeAndVoteReturnDefensiveProposalCopies(t *testing.T) {
+	config := shared.DefaultFederationConfig()
+	config.ConsensusQuorum = 1.0
+	hub := federation.NewFederationHub(config)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	for _, swarmID := range []string{"swarm-propose-source", "swarm-propose-voter"} {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 10,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	value := map[string]interface{}{
+		"policy": map[string]interface{}{"mode": "balanced"},
+	}
+	proposeResult, proposeErr := ft.Execute(context.Background(), "federation/propose", map[string]interface{}{
+		"proposerId":   "swarm-propose-source",
+		"proposalType": "policy-update",
+		"value":        value,
+	})
+	if proposeErr != nil {
+		t.Fatalf("Execute propose should succeed, got error: %v", proposeErr)
+	}
+	if proposeResult == nil {
+		t.Fatal("expected propose result")
+	}
+	proposalCopy, ok := proposeResult.Data.(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected propose data type *shared.FederationProposal, got %T", proposeResult.Data)
+	}
+
+	// Mutate original input and returned proposal copy.
+	value["policy"].(map[string]interface{})["mode"] = "mutated-input"
+	value["newField"] = "mutated-input"
+	copyValue, ok := proposalCopy.Value.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected proposal copy value map, got %T", proposalCopy.Value)
+	}
+	copyValue["policy"].(map[string]interface{})["mode"] = "mutated-output"
+	copyValue["newField"] = "mutated-output"
+	proposalCopy.Votes["external-mutated"] = true
+
+	storedProposal, ok := hub.GetProposal(proposalCopy.ID)
+	if !ok {
+		t.Fatalf("expected stored proposal %s", proposalCopy.ID)
+	}
+	storedValue, ok := storedProposal.Value.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stored proposal value map, got %T", storedProposal.Value)
+	}
+	storedPolicy, ok := storedValue["policy"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stored proposal policy map, got %T", storedValue["policy"])
+	}
+	if storedPolicy["mode"] != "balanced" {
+		t.Fatalf("expected stored policy mode to remain balanced, got %v", storedPolicy["mode"])
+	}
+	if _, exists := storedValue["newField"]; exists {
+		t.Fatalf("expected stored proposal value to not include newField, got %v", storedValue["newField"])
+	}
+	if _, exists := storedProposal.Votes["external-mutated"]; exists {
+		t.Fatal("expected stored proposal votes to ignore external mutation")
+	}
+
+	voteResult, voteErr := ft.ExecuteTool(context.Background(), "federation/vote", map[string]interface{}{
+		"voterId":    "swarm-propose-voter",
+		"proposalId": proposalCopy.ID,
+		"approve":    true,
+	})
+	if voteErr != nil {
+		t.Fatalf("ExecuteTool vote should succeed, got error: %v", voteErr)
+	}
+	voteData, ok := voteResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected vote data map, got %T", voteResult.Data)
+	}
+	voteProposalCopy, ok := voteData["proposal"].(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected vote proposal copy type *shared.FederationProposal, got %T", voteData["proposal"])
+	}
+
+	voteProposalCopy.Votes["another-external-mutated"] = true
+	voteProposalValue, ok := voteProposalCopy.Value.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected vote proposal value map, got %T", voteProposalCopy.Value)
+	}
+	voteProposalValue["policy"].(map[string]interface{})["mode"] = "mutated-after-vote"
+
+	storedAfterVote, ok := hub.GetProposal(proposalCopy.ID)
+	if !ok {
+		t.Fatalf("expected stored proposal %s after vote", proposalCopy.ID)
+	}
+	if _, exists := storedAfterVote.Votes["another-external-mutated"]; exists {
+		t.Fatal("expected stored proposal votes to ignore vote-result mutation")
+	}
+	storedAfterVoteValue, ok := storedAfterVote.Value.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stored proposal value map after vote, got %T", storedAfterVote.Value)
+	}
+	storedAfterVotePolicy, ok := storedAfterVoteValue["policy"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stored proposal policy map after vote, got %T", storedAfterVoteValue["policy"])
+	}
+	if storedAfterVotePolicy["mode"] != "balanced" {
+		t.Fatalf("expected stored policy mode to remain balanced after vote copy mutation, got %v", storedAfterVotePolicy["mode"])
 	}
 }
 
