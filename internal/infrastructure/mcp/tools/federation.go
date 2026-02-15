@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
@@ -398,6 +399,7 @@ func (t *FederationTools) listEphemeral(ctx context.Context, args map[string]int
 		}
 		agents = filtered
 	}
+	sortEphemeralAgents(agents)
 
 	return shared.MCPToolResult{
 		Success: true,
@@ -647,4 +649,15 @@ func parseEphemeralAgentStatus(raw string) (shared.EphemeralAgentStatus, bool) {
 	default:
 		return "", false
 	}
+}
+
+func sortEphemeralAgents(agents []*shared.EphemeralAgent) {
+	sort.Slice(agents, func(i, j int) bool {
+		left := agents[i]
+		right := agents[j]
+		if left.CreatedAt == right.CreatedAt {
+			return left.ID < right.ID
+		}
+		return left.CreatedAt < right.CreatedAt
+	})
 }

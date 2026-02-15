@@ -372,6 +372,82 @@ func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralParity(t *testing.T)
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralDeterministicOrderParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm-list-order", Name: "Order Swarm", MaxAgents: 10}); err != nil {
+		t.Fatalf("failed to register order swarm: %v", err)
+	}
+
+	for i := 0; i < 4; i++ {
+		if _, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+			SwarmID: "swarm-list-order",
+			Type:    "coder",
+			Task:    "ordered listing parity",
+		}); err != nil {
+			t.Fatalf("failed to spawn list-order agent %d: %v", i, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/list-ephemeral", map[string]interface{}{})
+	if execErr != nil {
+		t.Fatalf("Execute should succeed, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result to be non-nil")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", map[string]interface{}{})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed, got error: %v", directErr)
+	}
+
+	execAgents, ok := execResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected Execute data type []*shared.EphemeralAgent, got %T", execResult.Data)
+	}
+	directAgents, ok := directResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type []*shared.EphemeralAgent, got %T", directResult.Data)
+	}
+	if len(execAgents) != len(directAgents) {
+		t.Fatalf("expected list parity, got Execute=%d ExecuteTool=%d", len(execAgents), len(directAgents))
+	}
+	if len(execAgents) < 4 {
+		t.Fatalf("expected at least 4 list entries, got %d", len(execAgents))
+	}
+
+	assertSorted := func(agents []*shared.EphemeralAgent, label string) {
+		for i := 1; i < len(agents); i++ {
+			prev := agents[i-1]
+			curr := agents[i]
+			if prev.CreatedAt > curr.CreatedAt {
+				t.Fatalf("%s list is not sorted by CreatedAt at index %d (%d > %d)", label, i, prev.CreatedAt, curr.CreatedAt)
+			}
+			if prev.CreatedAt == curr.CreatedAt && prev.ID > curr.ID {
+				t.Fatalf("%s list tie-break sort by ID violated at index %d (%s > %s)", label, i, prev.ID, curr.ID)
+			}
+		}
+	}
+
+	assertSorted(execAgents, "Execute")
+	assertSorted(directAgents, "ExecuteTool")
+
+	for i := range execAgents {
+		if execAgents[i].ID != directAgents[i].ID {
+			t.Fatalf("expected deterministic order parity at index %d, got Execute=%s ExecuteTool=%s", i, execAgents[i].ID, directAgents[i].ID)
+		}
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralSwarmFilterParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
