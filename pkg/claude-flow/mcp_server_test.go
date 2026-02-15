@@ -80,3 +80,61 @@ func TestNewMCPServer_NoDuplicateToolNames(t *testing.T) {
 		seen[tool.Name] = true
 	}
 }
+
+func TestNewMCPServer_WithCoordinator_RegistersCoordinatorTools(t *testing.T) {
+	coord, err := NewSwarmCoordinator(SwarmConfig{
+		Topology: TopologyMesh,
+	})
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = coord.Shutdown()
+	})
+
+	server := NewMCPServer(MCPServerConfig{
+		Coordinator: coord,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	seen := make(map[string]bool, len(tools))
+	hasAgentSpawn := false
+	hasConfigGet := false
+	hasOrchestratePlan := false
+	hasFederationStatus := false
+	hasHooksList := false
+
+	for _, tool := range tools {
+		if seen[tool.Name] {
+			t.Fatalf("duplicate tool name found: %s", tool.Name)
+		}
+		seen[tool.Name] = true
+
+		switch tool.Name {
+		case "agent_spawn":
+			hasAgentSpawn = true
+		case "config_get":
+			hasConfigGet = true
+		case "orchestrate_plan":
+			hasOrchestratePlan = true
+		case "federation/status":
+			hasFederationStatus = true
+		case "hooks/list":
+			hasHooksList = true
+		}
+	}
+
+	if !hasAgentSpawn || !hasConfigGet || !hasOrchestratePlan || !hasFederationStatus || !hasHooksList {
+		t.Fatalf(
+			"expected core tool families from coordinator/federation/hooks to be present; got agent=%v config=%v orchestrate=%v federation=%v hooks=%v",
+			hasAgentSpawn, hasConfigGet, hasOrchestratePlan, hasFederationStatus, hasHooksList,
+		)
+	}
+}
