@@ -120,6 +120,49 @@ func TestFederationTools_ExecuteAndExecuteTool_StatusParity(t *testing.T) {
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/list-ephemeral", args)
+	if execErr != nil {
+		t.Fatalf("Execute should succeed, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result to be non-nil")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", args)
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execAgents, ok := execResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected Execute data type []*shared.EphemeralAgent, got %T", execResult.Data)
+	}
+	directAgents, ok := directResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type []*shared.EphemeralAgent, got %T", directResult.Data)
+	}
+
+	if len(execAgents) != len(directAgents) {
+		t.Fatalf("expected list parity, got Execute=%d ExecuteTool=%d", len(execAgents), len(directAgents))
+	}
+}
+
 func TestFederationTools_Execute_ValidationErrorPropagation(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
