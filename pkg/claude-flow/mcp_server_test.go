@@ -108,6 +108,7 @@ func TestNewMCPServer_WithCoordinator_RegistersCoordinatorTools(t *testing.T) {
 	hasAgentSpawn := false
 	hasConfigGet := false
 	hasOrchestratePlan := false
+	hasMemoryStore := false
 	hasFederationStatus := false
 	hasHooksList := false
 
@@ -124,11 +125,17 @@ func TestNewMCPServer_WithCoordinator_RegistersCoordinatorTools(t *testing.T) {
 			hasConfigGet = true
 		case "orchestrate_plan":
 			hasOrchestratePlan = true
+		case "memory_store":
+			hasMemoryStore = true
 		case "federation/status":
 			hasFederationStatus = true
 		case "hooks/list":
 			hasHooksList = true
 		}
+	}
+
+	if hasMemoryStore {
+		t.Fatal("expected memory_store to be absent when memory backend is not configured")
 	}
 
 	if !hasAgentSpawn || !hasConfigGet || !hasOrchestratePlan || !hasFederationStatus || !hasHooksList {
