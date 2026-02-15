@@ -280,3 +280,50 @@ func TestServer_OptionsAndLoopsIgnoreNilProviders(t *testing.T) {
 		t.Fatal("expected non-nil result when non-nil provider handles request")
 	}
 }
+
+func TestServer_GetCapabilitiesReturnsDefensiveCopy(t *testing.T) {
+	server := NewServer(Options{})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	// Seed internal experimental map for copy-on-read checks.
+	server.mu.Lock()
+	server.capabilities.Experimental = map[string]interface{}{
+		"alpha": "one",
+	}
+	server.mu.Unlock()
+
+	caps := server.GetCapabilities()
+	if caps == nil {
+		t.Fatal("expected capabilities")
+	}
+
+	// Mutate returned snapshot.
+	caps.Logging.Level = shared.MCPLogLevelDebug
+	caps.Resources.Subscribe = false
+	caps.Tools.ListChanged = false
+	caps.Experimental["alpha"] = "mutated"
+	caps.Experimental["beta"] = "new"
+
+	// Re-read and ensure internal state is unchanged.
+	refetched := server.GetCapabilities()
+	if refetched == nil {
+		t.Fatal("expected refetched capabilities")
+	}
+	if refetched.Logging.Level != shared.MCPLogLevelInfo {
+		t.Fatalf("expected internal logging level to remain %q, got %q", shared.MCPLogLevelInfo, refetched.Logging.Level)
+	}
+	if refetched.Resources == nil || !refetched.Resources.Subscribe {
+		t.Fatalf("expected internal resources.subscribe to remain true, got %+v", refetched.Resources)
+	}
+	if refetched.Tools == nil || !refetched.Tools.ListChanged {
+		t.Fatalf("expected internal tools.listChanged to remain true, got %+v", refetched.Tools)
+	}
+	if got := refetched.Experimental["alpha"]; got != "one" {
+		t.Fatalf("expected experimental alpha to remain \"one\", got %v", got)
+	}
+	if _, ok := refetched.Experimental["beta"]; ok {
+		t.Fatalf("expected experimental beta key to be absent, got %v", refetched.Experimental["beta"])
+	}
+}

@@ -85,6 +85,42 @@ func (s *Server) configuredOrError() error {
 	return nil
 }
 
+func cloneCapabilities(c *shared.MCPCapabilities) *shared.MCPCapabilities {
+	if c == nil {
+		return nil
+	}
+
+	cloned := *c
+	if c.Experimental != nil {
+		experimental := make(map[string]interface{}, len(c.Experimental))
+		for key, value := range c.Experimental {
+			experimental[key] = value
+		}
+		cloned.Experimental = experimental
+	}
+	if c.Logging != nil {
+		logging := *c.Logging
+		cloned.Logging = &logging
+	}
+	if c.Prompts != nil {
+		prompts := *c.Prompts
+		cloned.Prompts = &prompts
+	}
+	if c.Resources != nil {
+		resources := *c.Resources
+		cloned.Resources = &resources
+	}
+	if c.Tools != nil {
+		tools := *c.Tools
+		cloned.Tools = &tools
+	}
+	if c.Sampling != nil {
+		sampling := *c.Sampling
+		cloned.Sampling = &sampling
+	}
+	return &cloned
+}
+
 // NewServer creates a new MCP server.
 func NewServer(opts Options) *Server {
 	port := opts.Port
@@ -1025,7 +1061,7 @@ func (s *Server) GetCapabilities() *shared.MCPCapabilities {
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.capabilities
+	return cloneCapabilities(s.capabilities)
 }
 
 // RegisterMockProvider registers a mock LLM provider for testing.
