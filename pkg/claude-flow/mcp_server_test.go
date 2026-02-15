@@ -3,13 +3,21 @@ package claudeflow
 import (
 	"bytes"
 	"context"
+	"errors"
 	"math"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
+
+type runStdioFailingWriter struct{}
+
+func (runStdioFailingWriter) Write(p []byte) (int, error) {
+	return 0, errors.New("write failure")
+}
 
 func requireFederationSchemaNumericConstraint(
 	t *testing.T,
@@ -310,6 +318,46 @@ func TestMCPServer_RunStdioRejectsNilReaderOrWriter(t *testing.T) {
 	}
 	if err := server.RunStdio(context.Background(), nil, nil); err == nil || err.Error() != "reader is required" {
 		t.Fatalf("expected reader-required precedence when both streams are nil, got %v", err)
+	}
+}
+
+func TestMCPServer_RunStdioReturnsDecodeError(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server")
+	}
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+
+	err := server.RunStdio(context.Background(), bytes.NewBufferString("{invalid-json"), bytes.NewBuffer(nil))
+	if err == nil {
+		t.Fatal("expected decode error")
+	}
+	if !strings.Contains(err.Error(), "failed to decode mcp request:") {
+		t.Fatalf("expected decode error prefix, got %v", err)
+	}
+}
+
+func TestMCPServer_RunStdioReturnsEncodeError(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server")
+	}
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+
+	err := server.RunStdio(
+		context.Background(),
+		bytes.NewBufferString(`{"id":"1","method":"initialize","params":{}}`),
+		runStdioFailingWriter{},
+	)
+	if err == nil {
+		t.Fatal("expected encode error")
+	}
+	if !strings.Contains(err.Error(), "failed to encode mcp response:") {
+		t.Fatalf("expected encode error prefix, got %v", err)
 	}
 }
 
@@ -1211,21 +1259,21 @@ func TestNewMCPServer_WithCoordinator_RegistersAllCoordinatorTools(t *testing.T)
 	}
 
 	expectedCoordinatorTools := map[string]bool{
-		"agent_spawn":       true,
-		"agent_list":        true,
-		"agent_terminate":   true,
-		"agent_metrics":     true,
-		"agent_types_list":  true,
-		"agent_pool_list":   true,
-		"agent_pool_scale":  true,
-		"agent_health":      true,
-		"config_get":        true,
-		"config_set":        true,
-		"config_list":       true,
-		"config_validate":   true,
-		"swarm_state":       true,
-		"swarm_reconfigure": true,
-		"orchestrate_plan":  true,
+		"agent_spawn":         true,
+		"agent_list":          true,
+		"agent_terminate":     true,
+		"agent_metrics":       true,
+		"agent_types_list":    true,
+		"agent_pool_list":     true,
+		"agent_pool_scale":    true,
+		"agent_health":        true,
+		"config_get":          true,
+		"config_set":          true,
+		"config_list":         true,
+		"config_validate":     true,
+		"swarm_state":         true,
+		"swarm_reconfigure":   true,
+		"orchestrate_plan":    true,
 		"orchestrate_execute": true,
 		"orchestrate_status":  true,
 	}
@@ -1896,21 +1944,21 @@ func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllCoordinatorTools(t *t
 	}
 
 	expectedCoordinatorTools := map[string]bool{
-		"agent_spawn":       true,
-		"agent_list":        true,
-		"agent_terminate":   true,
-		"agent_metrics":     true,
-		"agent_types_list":  true,
-		"agent_pool_list":   true,
-		"agent_pool_scale":  true,
-		"agent_health":      true,
-		"config_get":        true,
-		"config_set":        true,
-		"config_list":       true,
-		"config_validate":   true,
-		"swarm_state":       true,
-		"swarm_reconfigure": true,
-		"orchestrate_plan":  true,
+		"agent_spawn":         true,
+		"agent_list":          true,
+		"agent_terminate":     true,
+		"agent_metrics":       true,
+		"agent_types_list":    true,
+		"agent_pool_list":     true,
+		"agent_pool_scale":    true,
+		"agent_health":        true,
+		"config_get":          true,
+		"config_set":          true,
+		"config_list":         true,
+		"config_validate":     true,
+		"swarm_state":         true,
+		"swarm_reconfigure":   true,
+		"orchestrate_plan":    true,
 		"orchestrate_execute": true,
 		"orchestrate_status":  true,
 	}
