@@ -232,6 +232,14 @@ func TestFederationHub_RegisterSwarmTrimsFields(t *testing.T) {
 		SwarmID:   "  swarm-trim  ",
 		Name:      "  Trimmed Name  ",
 		Endpoint:  "  http://example.local  ",
+		Capabilities: []string{
+			"  code  ",
+			"",
+			"code",
+			" review ",
+			"   ",
+			"review",
+		},
 		MaxAgents: 3,
 	})
 	if err != nil {
@@ -247,5 +255,14 @@ func TestFederationHub_RegisterSwarmTrimsFields(t *testing.T) {
 	}
 	if swarm.Endpoint != "http://example.local" {
 		t.Fatalf("expected trimmed endpoint, got %q", swarm.Endpoint)
+	}
+	expectedCapabilities := []string{"code", "review"}
+	if len(swarm.Capabilities) != len(expectedCapabilities) {
+		t.Fatalf("expected %d normalized capabilities, got %d (%v)", len(expectedCapabilities), len(swarm.Capabilities), swarm.Capabilities)
+	}
+	for i, capability := range expectedCapabilities {
+		if swarm.Capabilities[i] != capability {
+			t.Fatalf("expected capability %q at index %d, got %q", capability, i, swarm.Capabilities[i])
+		}
 	}
 }

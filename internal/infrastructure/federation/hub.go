@@ -146,6 +146,7 @@ func (fh *FederationHub) RegisterSwarm(swarm shared.SwarmRegistration) error {
 	swarm.SwarmID = swarmID
 	swarm.Name = strings.TrimSpace(swarm.Name)
 	swarm.Endpoint = strings.TrimSpace(swarm.Endpoint)
+	swarm.Capabilities = normalizeStringValues(swarm.Capabilities)
 
 	if _, exists := fh.swarms[swarm.SwarmID]; exists {
 		return fmt.Errorf("swarm %s already exists", swarm.SwarmID)
@@ -432,4 +433,22 @@ func (fh *FederationHub) recordMessageTime(durationMs int64) {
 // generateID generates a unique ID.
 func generateID(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, uuid.New().String()[:8])
+}
+
+func normalizeStringValues(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+
+	seen := make(map[string]bool, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		normalized = append(normalized, trimmed)
+	}
+	return normalized
 }
