@@ -68,11 +68,25 @@ func TestFederationHub_InitializeRejectsInvalidIntervals(t *testing.T) {
 			expectedErr: "heartbeat interval must be greater than 0",
 		},
 		{
+			name: "heartbeat interval out of range",
+			configure: func(cfg *shared.FederationConfig) {
+				cfg.HeartbeatInterval = math.MaxInt64
+			},
+			expectedErr: "heartbeat interval is out of range",
+		},
+		{
 			name: "non-positive sync interval",
 			configure: func(cfg *shared.FederationConfig) {
 				cfg.SyncInterval = 0
 			},
 			expectedErr: "sync interval must be greater than 0",
+		},
+		{
+			name: "sync interval out of range",
+			configure: func(cfg *shared.FederationConfig) {
+				cfg.SyncInterval = math.MaxInt64
+			},
+			expectedErr: "sync interval is out of range",
 		},
 		{
 			name: "cleanup enabled with non-positive cleanup interval",
@@ -81,6 +95,14 @@ func TestFederationHub_InitializeRejectsInvalidIntervals(t *testing.T) {
 				cfg.CleanupInterval = 0
 			},
 			expectedErr: "cleanup interval must be greater than 0",
+		},
+		{
+			name: "cleanup enabled with out-of-range cleanup interval",
+			configure: func(cfg *shared.FederationConfig) {
+				cfg.AutoCleanupEnabled = true
+				cfg.CleanupInterval = math.MaxInt64
+			},
+			expectedErr: "cleanup interval is out of range",
 		},
 		{
 			name: "non-positive max message history",

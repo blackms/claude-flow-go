@@ -4,6 +4,7 @@ package federation
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -92,14 +93,25 @@ func NewFederationHubWithDefaults() *FederationHub {
 
 // Initialize starts the federation hub background processes.
 func (fh *FederationHub) Initialize() error {
+	maxTickerIntervalMs := int64(math.MaxInt64 / int64(time.Millisecond))
+
 	if fh.config.HeartbeatInterval <= 0 {
 		return fmt.Errorf("heartbeat interval must be greater than 0")
+	}
+	if fh.config.HeartbeatInterval > math.MaxInt64/6 {
+		return fmt.Errorf("heartbeat interval is out of range")
 	}
 	if fh.config.SyncInterval <= 0 {
 		return fmt.Errorf("sync interval must be greater than 0")
 	}
+	if fh.config.SyncInterval > maxTickerIntervalMs {
+		return fmt.Errorf("sync interval is out of range")
+	}
 	if fh.config.AutoCleanupEnabled && fh.config.CleanupInterval <= 0 {
 		return fmt.Errorf("cleanup interval must be greater than 0")
+	}
+	if fh.config.AutoCleanupEnabled && fh.config.CleanupInterval > maxTickerIntervalMs {
+		return fmt.Errorf("cleanup interval is out of range")
 	}
 	if fh.config.MaxMessageHistory <= 0 {
 		return fmt.Errorf("max message history must be greater than 0")
