@@ -308,6 +308,19 @@ func TestRoutingEngine_ExtractTaskType(t *testing.T) {
 	}
 }
 
+func TestRoutingEngine_ExtractTaskType_DeterministicPriority(t *testing.T) {
+	re := NewRoutingEngine(0.1)
+
+	// Contains both review and code keywords; priority must consistently pick review.
+	const task = "review the code for defects"
+	for i := 0; i < 500; i++ {
+		got := re.extractTaskType(task)
+		if got != "review" {
+			t.Fatalf("iteration %d: expected review, got %s", i, got)
+		}
+	}
+}
+
 func TestRoutingEngine_ScoreAgentForTask(t *testing.T) {
 	re := NewRoutingEngine(0.1)
 
