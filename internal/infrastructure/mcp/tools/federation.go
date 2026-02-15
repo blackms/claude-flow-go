@@ -282,12 +282,17 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 	case int64:
 		opts.TTL = ttl
 	}
-	if caps, ok := args["capabilities"].([]interface{}); ok {
-		opts.Capabilities = make([]string, len(caps))
-		for i, cap := range caps {
-			if s, ok := cap.(string); ok {
-				opts.Capabilities[i] = s
+	if capsRaw, ok := args["capabilities"]; ok {
+		switch caps := capsRaw.(type) {
+		case []interface{}:
+			opts.Capabilities = make([]string, 0, len(caps))
+			for _, cap := range caps {
+				if s, ok := cap.(string); ok {
+					opts.Capabilities = append(opts.Capabilities, s)
+				}
 			}
+		case []string:
+			opts.Capabilities = append([]string(nil), caps...)
 		}
 	}
 
@@ -414,11 +419,16 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 			Error:   "maxAgents must be greater than 0",
 		}, fmt.Errorf("maxAgents must be greater than 0")
 	}
-	if caps, ok := args["capabilities"].([]interface{}); ok {
-		for _, cap := range caps {
-			if s, ok := cap.(string); ok {
-				swarm.Capabilities = append(swarm.Capabilities, s)
+	if capsRaw, ok := args["capabilities"]; ok {
+		switch caps := capsRaw.(type) {
+		case []interface{}:
+			for _, cap := range caps {
+				if s, ok := cap.(string); ok {
+					swarm.Capabilities = append(swarm.Capabilities, s)
+				}
 			}
+		case []string:
+			swarm.Capabilities = append(swarm.Capabilities, caps...)
 		}
 	}
 

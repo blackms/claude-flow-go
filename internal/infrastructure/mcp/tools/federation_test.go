@@ -374,6 +374,78 @@ func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmIntegerMaxAgentsPari
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmStringSliceCapabilitiesParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	execCaps := []string{"go", "docker"}
+	execResult, execErr := ft.Execute(context.Background(), "federation/register-swarm", map[string]interface{}{
+		"swarmId":      "swarm-cap-exec",
+		"name":         "Capabilities Execute",
+		"maxAgents":    6,
+		"capabilities": execCaps, // []string
+	})
+	if execErr != nil {
+		t.Fatalf("Execute should accept []string capabilities, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	directCaps := []string{"security"}
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/register-swarm", map[string]interface{}{
+		"swarmId":      "swarm-cap-direct",
+		"name":         "Capabilities Direct",
+		"maxAgents":    int64(3),
+		"capabilities": directCaps, // []string
+	})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should accept []string capabilities, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execSwarm, ok := hub.GetSwarm("swarm-cap-exec")
+	if !ok {
+		t.Fatal("expected swarm-cap-exec to be registered")
+	}
+	if len(execSwarm.Capabilities) != len(execCaps) {
+		t.Fatalf("expected Execute capabilities length %d, got %d", len(execCaps), len(execSwarm.Capabilities))
+	}
+	for _, cap := range execCaps {
+		found := false
+		for _, existing := range execSwarm.Capabilities {
+			if existing == cap {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected Execute swarm capabilities to contain %q, got %v", cap, execSwarm.Capabilities)
+		}
+	}
+
+	directSwarm, ok := hub.GetSwarm("swarm-cap-direct")
+	if !ok {
+		t.Fatal("expected swarm-cap-direct to be registered")
+	}
+	if len(directSwarm.Capabilities) != len(directCaps) {
+		t.Fatalf("expected ExecuteTool capabilities length %d, got %d", len(directCaps), len(directSwarm.Capabilities))
+	}
+	if len(directSwarm.Capabilities) > 0 && directSwarm.Capabilities[0] != directCaps[0] {
+		t.Fatalf("expected ExecuteTool capability %q, got %v", directCaps[0], directSwarm.Capabilities)
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralSuccessParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
@@ -501,6 +573,65 @@ func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralIntegerTTLParity(t 
 	}
 	if directSpawn.EstimatedTTL != 23456 {
 		t.Fatalf("expected ExecuteTool estimated ttl 23456, got %d", directSpawn.EstimatedTTL)
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralStringSliceCapabilitiesParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	// Available swarm without required capability.
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:       "swarm-general",
+		Name:          "General Swarm",
+		MaxAgents:     5,
+		Capabilities:  []string{"general"},
+		CurrentAgents: 0,
+	}); err != nil {
+		t.Fatalf("failed to register general swarm: %v", err)
+	}
+
+	// Matching capability swarm but intentionally at capacity (CurrentAgents >= MaxAgents).
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:       "swarm-gpu-full",
+		Name:          "GPU Full Swarm",
+		MaxAgents:     1,
+		CurrentAgents: 1,
+		Capabilities:  []string{"gpu"},
+	}); err != nil {
+		t.Fatalf("failed to register gpu-full swarm: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{
+		"type":         "coder",
+		"task":         "use gpu acceleration",
+		"capabilities": []string{"gpu"}, // []string path
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/spawn-ephemeral", args)
+	if execErr == nil {
+		t.Fatal("expected Execute error when required capability has no available swarm")
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/spawn-ephemeral", args)
+	if directErr == nil {
+		t.Fatal("expected ExecuteTool error when required capability has no available swarm")
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+	if execResult.Error != directResult.Error {
+		t.Fatalf("expected error parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
 	}
 }
 
