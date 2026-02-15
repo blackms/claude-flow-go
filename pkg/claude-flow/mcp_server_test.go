@@ -3,6 +3,7 @@ package claudeflow
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -470,6 +471,47 @@ func TestMCPServer_RunStdioContextCancellationUnblocksPipeReader(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected RunStdio to return promptly after context cancellation")
+	}
+}
+
+func TestMCPServer_RunStdioContinuesAfterProtocolError(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server")
+	}
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+
+	input := bytes.NewBufferString(
+		`{"id":"bad-method","method":"   ","params":{}}` + "\n" +
+			`{"id":"ok-init","method":"initialize","params":{}}` + "\n",
+	)
+	output := bytes.NewBuffer(nil)
+
+	if err := server.RunStdio(context.Background(), input, output); err != nil {
+		t.Fatalf("expected RunStdio to complete request stream, got %v", err)
+	}
+
+	decoder := json.NewDecoder(output)
+
+	var first shared.MCPResponse
+	if err := decoder.Decode(&first); err != nil {
+		t.Fatalf("expected first response, got %v", err)
+	}
+	if first.ID != "bad-method" {
+		t.Fatalf("expected first response id bad-method, got %q", first.ID)
+	}
+	if first.Error == nil || first.Error.Code != -32600 || first.Error.Message != "Method is required" {
+		t.Fatalf("expected blank-method protocol error response, got %+v", first.Error)
+	}
+
+	var second shared.MCPResponse
+	if err := decoder.Decode(&second); err != nil {
+		t.Fatalf("expected second response, got %v", err)
+	}
+	if second.ID != "ok-init" || second.Error != nil {
+		t.Fatalf("expected successful initialize response after error, got %+v", second)
 	}
 }
 
