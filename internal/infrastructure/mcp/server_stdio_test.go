@@ -3,11 +3,14 @@ package mcp
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
 func TestStdioTransport_RunRejectsUnconfiguredServer(t *testing.T) {
@@ -126,5 +129,75 @@ func TestStdioTransport_RunContextCancellationUnblocksPipeReader(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected transport to exit promptly after context cancellation")
+	}
+}
+
+func TestStdioTransport_RunProcessesSequentialRequests(t *testing.T) {
+	server := NewServer(Options{})
+	input := bytes.NewBufferString(
+		`{"id":"1","method":"initialize","params":{}}` + "\n" +
+			`{"id":"2","method":"tools/list","params":{}}` + "\n",
+	)
+	output := bytes.NewBuffer(nil)
+
+	transport := NewStdioTransport(server, input, output)
+	if err := transport.Run(context.Background()); err != nil {
+		t.Fatalf("expected transport run success, got %v", err)
+	}
+
+	decoder := json.NewDecoder(output)
+
+	var first shared.MCPResponse
+	if err := decoder.Decode(&first); err != nil {
+		t.Fatalf("expected first response, got %v", err)
+	}
+	if first.ID != "1" || first.Error != nil {
+		t.Fatalf("expected successful initialize response, got %+v", first)
+	}
+
+	var second shared.MCPResponse
+	if err := decoder.Decode(&second); err != nil {
+		t.Fatalf("expected second response, got %v", err)
+	}
+	if second.ID != "2" || second.Error != nil {
+		t.Fatalf("expected successful tools/list response, got %+v", second)
+	}
+	result, ok := second.Result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected tools/list map result, got %T", second.Result)
+	}
+	if _, ok := result["tools"]; !ok {
+		t.Fatalf("expected tools/list result to contain tools array, got %+v", result)
+	}
+}
+
+func TestStdioTransport_RunReturnsProtocolValidationErrors(t *testing.T) {
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			guardTestProvider{},
+		},
+	})
+	input := bytes.NewBufferString(
+		`{"id":"bad-args","method":"tools/call","params":{"name":"guard/provider-tool","arguments":"not-an-object"}}` + "\n",
+	)
+	output := bytes.NewBuffer(nil)
+
+	transport := NewStdioTransport(server, input, output)
+	if err := transport.Run(context.Background()); err != nil {
+		t.Fatalf("expected transport run to complete despite protocol error response, got %v", err)
+	}
+
+	var response shared.MCPResponse
+	if err := json.NewDecoder(output).Decode(&response); err != nil {
+		t.Fatalf("expected protocol error response, got %v", err)
+	}
+	if response.Error == nil {
+		t.Fatal("expected protocol error response")
+	}
+	if response.Error.Code != -32602 {
+		t.Fatalf("expected invalid params code, got %d", response.Error.Code)
+	}
+	if response.Error.Message != "Invalid params: arguments must be an object" {
+		t.Fatalf("expected invalid arguments message, got %q", response.Error.Message)
 	}
 }
