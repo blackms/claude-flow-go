@@ -472,3 +472,57 @@ func TestAggregateRepository_Load_NonStatefulAggregateIgnoresSnapshot(t *testing
 		t.Fatalf("expected final aggregate version 3, got %d", agg.Version())
 	}
 }
+
+func TestAggregateRepository_Load_SnapshotOnlyAggregate(t *testing.T) {
+	ctx := context.Background()
+	aggregateID := "aggregate-snapshot-only"
+
+	eventStore := infra.NewInMemoryEventStore()
+	snapshotStore := infra.NewInMemorySnapshotStore()
+	serializer := infra.NewJSONEventSerializer()
+
+	if err := snapshotStore.Save(ctx, &domain.Snapshot{
+		AggregateID:   aggregateID,
+		AggregateType: "repository-test",
+		Version:       3,
+		State:         []byte(`{"restored":true}`),
+		CreatedAt:     time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("failed to save snapshot: %v", err)
+	}
+
+	repo := NewAggregateRepository(RepositoryConfig{
+		EventStore:    eventStore,
+		SnapshotStore: snapshotStore,
+		Serializer:    serializer,
+		Factory: func(id string) domain.Aggregate {
+			return &repositoryTestAggregate{id: id}
+		},
+	})
+
+	loaded, err := repo.Load(ctx, aggregateID)
+	if err != nil {
+		t.Fatalf("unexpected load error: %v", err)
+	}
+
+	agg, ok := loaded.(*repositoryTestAggregate)
+	if !ok {
+		t.Fatalf("expected *repositoryTestAggregate, got %T", loaded)
+	}
+
+	if !agg.fromSnapshotCall {
+		t.Fatal("expected aggregate snapshot restore to be called")
+	}
+
+	if !agg.setVersionCall {
+		t.Fatal("expected setVersion from snapshot to be called")
+	}
+
+	if len(agg.appliedVersions) != 0 {
+		t.Fatalf("expected no event replay after snapshot-only load, got %v", agg.appliedVersions)
+	}
+
+	if agg.Version() != 3 {
+		t.Fatalf("expected final aggregate version 3, got %d", agg.Version())
+	}
+}

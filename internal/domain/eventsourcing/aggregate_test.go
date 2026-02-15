@@ -278,3 +278,29 @@ func TestRebuildFromSnapshot_SetterOnlyAggregate(t *testing.T) {
 		t.Fatalf("expected final version 6, got %d", agg.Version())
 	}
 }
+
+func TestRebuildFromSnapshot_SetVersionAppliedWithoutEvents(t *testing.T) {
+	agg := &snapshotSetterOnlyAggregate{
+		id:            "agg-5",
+		aggregateType: "test-aggregate",
+	}
+
+	snapshot := &Snapshot{
+		AggregateID:   "agg-5",
+		AggregateType: "test-aggregate",
+		Version:       9,
+		State:         []byte(`{"state":"snapshot"}`),
+	}
+
+	if err := RebuildFromSnapshot(agg, snapshot, nil); err != nil {
+		t.Fatalf("unexpected error rebuilding from snapshot: %v", err)
+	}
+
+	if !agg.setVersionCall {
+		t.Fatal("expected SetVersion capability to be used")
+	}
+
+	if agg.Version() != 9 {
+		t.Fatalf("expected version from snapshot (9), got %d", agg.Version())
+	}
+}
