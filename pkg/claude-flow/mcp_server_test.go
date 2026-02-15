@@ -480,6 +480,44 @@ func TestNewMCPServer_WithoutCoordinator_RegistersAllFederationTools(t *testing.
 	}
 }
 
+func TestNewMCPServer_WithoutCoordinator_RegistersNoCoordinatorTools(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	coordinatorTools := map[string]bool{
+		"agent_spawn":         true,
+		"agent_list":          true,
+		"agent_terminate":     true,
+		"agent_metrics":       true,
+		"agent_types_list":    true,
+		"agent_pool_list":     true,
+		"agent_pool_scale":    true,
+		"agent_health":        true,
+		"config_get":          true,
+		"config_set":          true,
+		"config_list":         true,
+		"config_validate":     true,
+		"swarm_state":         true,
+		"swarm_reconfigure":   true,
+		"orchestrate_plan":    true,
+		"orchestrate_execute": true,
+		"orchestrate_status":  true,
+	}
+
+	for _, tool := range tools {
+		if coordinatorTools[tool.Name] {
+			t.Fatalf("expected coordinator tool %s to be absent without coordinator", tool.Name)
+		}
+	}
+}
+
 func TestNewMCPServer_WithoutMemory_RegistersNoMemoryTools(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
 	if server == nil {
@@ -653,6 +691,51 @@ func TestNewMCPServer_WithMemory_RegistersAllMemoryTools(t *testing.T) {
 	for name := range expectedMemoryTools {
 		if counts[name] != 1 {
 			t.Fatalf("expected exactly one %s tool in memory-only config, got %d", name, counts[name])
+		}
+	}
+}
+
+func TestNewMCPServer_WithMemory_RegistersNoCoordinatorTools(t *testing.T) {
+	backend, err := NewSQLiteBackend(":memory:")
+	if err != nil {
+		t.Fatalf("failed to initialize sqlite backend: %v", err)
+	}
+
+	server := NewMCPServer(MCPServerConfig{
+		Memory: backend,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	coordinatorTools := map[string]bool{
+		"agent_spawn":         true,
+		"agent_list":          true,
+		"agent_terminate":     true,
+		"agent_metrics":       true,
+		"agent_types_list":    true,
+		"agent_pool_list":     true,
+		"agent_pool_scale":    true,
+		"agent_health":        true,
+		"config_get":          true,
+		"config_set":          true,
+		"config_list":         true,
+		"config_validate":     true,
+		"swarm_state":         true,
+		"swarm_reconfigure":   true,
+		"orchestrate_plan":    true,
+		"orchestrate_execute": true,
+		"orchestrate_status":  true,
+	}
+
+	for _, tool := range tools {
+		if coordinatorTools[tool.Name] {
+			t.Fatalf("expected coordinator tool %s to be absent in memory-only config", tool.Name)
 		}
 	}
 }
