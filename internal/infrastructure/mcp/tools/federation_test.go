@@ -281,6 +281,7 @@ func TestValidateCapabilitiesInput(t *testing.T) {
 	}{
 		{name: "string slice", input: []string{"go", "docker"}, shouldErr: false},
 		{name: "interface string slice", input: []interface{}{"go", "docker"}, shouldErr: false},
+		{name: "nil input", input: nil, shouldErr: true},
 		{name: "non-array", input: "go", shouldErr: true},
 		{name: "interface slice with non-string", input: []interface{}{"go", 1}, shouldErr: true},
 	}
@@ -2799,6 +2800,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "spawn nil capabilities",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type":         "coder",
+				"task":         "implement feature",
+				"capabilities": nil,
+			},
+		},
+		{
 			name:     "list non-string swarmId",
 			toolName: "federation/list-ephemeral",
 			args: map[string]interface{}{
@@ -2810,6 +2820,13 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			toolName: "federation/list-ephemeral",
 			args: map[string]interface{}{
 				"status": true,
+			},
+		},
+		{
+			name:     "list nil status",
+			toolName: "federation/list-ephemeral",
+			args: map[string]interface{}{
+				"status": nil,
 			},
 		},
 		{
@@ -3098,6 +3115,16 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "register swarm nil capabilities",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":      "swarm-1",
+				"name":         "swarm-one",
+				"maxAgents":    float64(5),
+				"capabilities": nil,
+			},
+		},
+		{
 			name:     "register swarm blank swarmId",
 			toolName: "federation/register-swarm",
 			args: map[string]interface{}{
@@ -3126,6 +3153,14 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			args: map[string]interface{}{
 				"agentId": "agent-1",
 				"error":   true,
+			},
+		},
+		{
+			name:     "terminate nil error",
+			toolName: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": "agent-1",
+				"error":   nil,
 			},
 		},
 	}
