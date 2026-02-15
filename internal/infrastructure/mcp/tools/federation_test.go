@@ -890,9 +890,33 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "broadcast missing payload",
+			toolName: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": "swarm-1",
+			},
+		},
+		{
+			name:     "broadcast blank sourceSwarmId",
+			toolName: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": "   ",
+				"payload":       map[string]interface{}{"event": "x"},
+			},
+		},
+		{
 			name:     "propose missing proposerId",
 			toolName: "federation/propose",
 			args: map[string]interface{}{
+				"proposalType": "scaling",
+				"value":        map[string]interface{}{"maxAgents": 10},
+			},
+		},
+		{
+			name:     "propose blank proposerId",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "   ",
 				"proposalType": "scaling",
 				"value":        map[string]interface{}{"maxAgents": 10},
 			},
@@ -903,6 +927,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			args: map[string]interface{}{
 				"proposerId": "swarm-1",
 				"value":      map[string]interface{}{"maxAgents": 10},
+			},
+		},
+		{
+			name:     "propose blank proposalType",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "swarm-1",
+				"proposalType": "   ",
+				"value":        map[string]interface{}{"maxAgents": 10},
 			},
 		},
 		{
@@ -922,11 +955,29 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "vote blank voterId",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "   ",
+				"proposalId": "p-1",
+				"approve":    true,
+			},
+		},
+		{
 			name:     "vote missing proposalId",
 			toolName: "federation/vote",
 			args: map[string]interface{}{
 				"voterId": "swarm-1",
 				"approve": true,
+			},
+		},
+		{
+			name:     "vote blank proposalId",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "swarm-1",
+				"proposalId": "   ",
+				"approve":    true,
 			},
 		},
 		{
@@ -960,6 +1011,22 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 				"swarmId":   "swarm-1",
 				"name":      "   ",
 				"maxAgents": float64(5),
+			},
+		},
+		{
+			name:     "register swarm blank swarmId",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "   ",
+				"name":      "swarm-one",
+				"maxAgents": float64(5),
+			},
+		},
+		{
+			name:     "terminate blank agentId",
+			toolName: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": "   ",
 			},
 		},
 	}

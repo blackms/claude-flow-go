@@ -317,7 +317,7 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 // terminateEphemeral terminates an ephemeral agent.
 func (t *FederationTools) terminateEphemeral(ctx context.Context, args map[string]interface{}) (shared.MCPToolResult, error) {
 	agentID, ok := args["agentId"].(string)
-	if !ok {
+	if !ok || strings.TrimSpace(agentID) == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "agentId is required",
@@ -368,7 +368,7 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 		Capabilities: []string{},
 	}
 
-	if swarmID, ok := args["swarmId"].(string); ok {
+	if swarmID, ok := args["swarmId"].(string); ok && strings.TrimSpace(swarmID) != "" {
 		swarm.SwarmID = swarmID
 	} else {
 		return shared.MCPToolResult{
@@ -434,14 +434,20 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 // broadcast broadcasts a message.
 func (t *FederationTools) broadcast(ctx context.Context, args map[string]interface{}) (shared.MCPToolResult, error) {
 	sourceSwarmID, ok := args["sourceSwarmId"].(string)
-	if !ok {
+	if !ok || strings.TrimSpace(sourceSwarmID) == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "sourceSwarmId is required",
 		}, fmt.Errorf("sourceSwarmId is required")
 	}
 
-	payload := args["payload"]
+	payload, hasPayload := args["payload"]
+	if !hasPayload || payload == nil {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "payload is required",
+		}, fmt.Errorf("payload is required")
+	}
 
 	msg, err := t.hub.Broadcast(sourceSwarmID, payload)
 	if err != nil {
@@ -460,7 +466,7 @@ func (t *FederationTools) broadcast(ctx context.Context, args map[string]interfa
 // propose creates a proposal.
 func (t *FederationTools) propose(ctx context.Context, args map[string]interface{}) (shared.MCPToolResult, error) {
 	proposerID, ok := args["proposerId"].(string)
-	if !ok {
+	if !ok || strings.TrimSpace(proposerID) == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "proposerId is required",
@@ -468,14 +474,20 @@ func (t *FederationTools) propose(ctx context.Context, args map[string]interface
 	}
 
 	proposalType, ok := args["proposalType"].(string)
-	if !ok {
+	if !ok || strings.TrimSpace(proposalType) == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "proposalType is required",
 		}, fmt.Errorf("proposalType is required")
 	}
 
-	value := args["value"]
+	value, hasValue := args["value"]
+	if !hasValue || value == nil {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "value is required",
+		}, fmt.Errorf("value is required")
+	}
 
 	proposal, err := t.hub.Propose(proposerID, proposalType, value)
 	if err != nil {
@@ -494,7 +506,7 @@ func (t *FederationTools) propose(ctx context.Context, args map[string]interface
 // vote votes on a proposal.
 func (t *FederationTools) vote(ctx context.Context, args map[string]interface{}) (shared.MCPToolResult, error) {
 	voterID, ok := args["voterId"].(string)
-	if !ok {
+	if !ok || strings.TrimSpace(voterID) == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "voterId is required",
@@ -502,7 +514,7 @@ func (t *FederationTools) vote(ctx context.Context, args map[string]interface{})
 	}
 
 	proposalID, ok := args["proposalId"].(string)
-	if !ok {
+	if !ok || strings.TrimSpace(proposalID) == "" {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "proposalId is required",
