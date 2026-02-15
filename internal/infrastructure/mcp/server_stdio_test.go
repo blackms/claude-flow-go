@@ -40,3 +40,17 @@ func TestStdioTransport_RunRejectsNilReaderOrWriter(t *testing.T) {
 		t.Fatalf("expected reader-required precedence when both are nil, got %v", err)
 	}
 }
+
+func TestStdioTransport_RunValidationPrecedence(t *testing.T) {
+	server := NewServer(Options{})
+
+	if err := NewStdioTransport(nil, nil, nil).Run(nil); err == nil || err.Error() != "stdio transport server is not configured" {
+		t.Fatalf("expected server-configured precedence error, got %v", err)
+	}
+	if err := NewStdioTransport(server, nil, nil).Run(nil); err == nil || err.Error() != "context is required" {
+		t.Fatalf("expected context-required precedence error, got %v", err)
+	}
+	if err := NewStdioTransport(server, nil, nil).Run(context.Background()); err == nil || err.Error() != "reader is required" {
+		t.Fatalf("expected reader-required precedence error, got %v", err)
+	}
+}
