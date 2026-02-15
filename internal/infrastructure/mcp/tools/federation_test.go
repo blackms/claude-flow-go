@@ -226,8 +226,48 @@ func TestFederationTools_GetTools_IntegerNumericParameters(t *testing.T) {
 		}
 	}
 
+	assertPropertyNumber := func(toolName, propertyName, key string, expected float64) {
+		t.Helper()
+
+		tool, ok := toolByName[toolName]
+		if !ok {
+			t.Fatalf("expected tool %s to be present", toolName)
+		}
+		propertiesRaw, ok := tool.Parameters["properties"]
+		if !ok {
+			t.Fatalf("expected properties for tool %s", toolName)
+		}
+		properties, ok := propertiesRaw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected properties map for tool %s, got %T", toolName, propertiesRaw)
+		}
+		propertyRaw, ok := properties[propertyName]
+		if !ok {
+			t.Fatalf("expected property %s on tool %s", propertyName, toolName)
+		}
+		property, ok := propertyRaw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected property map for %s.%s, got %T", toolName, propertyName, propertyRaw)
+		}
+		valueRaw, ok := property[key]
+		if !ok {
+			t.Fatalf("expected %s.%s to define %s", toolName, propertyName, key)
+		}
+		value, ok := valueRaw.(float64)
+		if !ok {
+			t.Fatalf("expected %s.%s %s to be float64, got %T", toolName, propertyName, key, valueRaw)
+		}
+		if value != expected {
+			t.Fatalf("expected %s.%s %s %v, got %v", toolName, propertyName, key, expected, value)
+		}
+	}
+
 	assertPropertyType("federation/spawn-ephemeral", "ttl", "integer")
 	assertPropertyType("federation/register-swarm", "maxAgents", "integer")
+	assertPropertyNumber("federation/spawn-ephemeral", "ttl", "minimum", 1)
+	assertPropertyNumber("federation/spawn-ephemeral", "ttl", "maximum", float64(math.MaxInt64))
+	assertPropertyNumber("federation/register-swarm", "maxAgents", "minimum", 1)
+	assertPropertyNumber("federation/register-swarm", "maxAgents", "maximum", float64(math.MaxInt))
 }
 
 func TestNormalizeCapabilities(t *testing.T) {
@@ -2807,6 +2847,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "spawn non-positive ttl",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  float64(0),
+			},
+		},
+		{
 			name:     "spawn blank type",
 			toolName: "federation/spawn-ephemeral",
 			args: map[string]interface{}{
@@ -3291,6 +3340,16 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 				"ttl":  "1000",
 			},
 			expectedError: "ttl must be an integer",
+		},
+		{
+			name:     "spawn ttl non-positive",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  float64(0),
+			},
+			expectedError: "ttl must be greater than 0",
 		},
 		{
 			name:     "spawn type nil",

@@ -1,9 +1,53 @@
 package claudeflow
 
 import (
+	"math"
 	"reflect"
 	"testing"
 )
+
+func requireFederationSchemaNumericConstraint(
+	t *testing.T,
+	toolByName map[string]map[string]interface{},
+	toolName string,
+	propertyName string,
+	constraintKey string,
+	expected float64,
+) {
+	t.Helper()
+
+	params, ok := toolByName[toolName]
+	if !ok {
+		t.Fatalf("expected tool %s to be present", toolName)
+	}
+	propertiesRaw, ok := params["properties"]
+	if !ok {
+		t.Fatalf("expected properties in %s schema", toolName)
+	}
+	properties, ok := propertiesRaw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected properties map for %s, got %T", toolName, propertiesRaw)
+	}
+	propertyRaw, ok := properties[propertyName]
+	if !ok {
+		t.Fatalf("expected property %s in %s schema", propertyName, toolName)
+	}
+	property, ok := propertyRaw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected property map for %s.%s, got %T", toolName, propertyName, propertyRaw)
+	}
+	valueRaw, ok := property[constraintKey]
+	if !ok {
+		t.Fatalf("expected %s.%s to define %s", toolName, propertyName, constraintKey)
+	}
+	value, ok := valueRaw.(float64)
+	if !ok {
+		t.Fatalf("expected %s.%s %s to be float64, got %T", toolName, propertyName, constraintKey, valueRaw)
+	}
+	if value != expected {
+		t.Fatalf("expected %s.%s %s %v, got %v", toolName, propertyName, constraintKey, expected, value)
+	}
+}
 
 func TestNewMCPServer_RegistersFederationTools(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
@@ -117,6 +161,10 @@ func TestNewMCPServer_FederationToolSchemas_ExposeValidatedStatusAndIntegers(t *
 
 	requirePropertyType("federation/spawn-ephemeral", "ttl", "integer")
 	requirePropertyType("federation/register-swarm", "maxAgents", "integer")
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/spawn-ephemeral", "ttl", "minimum", 1)
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/spawn-ephemeral", "ttl", "maximum", float64(math.MaxInt64))
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/register-swarm", "maxAgents", "minimum", 1)
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/register-swarm", "maxAgents", "maximum", float64(math.MaxInt))
 
 	params, ok := toolByName["federation/list-ephemeral"]
 	if !ok {
@@ -236,6 +284,10 @@ func TestNewMCPServer_WithCoordinatorAndMemory_FederationToolSchemas_ExposeValid
 
 	requirePropertyType("federation/spawn-ephemeral", "ttl", "integer")
 	requirePropertyType("federation/register-swarm", "maxAgents", "integer")
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/spawn-ephemeral", "ttl", "minimum", 1)
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/spawn-ephemeral", "ttl", "maximum", float64(math.MaxInt64))
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/register-swarm", "maxAgents", "minimum", 1)
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/register-swarm", "maxAgents", "maximum", float64(math.MaxInt))
 
 	params, ok := toolByName["federation/list-ephemeral"]
 	if !ok {
@@ -344,6 +396,10 @@ func TestNewMCPServer_WithMemory_FederationToolSchemas_ExposeValidatedStatusAndI
 
 	requirePropertyType("federation/spawn-ephemeral", "ttl", "integer")
 	requirePropertyType("federation/register-swarm", "maxAgents", "integer")
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/spawn-ephemeral", "ttl", "minimum", 1)
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/spawn-ephemeral", "ttl", "maximum", float64(math.MaxInt64))
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/register-swarm", "maxAgents", "minimum", 1)
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/register-swarm", "maxAgents", "maximum", float64(math.MaxInt))
 
 	params, ok := toolByName["federation/list-ephemeral"]
 	if !ok {
@@ -457,6 +513,10 @@ func TestNewMCPServer_WithCoordinator_FederationToolSchemas_ExposeValidatedStatu
 
 	requirePropertyType("federation/spawn-ephemeral", "ttl", "integer")
 	requirePropertyType("federation/register-swarm", "maxAgents", "integer")
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/spawn-ephemeral", "ttl", "minimum", 1)
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/spawn-ephemeral", "ttl", "maximum", float64(math.MaxInt64))
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/register-swarm", "maxAgents", "minimum", 1)
+	requireFederationSchemaNumericConstraint(t, toolByName, "federation/register-swarm", "maxAgents", "maximum", float64(math.MaxInt))
 
 	params, ok := toolByName["federation/list-ephemeral"]
 	if !ok {

@@ -56,6 +56,8 @@ func (t *FederationTools) GetTools() []shared.MCPTool {
 					"ttl": map[string]interface{}{
 						"type":        "integer",
 						"description": "Time-to-live in milliseconds",
+						"minimum":     float64(1),
+						"maximum":     float64(math.MaxInt64),
 					},
 					"capabilities": map[string]interface{}{
 						"type": "array",
@@ -125,6 +127,8 @@ func (t *FederationTools) GetTools() []shared.MCPTool {
 					"maxAgents": map[string]interface{}{
 						"type":        "integer",
 						"description": "Maximum agents capacity",
+						"minimum":     float64(1),
+						"maximum":     float64(math.MaxInt),
 					},
 					"capabilities": map[string]interface{}{
 						"type": "array",
@@ -332,6 +336,12 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 				Success: false,
 				Error:   "ttl must be an integer",
 			}, fmt.Errorf("ttl must be an integer")
+		}
+		if opts.TTL <= 0 {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "ttl must be greater than 0",
+			}, fmt.Errorf("ttl must be greater than 0")
 		}
 	}
 	if capsRaw, ok := args["capabilities"]; ok {
