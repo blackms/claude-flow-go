@@ -413,6 +413,8 @@ func (fh *FederationHub) syncFederation() {
 
 // SetEventHandler sets the event handler for federation events.
 func (fh *FederationHub) SetEventHandler(handler EventHandler) {
+	fh.mu.Lock()
+	defer fh.mu.Unlock()
 	fh.eventHandler = handler
 }
 

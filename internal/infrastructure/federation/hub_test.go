@@ -3,7 +3,9 @@ package federation
 import (
 	"math"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
@@ -206,6 +208,52 @@ func TestFederationHub_InitializeRejectsWhenShutdownBeforeStart(t *testing.T) {
 	}
 	if err.Error() != "federation hub is shut down" {
 		t.Fatalf("expected shutdown lifecycle error, got %q", err.Error())
+	}
+}
+
+func TestFederationHub_SetEventHandlerSupportsUpdateAndClear(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	var handled atomic.Int64
+	hub.SetEventHandler(func(event shared.FederationEvent) {
+		handled.Add(1)
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "event-handler-swarm-a",
+		Name:      "Event Handler A",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register first swarm: %v", err)
+	}
+
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for handled.Load() < 1 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if handled.Load() < 1 {
+		t.Fatalf("expected event handler to be invoked at least once, got %d", handled.Load())
+	}
+
+	hub.SetEventHandler(nil)
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "event-handler-swarm-b",
+		Name:      "Event Handler B",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register second swarm: %v", err)
+	}
+
+	time.Sleep(30 * time.Millisecond)
+	if handled.Load() != 1 {
+		t.Fatalf("expected cleared event handler to prevent additional callbacks, got %d invocations", handled.Load())
 	}
 }
 
