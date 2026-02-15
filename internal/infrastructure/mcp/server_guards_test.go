@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
@@ -110,6 +111,26 @@ func (p expectingProvider) Execute(ctx context.Context, toolName string, params 
 		return nil, fmt.Errorf("expected %s=%q, got %q", p.paramKey, p.expectedValue, actual)
 	}
 	return &shared.MCPToolResult{Success: true, Data: map[string]interface{}{"ok": true}}, nil
+}
+
+type nonSerializableResultProvider struct {
+	methodName string
+}
+
+func (p nonSerializableResultProvider) GetTools() []shared.MCPTool {
+	return []shared.MCPTool{{Name: p.methodName}}
+}
+
+func (p nonSerializableResultProvider) Execute(ctx context.Context, toolName string, params map[string]interface{}) (*shared.MCPToolResult, error) {
+	if toolName != p.methodName {
+		return nil, nil
+	}
+	return &shared.MCPToolResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"nonSerializable": func() {},
+		},
+	}, nil
 }
 
 func TestServer_NilReceiverMethodsFailGracefully(t *testing.T) {
@@ -633,6 +654,34 @@ func TestServer_HandleToolsCallProviderArgumentsAreDefensivelyCopied(t *testing.
 	}
 	if got, _ := arguments["flag"].(string); got != "original" {
 		t.Fatalf("expected caller arguments to remain unchanged, got %q", got)
+	}
+}
+
+func TestServer_HandleToolsCallReturnsSerializationError(t *testing.T) {
+	const method = "guard/non-serializable"
+
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			nonSerializableResultProvider{methodName: method},
+		},
+	})
+
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "non-serializable-result",
+		Method: "tools/call",
+		Params: map[string]interface{}{
+			"name":      method,
+			"arguments": map[string]interface{}{},
+		},
+	})
+	if resp.Error == nil {
+		t.Fatal("expected serialization error")
+	}
+	if resp.Error.Code != -32603 {
+		t.Fatalf("expected internal serialization error code, got %d", resp.Error.Code)
+	}
+	if !strings.HasPrefix(resp.Error.Message, "Failed to serialize tool result:") {
+		t.Fatalf("expected serialization error message prefix, got %q", resp.Error.Message)
 	}
 }
 

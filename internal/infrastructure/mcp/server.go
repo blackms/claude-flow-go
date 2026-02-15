@@ -649,7 +649,16 @@ func (s *Server) handleToolsCall(ctx context.Context, request shared.MCPRequest)
 		if result == nil {
 			continue
 		}
-		resultJSON, _ := json.Marshal(result)
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			return shared.MCPResponse{
+				ID: request.ID,
+				Error: &shared.MCPError{
+					Code:    -32603,
+					Message: fmt.Sprintf("Failed to serialize tool result: %v", err),
+				},
+			}
+		}
 		return shared.MCPResponse{
 			ID: request.ID,
 			Result: map[string]interface{}{
