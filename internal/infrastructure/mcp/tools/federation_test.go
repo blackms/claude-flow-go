@@ -514,6 +514,33 @@ func TestCloneFederationProposal_DeepCopiesValueAndVotes(t *testing.T) {
 	}
 }
 
+func TestSortEphemeralAgents_HandlesNilEntries(t *testing.T) {
+	agents := []*shared.EphemeralAgent{
+		nil,
+		{ID: "b", CreatedAt: 200},
+		nil,
+		{ID: "a", CreatedAt: 100},
+		{ID: "c", CreatedAt: 200},
+	}
+
+	sortEphemeralAgents(agents)
+
+	expectedOrder := []string{"a", "b", "c"}
+	for i, expectedID := range expectedOrder {
+		if agents[i] == nil {
+			t.Fatalf("expected non-nil agent at index %d", i)
+		}
+		if agents[i].ID != expectedID {
+			t.Fatalf("expected agent ID %q at index %d, got %q", expectedID, i, agents[i].ID)
+		}
+	}
+	for i := len(expectedOrder); i < len(agents); i++ {
+		if agents[i] != nil {
+			t.Fatalf("expected nil agent entries to be sorted to tail, found non-nil at index %d: %v", i, agents[i])
+		}
+	}
+}
+
 func TestFederationTools_Execute_UnknownTool(t *testing.T) {
 	ft := &FederationTools{}
 

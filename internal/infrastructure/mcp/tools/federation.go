@@ -889,6 +889,12 @@ func sortEphemeralAgents(agents []*shared.EphemeralAgent) {
 	sort.Slice(agents, func(i, j int) bool {
 		left := agents[i]
 		right := agents[j]
+		if left == nil || right == nil {
+			if left == nil && right == nil {
+				return false
+			}
+			return left != nil
+		}
 		if left.CreatedAt == right.CreatedAt {
 			return left.ID < right.ID
 		}
