@@ -276,6 +276,55 @@ func TestNewMCPServer_WithCoordinator_RegistersAllFederationTools(t *testing.T) 
 	}
 }
 
+func TestNewMCPServer_WithCoordinator_RegistersAllHooksTools(t *testing.T) {
+	coord, err := NewSwarmCoordinator(SwarmConfig{
+		Topology: TopologyMesh,
+	})
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = coord.Shutdown()
+	})
+
+	server := NewMCPServer(MCPServerConfig{
+		Coordinator: coord,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	expectedHooks := map[string]bool{
+		"hooks/pre-edit":     true,
+		"hooks/post-edit":    true,
+		"hooks/pre-command":  true,
+		"hooks/post-command": true,
+		"hooks/route":        true,
+		"hooks/explain":      true,
+		"hooks/pretrain":     true,
+		"hooks/metrics":      true,
+		"hooks/list":         true,
+	}
+
+	counts := make(map[string]int, len(expectedHooks))
+	for _, tool := range tools {
+		if expectedHooks[tool.Name] {
+			counts[tool.Name]++
+		}
+	}
+
+	for name := range expectedHooks {
+		if counts[name] != 1 {
+			t.Fatalf("expected exactly one %s tool in coordinator-only config, got %d", name, counts[name])
+		}
+	}
+}
+
 func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
 	if server == nil {
@@ -485,6 +534,50 @@ func TestNewMCPServer_WithMemory_RegistersAllFederationTools(t *testing.T) {
 	}
 }
 
+func TestNewMCPServer_WithMemory_RegistersAllHooksTools(t *testing.T) {
+	backend, err := NewSQLiteBackend(":memory:")
+	if err != nil {
+		t.Fatalf("failed to initialize sqlite backend: %v", err)
+	}
+
+	server := NewMCPServer(MCPServerConfig{
+		Memory: backend,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	expectedHooks := map[string]bool{
+		"hooks/pre-edit":     true,
+		"hooks/post-edit":    true,
+		"hooks/pre-command":  true,
+		"hooks/post-command": true,
+		"hooks/route":        true,
+		"hooks/explain":      true,
+		"hooks/pretrain":     true,
+		"hooks/metrics":      true,
+		"hooks/list":         true,
+	}
+
+	counts := make(map[string]int, len(expectedHooks))
+	for _, tool := range tools {
+		if expectedHooks[tool.Name] {
+			counts[tool.Name]++
+		}
+	}
+
+	for name := range expectedHooks {
+		if counts[name] != 1 {
+			t.Fatalf("expected exactly one %s tool in memory-only config, got %d", name, counts[name])
+		}
+	}
+}
+
 func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllToolFamilies(t *testing.T) {
 	coord, err := NewSwarmCoordinator(SwarmConfig{
 		Topology: TopologyMesh,
@@ -606,6 +699,61 @@ func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllFederationTools(t *te
 	}
 
 	for name := range expectedFederation {
+		if counts[name] != 1 {
+			t.Fatalf("expected exactly one %s tool in coordinator+memory config, got %d", name, counts[name])
+		}
+	}
+}
+
+func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllHooksTools(t *testing.T) {
+	coord, err := NewSwarmCoordinator(SwarmConfig{
+		Topology: TopologyMesh,
+	})
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = coord.Shutdown()
+	})
+
+	backend, err := NewSQLiteBackend(":memory:")
+	if err != nil {
+		t.Fatalf("failed to initialize sqlite backend: %v", err)
+	}
+
+	server := NewMCPServer(MCPServerConfig{
+		Coordinator: coord,
+		Memory:      backend,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	expectedHooks := map[string]bool{
+		"hooks/pre-edit":     true,
+		"hooks/post-edit":    true,
+		"hooks/pre-command":  true,
+		"hooks/post-command": true,
+		"hooks/route":        true,
+		"hooks/explain":      true,
+		"hooks/pretrain":     true,
+		"hooks/metrics":      true,
+		"hooks/list":         true,
+	}
+
+	counts := make(map[string]int, len(expectedHooks))
+	for _, tool := range tools {
+		if expectedHooks[tool.Name] {
+			counts[tool.Name]++
+		}
+	}
+
+	for name := range expectedHooks {
 		if counts[name] != 1 {
 			t.Fatalf("expected exactly one %s tool in coordinator+memory config, got %d", name, counts[name])
 		}
