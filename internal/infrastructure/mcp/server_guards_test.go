@@ -286,6 +286,35 @@ func TestServer_NewServerConfiguredPathStillWorks(t *testing.T) {
 	}
 }
 
+func TestServer_GetStatusReturnsDefensiveCopy(t *testing.T) {
+	server := NewServer(Options{})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	first := server.GetStatus()
+	if first == nil {
+		t.Fatal("expected status map")
+	}
+	first["running"] = true
+	first["error"] = "mutated"
+	first["toolCount"] = 999
+
+	second := server.GetStatus()
+	if second == nil {
+		t.Fatal("expected second status map")
+	}
+	if running, ok := second["running"].(bool); !ok || running {
+		t.Fatalf("expected defensive status running=false, got %v", second["running"])
+	}
+	if toolCount, ok := second["toolCount"].(int); !ok || toolCount == 999 {
+		t.Fatalf("expected defensive status toolCount unchanged, got %v", second["toolCount"])
+	}
+	if second["error"] == "mutated" {
+		t.Fatalf("expected defensive status to drop injected error field, got %v", second["error"])
+	}
+}
+
 func TestServer_StartRejectsInvalidPortAndHost(t *testing.T) {
 	invalidPortServer := NewServer(Options{Port: -1})
 	if invalidPortServer == nil {
