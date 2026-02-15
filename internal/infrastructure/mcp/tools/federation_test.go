@@ -3271,6 +3271,15 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 			expectedError: "ttl must be an integer",
 		},
 		{
+			name:     "spawn type nil",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": nil,
+				"task": "implement feature",
+			},
+			expectedError: "type must be a string",
+		},
+		{
 			name:     "spawn capabilities non-string entry",
 			toolName: "federation/spawn-ephemeral",
 			args: map[string]interface{}{
@@ -3302,6 +3311,16 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 			expectedError: "endpoint must be a string",
 		},
 		{
+			name:     "register name nil",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      nil,
+				"maxAgents": float64(5),
+			},
+			expectedError: "name must be a string",
+		},
+		{
 			name:     "register capabilities nil",
 			toolName: "federation/register-swarm",
 			args: map[string]interface{}{
@@ -3319,6 +3338,16 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 				"voterId":    "swarm-1",
 				"proposalId": "proposal-1",
 				"approve":    "true",
+			},
+			expectedError: "approve must be a boolean",
+		},
+		{
+			name:     "vote approve nil",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "swarm-1",
+				"proposalId": "proposal-1",
+				"approve":    nil,
 			},
 			expectedError: "approve must be a boolean",
 		},
@@ -3355,6 +3384,15 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 				"error":   nil,
 			},
 			expectedError: "error must be a string",
+		},
+		{
+			name:     "broadcast sourceSwarmId nil",
+			toolName: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": nil,
+				"payload":       map[string]interface{}{"event": "x"},
+			},
+			expectedError: "sourceSwarmId must be a string",
 		},
 	}
 
