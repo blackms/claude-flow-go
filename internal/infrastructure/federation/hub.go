@@ -383,6 +383,9 @@ func (fh *FederationHub) syncFederation() {
 	if fh.shutdown {
 		return
 	}
+	if !fh.initialized {
+		return
+	}
 
 	now := shared.Now()
 	heartbeatThreshold := fh.config.HeartbeatInterval * 3 // 3x heartbeat = degraded

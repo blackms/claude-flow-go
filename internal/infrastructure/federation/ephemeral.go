@@ -391,6 +391,9 @@ func (fh *FederationHub) cleanupExpiredAgents() {
 	if fh.shutdown {
 		return
 	}
+	if !fh.initialized {
+		return
+	}
 
 	now := shared.Now()
 	expiredAgents := make([]string, 0)

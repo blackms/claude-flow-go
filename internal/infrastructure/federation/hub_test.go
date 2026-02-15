@@ -486,6 +486,19 @@ func TestFederationHub_BackgroundMaintenanceNoOpsAfterShutdown(t *testing.T) {
 	}
 }
 
+func TestFederationHub_BackgroundMaintenanceNoOpsBeforeInitialize(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+
+	eventsBefore := hub.GetEvents(0)
+	hub.syncFederation()
+	hub.cleanupExpiredAgents()
+	eventsAfter := hub.GetEvents(0)
+
+	if len(eventsAfter) != len(eventsBefore) {
+		t.Fatalf("expected maintenance calls before initialize to avoid appending events, before=%d after=%d", len(eventsBefore), len(eventsAfter))
+	}
+}
+
 func TestFederationHub_ShutdownPreventsPendingSpawnActivation(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
