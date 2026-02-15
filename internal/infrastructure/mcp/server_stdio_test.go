@@ -201,3 +201,38 @@ func TestStdioTransport_RunReturnsProtocolValidationErrors(t *testing.T) {
 		t.Fatalf("expected invalid arguments message, got %q", response.Error.Message)
 	}
 }
+
+func TestStdioTransport_RunContinuesAfterProtocolError(t *testing.T) {
+	server := NewServer(Options{})
+	input := bytes.NewBufferString(
+		`{"id":"bad-method","method":"   ","params":{}}` + "\n" +
+			`{"id":"ok-init","method":"initialize","params":{}}` + "\n",
+	)
+	output := bytes.NewBuffer(nil)
+
+	transport := NewStdioTransport(server, input, output)
+	if err := transport.Run(context.Background()); err != nil {
+		t.Fatalf("expected transport run success, got %v", err)
+	}
+
+	decoder := json.NewDecoder(output)
+
+	var first shared.MCPResponse
+	if err := decoder.Decode(&first); err != nil {
+		t.Fatalf("expected first response, got %v", err)
+	}
+	if first.ID != "bad-method" {
+		t.Fatalf("expected first response id bad-method, got %q", first.ID)
+	}
+	if first.Error == nil || first.Error.Code != -32600 || first.Error.Message != "Method is required" {
+		t.Fatalf("expected invalid-request blank method error, got %+v", first.Error)
+	}
+
+	var second shared.MCPResponse
+	if err := decoder.Decode(&second); err != nil {
+		t.Fatalf("expected second response, got %v", err)
+	}
+	if second.ID != "ok-init" || second.Error != nil {
+		t.Fatalf("expected successful initialize response after protocol error, got %+v", second)
+	}
+}
