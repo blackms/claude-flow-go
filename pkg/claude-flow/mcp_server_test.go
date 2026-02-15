@@ -308,6 +308,9 @@ func TestMCPServer_RunStdioRejectsNilReaderOrWriter(t *testing.T) {
 	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), nil); err == nil || err.Error() != "writer is required" {
 		t.Fatalf("expected writer-required error, got %v", err)
 	}
+	if err := server.RunStdio(context.Background(), nil, nil); err == nil || err.Error() != "reader is required" {
+		t.Fatalf("expected reader-required precedence when both streams are nil, got %v", err)
+	}
 }
 
 func TestNewMCPServer_InitializesFederationHubLifecycle(t *testing.T) {
