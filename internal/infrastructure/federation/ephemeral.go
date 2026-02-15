@@ -287,7 +287,10 @@ func (fh *FederationHub) GetAgent(agentID string) (*shared.EphemeralAgent, bool)
 		return nil, false
 	}
 	agent, exists := fh.ephemeralAgents[agentID]
-	return agent, exists
+	if !exists {
+		return nil, false
+	}
+	return cloneEphemeralAgent(agent), true
 }
 
 // GetAgents returns all ephemeral agents.
@@ -297,7 +300,7 @@ func (fh *FederationHub) GetAgents() []*shared.EphemeralAgent {
 
 	agents := make([]*shared.EphemeralAgent, 0, len(fh.ephemeralAgents))
 	for _, agent := range fh.ephemeralAgents {
-		agents = append(agents, agent)
+		agents = append(agents, cloneEphemeralAgent(agent))
 	}
 	return agents
 }
@@ -310,7 +313,7 @@ func (fh *FederationHub) GetActiveAgents() []*shared.EphemeralAgent {
 	agents := make([]*shared.EphemeralAgent, 0)
 	for agentID := range fh.agentsByStatus[shared.EphemeralStatusActive] {
 		if agent, exists := fh.ephemeralAgents[agentID]; exists {
-			agents = append(agents, agent)
+			agents = append(agents, cloneEphemeralAgent(agent))
 		}
 	}
 	return agents
@@ -330,7 +333,7 @@ func (fh *FederationHub) GetAgentsBySwarm(swarmID string) []*shared.EphemeralAge
 	if agentIDs, exists := fh.agentsBySwarm[swarmID]; exists {
 		for agentID := range agentIDs {
 			if agent, exists := fh.ephemeralAgents[agentID]; exists {
-				agents = append(agents, agent)
+				agents = append(agents, cloneEphemeralAgent(agent))
 			}
 		}
 	}
@@ -346,7 +349,7 @@ func (fh *FederationHub) GetAgentsByStatus(status shared.EphemeralAgentStatus) [
 	if agentIDs, exists := fh.agentsByStatus[status]; exists {
 		for agentID := range agentIDs {
 			if agent, exists := fh.ephemeralAgents[agentID]; exists {
-				agents = append(agents, agent)
+				agents = append(agents, cloneEphemeralAgent(agent))
 			}
 		}
 	}

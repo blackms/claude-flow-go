@@ -251,7 +251,10 @@ func (fh *FederationHub) GetSwarm(swarmID string) (*shared.SwarmRegistration, bo
 		return nil, false
 	}
 	swarm, exists := fh.swarms[swarmID]
-	return swarm, exists
+	if !exists {
+		return nil, false
+	}
+	return cloneSwarmRegistration(swarm), true
 }
 
 // GetSwarms returns all registered swarms.
@@ -261,7 +264,7 @@ func (fh *FederationHub) GetSwarms() []*shared.SwarmRegistration {
 
 	swarms := make([]*shared.SwarmRegistration, 0, len(fh.swarms))
 	for _, swarm := range fh.swarms {
-		swarms = append(swarms, swarm)
+		swarms = append(swarms, cloneSwarmRegistration(swarm))
 	}
 	return swarms
 }
@@ -274,7 +277,7 @@ func (fh *FederationHub) GetActiveSwarms() []*shared.SwarmRegistration {
 	swarms := make([]*shared.SwarmRegistration, 0)
 	for _, swarm := range fh.swarms {
 		if swarm.Status == shared.SwarmStatusActive {
-			swarms = append(swarms, swarm)
+			swarms = append(swarms, cloneSwarmRegistration(swarm))
 		}
 	}
 	return swarms
@@ -390,7 +393,9 @@ func (fh *FederationHub) GetEvents(limit int) []*shared.FederationEvent {
 	// Return most recent events
 	start := len(fh.events) - limit
 	result := make([]*shared.FederationEvent, limit)
-	copy(result, fh.events[start:])
+	for i, event := range fh.events[start:] {
+		result[i] = cloneFederationEvent(event)
+	}
 	return result
 }
 

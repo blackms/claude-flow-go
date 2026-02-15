@@ -258,7 +258,10 @@ func (fh *FederationHub) GetProposal(proposalID string) (*shared.FederationPropo
 		return nil, false
 	}
 	proposal, exists := fh.proposals[proposalID]
-	return proposal, exists
+	if !exists {
+		return nil, false
+	}
+	return cloneFederationProposal(proposal), true
 }
 
 // GetProposals returns all proposals.
@@ -268,7 +271,7 @@ func (fh *FederationHub) GetProposals() []*shared.FederationProposal {
 
 	proposals := make([]*shared.FederationProposal, 0, len(fh.proposals))
 	for _, proposal := range fh.proposals {
-		proposals = append(proposals, proposal)
+		proposals = append(proposals, cloneFederationProposal(proposal))
 	}
 	return proposals
 }
@@ -281,7 +284,7 @@ func (fh *FederationHub) GetPendingProposals() []*shared.FederationProposal {
 	proposals := make([]*shared.FederationProposal, 0)
 	for _, proposal := range fh.proposals {
 		if proposal.Status == shared.FederationProposalPending {
-			proposals = append(proposals, proposal)
+			proposals = append(proposals, cloneFederationProposal(proposal))
 		}
 	}
 	return proposals
@@ -295,7 +298,7 @@ func (fh *FederationHub) GetProposalsByStatus(status shared.FederationProposalSt
 	proposals := make([]*shared.FederationProposal, 0)
 	for _, proposal := range fh.proposals {
 		if proposal.Status == status {
-			proposals = append(proposals, proposal)
+			proposals = append(proposals, cloneFederationProposal(proposal))
 		}
 	}
 	return proposals

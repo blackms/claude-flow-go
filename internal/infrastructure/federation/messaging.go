@@ -282,7 +282,9 @@ func (fh *FederationHub) GetMessages(limit int) []*shared.FederationMessage {
 	// Return most recent messages
 	start := len(fh.messages) - limit
 	result := make([]*shared.FederationMessage, limit)
-	copy(result, fh.messages[start:])
+	for i, msg := range fh.messages[start:] {
+		result[i] = cloneFederationMessage(msg)
+	}
 	return result
 }
 
@@ -306,7 +308,7 @@ func (fh *FederationHub) GetMessagesBySwarm(swarmID string, limit int) []*shared
 		msg := fh.messages[i]
 		if msg.SourceSwarmID == swarmID || msg.TargetSwarmID == swarmID ||
 			(msg.Type == shared.FederationMsgBroadcast && msg.TargetSwarmID == "") {
-			result = append(result, msg)
+			result = append(result, cloneFederationMessage(msg))
 		}
 	}
 
@@ -328,7 +330,7 @@ func (fh *FederationHub) GetMessagesByType(msgType shared.FederationMessageType,
 	for i := len(fh.messages) - 1; i >= 0 && len(result) < limit; i-- {
 		msg := fh.messages[i]
 		if msg.Type == msgType {
-			result = append(result, msg)
+			result = append(result, cloneFederationMessage(msg))
 		}
 	}
 
@@ -347,7 +349,7 @@ func (fh *FederationHub) GetMessage(messageID string) (*shared.FederationMessage
 
 	for _, msg := range fh.messages {
 		if msg.ID == messageID {
-			return msg, true
+			return cloneFederationMessage(msg), true
 		}
 	}
 	return nil, false
