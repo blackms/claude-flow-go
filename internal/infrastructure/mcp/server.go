@@ -846,6 +846,19 @@ func NewStdioTransport(server *Server, reader io.Reader, writer io.Writer) *Stdi
 
 // Run runs the stdio transport.
 func (t *StdioTransport) Run(ctx context.Context) error {
+	if t == nil || t.server == nil {
+		return fmt.Errorf("stdio transport server is not configured")
+	}
+	if ctx == nil {
+		return fmt.Errorf("context is required")
+	}
+	if t.reader == nil {
+		return fmt.Errorf("reader is required")
+	}
+	if t.writer == nil {
+		return fmt.Errorf("writer is required")
+	}
+
 	decoder := json.NewDecoder(t.reader)
 	encoder := json.NewEncoder(t.writer)
 
