@@ -100,6 +100,43 @@ func TestNewMCPServer_RegistersBuiltInHooksAndUniqueTools(t *testing.T) {
 	}
 }
 
+func TestNewMCPServer_RegistersAllHooksTools(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	expectedHooks := map[string]bool{
+		"hooks/pre-edit":     true,
+		"hooks/post-edit":    true,
+		"hooks/pre-command":  true,
+		"hooks/post-command": true,
+		"hooks/route":        true,
+		"hooks/explain":      true,
+		"hooks/pretrain":     true,
+		"hooks/metrics":      true,
+		"hooks/list":         true,
+	}
+
+	counts := make(map[string]int, len(expectedHooks))
+	for _, tool := range tools {
+		if expectedHooks[tool.Name] {
+			counts[tool.Name]++
+		}
+	}
+
+	for name := range expectedHooks {
+		if counts[name] != 1 {
+			t.Fatalf("expected exactly one %s tool, got %d", name, counts[name])
+		}
+	}
+}
+
 func TestNewMCPServer_NoDuplicateToolNames(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
 	if server == nil {
