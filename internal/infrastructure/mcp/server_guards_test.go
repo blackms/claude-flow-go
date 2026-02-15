@@ -874,3 +874,70 @@ func TestServer_HandleToolsListReturnsDefensiveSchemaCopies(t *testing.T) {
 		t.Fatalf("expected second schema to omit external mutation field, got %v", secondSchema["externallyMutated"])
 	}
 }
+
+func TestServer_ListToolsDefensiveCopyHandlesTypedNestedContainers(t *testing.T) {
+	server := NewServer(Options{})
+	server.RegisterTool(shared.MCPTool{
+		Name:        "guard/typed-containers",
+		Description: "typed nested containers",
+		Parameters: map[string]interface{}{
+			"typedIfaceSlice": []map[string]interface{}{
+				{"status": "active"},
+			},
+			"typedStringMapSlice": []map[string]string{
+				{"role": "primary"},
+			},
+			"typedMapSlice": map[string][]string{
+				"labels": []string{"go", "docker"},
+			},
+			"typedNestedMap": map[string]map[string]interface{}{
+				"config": {"enabled": true},
+			},
+		},
+	})
+
+	getSchema := func() map[string]interface{} {
+		tools := server.ListTools()
+		for _, tool := range tools {
+			if tool.Name == "guard/typed-containers" {
+				return tool.Parameters
+			}
+		}
+		return nil
+	}
+
+	first := getSchema()
+	if first == nil {
+		t.Fatal("expected typed container schema")
+	}
+
+	firstTypedIface := first["typedIfaceSlice"].([]map[string]interface{})
+	firstTypedIface[0]["status"] = "inactive"
+	firstTypedStringMapSlice := first["typedStringMapSlice"].([]map[string]string)
+	firstTypedStringMapSlice[0]["role"] = "secondary"
+	firstTypedMapSlice := first["typedMapSlice"].(map[string][]string)
+	firstTypedMapSlice["labels"][0] = "rust"
+	firstTypedNestedMap := first["typedNestedMap"].(map[string]map[string]interface{})
+	firstTypedNestedMap["config"]["enabled"] = false
+
+	second := getSchema()
+	if second == nil {
+		t.Fatal("expected typed container schema on second read")
+	}
+	secondTypedIface := second["typedIfaceSlice"].([]map[string]interface{})
+	if secondTypedIface[0]["status"] != "active" {
+		t.Fatalf("expected typedIfaceSlice clone isolation, got %v", secondTypedIface[0]["status"])
+	}
+	secondTypedStringMapSlice := second["typedStringMapSlice"].([]map[string]string)
+	if secondTypedStringMapSlice[0]["role"] != "primary" {
+		t.Fatalf("expected typedStringMapSlice clone isolation, got %v", secondTypedStringMapSlice[0]["role"])
+	}
+	secondTypedMapSlice := second["typedMapSlice"].(map[string][]string)
+	if secondTypedMapSlice["labels"][0] != "go" {
+		t.Fatalf("expected typedMapSlice clone isolation, got %v", secondTypedMapSlice["labels"])
+	}
+	secondTypedNestedMap := second["typedNestedMap"].(map[string]map[string]interface{})
+	if secondTypedNestedMap["config"]["enabled"] != true {
+		t.Fatalf("expected typedNestedMap clone isolation, got %v", secondTypedNestedMap["config"]["enabled"])
+	}
+}

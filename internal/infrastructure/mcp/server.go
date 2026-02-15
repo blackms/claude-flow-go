@@ -146,10 +146,38 @@ func cloneInterfaceValue(value interface{}) interface{} {
 		return append([]float64(nil), typed...)
 	case []bool:
 		return append([]bool(nil), typed...)
+	case []map[string]interface{}:
+		cloned := make([]map[string]interface{}, len(typed))
+		for i := range typed {
+			cloned[i] = cloneMapStringInterface(typed[i])
+		}
+		return cloned
+	case []map[string]string:
+		cloned := make([]map[string]string, len(typed))
+		for i := range typed {
+			entry := make(map[string]string, len(typed[i]))
+			for key, item := range typed[i] {
+				entry[key] = item
+			}
+			cloned[i] = entry
+		}
+		return cloned
 	case map[string]string:
 		cloned := make(map[string]string, len(typed))
 		for key, item := range typed {
 			cloned[key] = item
+		}
+		return cloned
+	case map[string][]string:
+		cloned := make(map[string][]string, len(typed))
+		for key, item := range typed {
+			cloned[key] = append([]string(nil), item...)
+		}
+		return cloned
+	case map[string]map[string]interface{}:
+		cloned := make(map[string]map[string]interface{}, len(typed))
+		for key, item := range typed {
+			cloned[key] = cloneMapStringInterface(item)
 		}
 		return cloned
 	default:
