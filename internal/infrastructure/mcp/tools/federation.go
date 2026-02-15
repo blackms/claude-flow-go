@@ -286,6 +286,20 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 		}
 	}
 
+	if strings.TrimSpace(opts.Type) == "" {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "type is required",
+		}, fmt.Errorf("type is required")
+	}
+
+	if strings.TrimSpace(opts.Task) == "" {
+		return shared.MCPToolResult{
+			Success: false,
+			Error:   "task is required",
+		}, fmt.Errorf("task is required")
+	}
+
 	result, err := t.hub.SpawnEphemeralAgent(opts)
 	if err != nil {
 		return shared.MCPToolResult{

@@ -853,6 +853,20 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 		args     map[string]interface{}
 	}{
 		{
+			name:     "spawn missing type",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"task": "implement feature",
+			},
+		},
+		{
+			name:     "spawn missing task",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+			},
+		},
+		{
 			name:     "broadcast missing sourceSwarmId",
 			toolName: "federation/broadcast",
 			args: map[string]interface{}{
