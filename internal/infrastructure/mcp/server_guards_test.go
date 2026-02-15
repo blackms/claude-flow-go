@@ -864,6 +864,28 @@ func TestServer_HandleRequestProvidesWritableParamsForNilRequestParams(t *testin
 	}
 }
 
+func TestServer_HandleRequestNilParamsAreIsolatedAcrossProviders(t *testing.T) {
+	const method = "guard/nil-params-isolation"
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			mutatingProvider{methodName: method, paramKey: "flag"},
+			expectingProvider{methodName: method, paramKey: "flag", expectedValue: ""},
+		},
+	})
+
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "nil-params-isolation",
+		Method: method,
+		Params: nil,
+	})
+	if resp.Error != nil {
+		t.Fatalf("expected provider isolation with nil params, got %v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Fatal("expected successful provider result after isolation check")
+	}
+}
+
 func TestServer_HandleToolsCallProvidesWritableParamsWhenArgumentsMissing(t *testing.T) {
 	const method = "guard/writable-tool-args"
 	server := NewServer(Options{
@@ -884,6 +906,30 @@ func TestServer_HandleToolsCallProvidesWritableParamsWhenArgumentsMissing(t *tes
 	}
 	if resp.Result == nil {
 		t.Fatal("expected successful tools/call provider result with writable params")
+	}
+}
+
+func TestServer_HandleToolsCallNilArgumentsAreIsolatedAcrossProviders(t *testing.T) {
+	const method = "guard/nil-arguments-isolation"
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			mutatingProvider{methodName: method, paramKey: "flag"},
+			expectingProvider{methodName: method, paramKey: "flag", expectedValue: ""},
+		},
+	})
+
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "nil-arguments-isolation",
+		Method: "tools/call",
+		Params: map[string]interface{}{
+			"name": method,
+		},
+	})
+	if resp.Error != nil {
+		t.Fatalf("expected tools/call provider isolation with missing arguments, got %v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Fatal("expected successful tools/call provider result after isolation check")
 	}
 }
 
