@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStdioTransport_RunRejectsUnconfiguredServer(t *testing.T) {
@@ -99,5 +101,30 @@ func TestStdioTransport_RunReturnsEncodeError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to encode mcp response:") {
 		t.Fatalf("expected encode failure prefix, got %v", err)
+	}
+}
+
+func TestStdioTransport_RunContextCancellationUnblocksPipeReader(t *testing.T) {
+	server := NewServer(Options{})
+	reader, writer := io.Pipe()
+	defer writer.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	transport := NewStdioTransport(server, reader, bytes.NewBuffer(nil))
+
+	done := make(chan error, 1)
+	go func() {
+		done <- transport.Run(ctx)
+	}()
+
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context canceled error, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected transport to exit promptly after context cancellation")
 	}
 }

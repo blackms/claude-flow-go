@@ -1223,6 +1223,21 @@ func (t *StdioTransport) Run(ctx context.Context) error {
 	decoder := json.NewDecoder(t.reader)
 	encoder := json.NewEncoder(t.writer)
 
+	type closeWithErrorReader interface {
+		CloseWithError(error) error
+	}
+	if readerCloser, ok := t.reader.(closeWithErrorReader); ok {
+		done := make(chan struct{})
+		defer close(done)
+		go func() {
+			select {
+			case <-ctx.Done():
+				_ = readerCloser.CloseWithError(ctx.Err())
+			case <-done:
+			}
+		}()
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -1234,6 +1249,9 @@ func (t *StdioTransport) Run(ctx context.Context) error {
 		if err := decoder.Decode(&request); err != nil {
 			if err == io.EOF {
 				return nil
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
 			return fmt.Errorf("failed to decode mcp request: %w", err)
 		}

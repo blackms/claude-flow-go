@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
 	"github.com/anthropics/claude-flow-go/internal/shared"
@@ -438,6 +440,36 @@ func TestMCPServer_RunStdioReturnsEncodeError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to encode mcp response:") {
 		t.Fatalf("expected encode error prefix, got %v", err)
+	}
+}
+
+func TestMCPServer_RunStdioContextCancellationUnblocksPipeReader(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server")
+	}
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+
+	reader, writer := io.Pipe()
+	defer writer.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- server.RunStdio(ctx, reader, bytes.NewBuffer(nil))
+	}()
+
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context canceled error, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected RunStdio to return promptly after context cancellation")
 	}
 }
 
