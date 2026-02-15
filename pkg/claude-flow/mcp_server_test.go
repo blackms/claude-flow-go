@@ -222,6 +222,9 @@ func TestMCPServer_ZeroValueMethodsFailGracefully(t *testing.T) {
 	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
 		t.Fatalf("expected stdio initialization error, got %v", err)
 	}
+	if err := server.RunStdio(nil, bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected stdio initialization error precedence for nil context, got %v", err)
+	}
 }
 
 func TestMCPServer_NilReceiverMethodsFailGracefully(t *testing.T) {
@@ -247,6 +250,9 @@ func TestMCPServer_NilReceiverMethodsFailGracefully(t *testing.T) {
 
 	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
 		t.Fatalf("expected nil-receiver stdio error, got %v", err)
+	}
+	if err := server.RunStdio(nil, bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected nil-receiver stdio error precedence for nil context, got %v", err)
 	}
 }
 
