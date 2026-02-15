@@ -136,6 +136,22 @@ func cloneInterfaceValue(value interface{}) interface{} {
 			cloned[i] = cloneInterfaceValue(typed[i])
 		}
 		return cloned
+	case []string:
+		return append([]string(nil), typed...)
+	case []int:
+		return append([]int(nil), typed...)
+	case []int64:
+		return append([]int64(nil), typed...)
+	case []float64:
+		return append([]float64(nil), typed...)
+	case []bool:
+		return append([]bool(nil), typed...)
+	case map[string]string:
+		cloned := make(map[string]string, len(typed))
+		for key, item := range typed {
+			cloned[key] = item
+		}
+		return cloned
 	default:
 		return typed
 	}

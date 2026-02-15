@@ -473,7 +473,7 @@ func TestServer_ListToolsReturnsDefensiveToolSchemaCopies(t *testing.T) {
 					"type": "string",
 				},
 			},
-			"required": []interface{}{"value"},
+			"required": []string{"value"},
 		},
 	})
 
@@ -496,7 +496,7 @@ func TestServer_ListToolsReturnsDefensiveToolSchemaCopies(t *testing.T) {
 	properties, _ := firstSchema["properties"].(map[string]interface{})
 	valueSchema, _ := properties["value"].(map[string]interface{})
 	valueSchema["type"] = "number"
-	required, _ := firstSchema["required"].([]interface{})
+	required, _ := firstSchema["required"].([]string)
 	if len(required) > 0 {
 		required[0] = "mutated"
 	}
@@ -511,7 +511,7 @@ func TestServer_ListToolsReturnsDefensiveToolSchemaCopies(t *testing.T) {
 	if secondValueSchema["type"] != "string" {
 		t.Fatalf("expected original nested schema value type, got %v", secondValueSchema["type"])
 	}
-	secondRequired, _ := secondSchema["required"].([]interface{})
+	secondRequired, _ := secondSchema["required"].([]string)
 	if len(secondRequired) == 0 || secondRequired[0] != "value" {
 		t.Fatalf("expected original required array, got %v", secondRequired)
 	}
