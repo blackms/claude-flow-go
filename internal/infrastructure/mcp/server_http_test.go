@@ -175,3 +175,38 @@ func TestServer_HTTPHandleListToolsReturnsSortedTools(t *testing.T) {
 		t.Fatalf("expected custom tools in /tools response, sawA=%v sawZ=%v", sawA, sawZ)
 	}
 }
+
+func TestServer_HTTPHandleHealthRejectsNonGET(t *testing.T) {
+	server := NewServer(Options{})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/health", nil)
+
+	server.handleHealth(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 for non-GET health request, got %d", recorder.Code)
+	}
+}
+
+func TestServer_HTTPHandleHealthReturnsStatusPayload(t *testing.T) {
+	server := NewServer(Options{})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/health", nil)
+
+	server.handleHealth(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /health, got %d", recorder.Code)
+	}
+
+	var status map[string]interface{}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &status); err != nil {
+		t.Fatalf("expected /health JSON payload, got %v", err)
+	}
+	if _, ok := status["running"]; !ok {
+		t.Fatalf("expected health payload to include running flag, got %+v", status)
+	}
+	if _, ok := status["toolCount"]; !ok {
+		t.Fatalf("expected health payload to include toolCount, got %+v", status)
+	}
+}
