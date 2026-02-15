@@ -3626,6 +3626,127 @@ func TestFederationTools_BroadcastAndProposeHandlePointerCycles(t *testing.T) {
 	}
 }
 
+func TestFederationTools_BroadcastAndProposeClonePointerMapKeys(t *testing.T) {
+	type keyNode struct {
+		Name string
+	}
+
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	for _, swarmID := range []string{"pointer-key-source", "pointer-key-target", "pointer-key-proposer"} {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 5,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	broadcastKey := &keyNode{Name: "broadcast-key"}
+	broadcastPointerMap := map[*keyNode]string{broadcastKey: "broadcast-value"}
+	broadcastResult, broadcastErr := ft.Execute(context.Background(), "federation/broadcast", map[string]interface{}{
+		"sourceSwarmId": "pointer-key-source",
+		"payload": map[string]interface{}{
+			"pointerMap": broadcastPointerMap,
+		},
+	})
+	if broadcastErr != nil {
+		t.Fatalf("Execute broadcast with pointer-key map should succeed, got %v", broadcastErr)
+	}
+	if broadcastResult == nil || !broadcastResult.Success {
+		t.Fatalf("expected Execute broadcast success, got %+v", broadcastResult)
+	}
+	broadcastMsg, ok := broadcastResult.Data.(*shared.FederationMessage)
+	if !ok {
+		t.Fatalf("expected Execute broadcast data type *shared.FederationMessage, got %T", broadcastResult.Data)
+	}
+	broadcastPayload, ok := broadcastMsg.Payload.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute broadcast payload map, got %T", broadcastMsg.Payload)
+	}
+	broadcastMapClone, ok := broadcastPayload["pointerMap"].(map[*keyNode]string)
+	if !ok {
+		t.Fatalf("expected Execute broadcast pointerMap type map[*keyNode]string, got %T", broadcastPayload["pointerMap"])
+	}
+	if len(broadcastMapClone) != 1 {
+		t.Fatalf("expected Execute broadcast pointerMap clone size 1, got %d", len(broadcastMapClone))
+	}
+	var broadcastClonedKey *keyNode
+	for key := range broadcastMapClone {
+		broadcastClonedKey = key
+	}
+	if broadcastClonedKey == nil {
+		t.Fatal("expected Execute broadcast cloned key")
+	}
+	if broadcastClonedKey == broadcastKey {
+		t.Fatal("expected Execute broadcast pointer-map key to be cloned")
+	}
+	if broadcastClonedKey.Name != "broadcast-key" {
+		t.Fatalf("expected Execute broadcast cloned key name broadcast-key, got %q", broadcastClonedKey.Name)
+	}
+	broadcastKey.Name = "broadcast-mutated"
+	if broadcastClonedKey.Name != "broadcast-key" {
+		t.Fatalf("expected Execute broadcast cloned key to remain broadcast-key after input mutation, got %q", broadcastClonedKey.Name)
+	}
+
+	proposalKey := &keyNode{Name: "proposal-key"}
+	proposalPointerMap := map[*keyNode]string{proposalKey: "proposal-value"}
+	proposalResult, proposalErr := ft.ExecuteTool(context.Background(), "federation/propose", map[string]interface{}{
+		"proposerId":   "pointer-key-proposer",
+		"proposalType": "pointer-key-check",
+		"value": map[string]interface{}{
+			"pointerMap": proposalPointerMap,
+		},
+	})
+	if proposalErr != nil {
+		t.Fatalf("ExecuteTool propose with pointer-key map should succeed, got %v", proposalErr)
+	}
+	if !proposalResult.Success {
+		t.Fatalf("expected ExecuteTool propose success, got %+v", proposalResult)
+	}
+	proposalCopy, ok := proposalResult.Data.(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected ExecuteTool propose data type *shared.FederationProposal, got %T", proposalResult.Data)
+	}
+	proposalValue, ok := proposalCopy.Value.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool proposal value map, got %T", proposalCopy.Value)
+	}
+	proposalMapClone, ok := proposalValue["pointerMap"].(map[*keyNode]string)
+	if !ok {
+		t.Fatalf("expected ExecuteTool proposal pointerMap type map[*keyNode]string, got %T", proposalValue["pointerMap"])
+	}
+	if len(proposalMapClone) != 1 {
+		t.Fatalf("expected ExecuteTool proposal pointerMap clone size 1, got %d", len(proposalMapClone))
+	}
+	var proposalClonedKey *keyNode
+	for key := range proposalMapClone {
+		proposalClonedKey = key
+	}
+	if proposalClonedKey == nil {
+		t.Fatal("expected ExecuteTool proposal cloned key")
+	}
+	if proposalClonedKey == proposalKey {
+		t.Fatal("expected ExecuteTool proposal pointer-map key to be cloned")
+	}
+	if proposalClonedKey.Name != "proposal-key" {
+		t.Fatalf("expected ExecuteTool proposal cloned key name proposal-key, got %q", proposalClonedKey.Name)
+	}
+	proposalKey.Name = "proposal-mutated"
+	if proposalClonedKey.Name != "proposal-key" {
+		t.Fatalf("expected ExecuteTool proposal cloned key to remain proposal-key after input mutation, got %q", proposalClonedKey.Name)
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_ProposeSuccessParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
