@@ -12,11 +12,13 @@ func TestManagedPriorityToTaskPriority(t *testing.T) {
 		input    int
 		expected shared.TaskPriority
 	}{
+		{name: "below normal range still low", input: 0, expected: shared.PriorityLow},
 		{name: "low range", input: 1, expected: shared.PriorityLow},
 		{name: "medium boundary", input: 4, expected: shared.PriorityMedium},
 		{name: "medium range", input: 7, expected: shared.PriorityMedium},
 		{name: "high boundary", input: 8, expected: shared.PriorityHigh},
 		{name: "high range", input: 10, expected: shared.PriorityHigh},
+		{name: "above normal range still high", input: 11, expected: shared.PriorityHigh},
 	}
 
 	for _, tt := range tests {
