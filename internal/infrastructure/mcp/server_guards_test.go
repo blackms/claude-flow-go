@@ -423,3 +423,40 @@ func TestServer_HandleRequestAndToolsCallTrimNames(t *testing.T) {
 		t.Fatalf("expected missing-tool-name validation for whitespace names, got %v", missingToolCallResp.Error)
 	}
 }
+
+func TestServer_HandleRequestRejectsNilContext(t *testing.T) {
+	server := NewServer(Options{})
+	if server == nil {
+		t.Fatal("expected server")
+	}
+
+	resp := server.HandleRequest(nil, shared.MCPRequest{
+		ID:     "nil-context",
+		Method: "tools/list",
+		Params: map[string]interface{}{},
+	})
+	if resp.Error == nil {
+		t.Fatal("expected error for nil context")
+	}
+	if resp.Error.Code != -32603 {
+		t.Fatalf("expected internal error code for nil context, got %d", resp.Error.Code)
+	}
+	if resp.Error.Message != "context is required" {
+		t.Fatalf("expected context-required message, got %q", resp.Error.Message)
+	}
+}
+
+func TestServer_HandleRequestValidationPrecedence(t *testing.T) {
+	var unconfigured Server
+	resp := unconfigured.HandleRequest(nil, shared.MCPRequest{
+		ID:     "precedence",
+		Method: "tools/list",
+		Params: map[string]interface{}{},
+	})
+	if resp.Error == nil {
+		t.Fatal("expected precedence error")
+	}
+	if resp.Error.Message != "mcp server is not initialized" {
+		t.Fatalf("expected initialization error precedence, got %q", resp.Error.Message)
+	}
+}

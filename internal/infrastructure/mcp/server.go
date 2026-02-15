@@ -429,6 +429,15 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 			},
 		}
 	}
+	if ctx == nil {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32603,
+				Message: "context is required",
+			},
+		}
+	}
 
 	method := strings.TrimSpace(request.Method)
 
