@@ -145,6 +145,31 @@ func TestNewFederationTools_AllowsNilHubAndFailsGracefully(t *testing.T) {
 	}
 }
 
+func TestNewFederationTools_AllowsZeroValueHubWrapperAndFailsGracefully(t *testing.T) {
+	hub := &FederationHub{}
+	fedTools := NewFederationTools(hub)
+	if fedTools == nil {
+		t.Fatal("expected federation tools wrapper for zero-value hub")
+	}
+
+	result, err := fedTools.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if err == nil {
+		t.Fatal("expected Execute to fail for zero-value hub wrapper")
+	}
+	if result == nil {
+		t.Fatal("expected Execute result for zero-value hub wrapper")
+	}
+	if err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected configured-hub error, got %q", err.Error())
+	}
+	if result.Error != "federation hub is not configured" {
+		t.Fatalf("expected result configured-hub error, got %q", result.Error)
+	}
+	if result.Success {
+		t.Fatal("expected failed Execute result for zero-value hub wrapper")
+	}
+}
+
 func TestFederationHub_PublicLifecycleReadsAvailableBeforeInitialize(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 
