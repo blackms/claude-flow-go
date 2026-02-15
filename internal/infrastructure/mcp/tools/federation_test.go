@@ -370,6 +370,103 @@ func TestFederationTools_ExecuteAndExecuteTool_StatusParity(t *testing.T) {
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_StatusDeterministicSwarmOrdering(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-zeta",
+		Name:      "Zeta",
+		MaxAgents: 3,
+	}); err != nil {
+		t.Fatalf("failed to register swarm-zeta: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-alpha",
+		Name:      "Alpha",
+		MaxAgents: 3,
+	}); err != nil {
+		t.Fatalf("failed to register swarm-alpha: %v", err)
+	}
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-beta",
+		Name:      "Beta",
+		MaxAgents: 3,
+	}); err != nil {
+		t.Fatalf("failed to register swarm-beta: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if execErr != nil {
+		t.Fatalf("Execute should succeed, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/status", map[string]interface{}{})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execData, ok := execResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute data map, got %T", execResult.Data)
+	}
+	directData, ok := directResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool data map, got %T", directResult.Data)
+	}
+
+	execSwarmsRaw, ok := execData["swarms"]
+	if !ok {
+		t.Fatal("expected Execute status data to contain swarms")
+	}
+	directSwarmsRaw, ok := directData["swarms"]
+	if !ok {
+		t.Fatal("expected ExecuteTool status data to contain swarms")
+	}
+
+	execSwarms, ok := execSwarmsRaw.([]map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute swarms as []map[string]interface{}, got %T", execSwarmsRaw)
+	}
+	directSwarms, ok := directSwarmsRaw.([]map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool swarms as []map[string]interface{}, got %T", directSwarmsRaw)
+	}
+
+	if len(execSwarms) != len(directSwarms) {
+		t.Fatalf("expected swarm list parity, got Execute=%d ExecuteTool=%d", len(execSwarms), len(directSwarms))
+	}
+
+	for i := 1; i < len(execSwarms); i++ {
+		prev := execSwarms[i-1]["swarmId"].(string)
+		curr := execSwarms[i]["swarmId"].(string)
+		if prev > curr {
+			t.Fatalf("expected Execute swarm order to be sorted ascending, got %q before %q", prev, curr)
+		}
+	}
+	for i := range execSwarms {
+		execID := execSwarms[i]["swarmId"]
+		directID := directSwarms[i]["swarmId"]
+		if execID != directID {
+			t.Fatalf("expected deterministic swarm ordering parity at index %d, got Execute=%v ExecuteTool=%v", i, execID, directID)
+		}
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {

@@ -241,6 +241,9 @@ func (t *FederationTools) getStatus(ctx context.Context, args map[string]interfa
 	config := t.hub.GetConfig()
 
 	swarms := t.hub.GetSwarms()
+	sort.Slice(swarms, func(i, j int) bool {
+		return swarms[i].SwarmID < swarms[j].SwarmID
+	})
 	swarmInfos := make([]map[string]interface{}, len(swarms))
 	for i, swarm := range swarms {
 		swarmInfos[i] = map[string]interface{}{
