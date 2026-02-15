@@ -140,3 +140,57 @@ func TestPromptRegistry_GetPromptReturnsDefensiveCopy(t *testing.T) {
 		t.Fatalf("expected defensive copy for GetPrompt arguments, got %+v", second.Arguments)
 	}
 }
+
+func TestPromptRegistry_GetIsolatesArgsAndMessages(t *testing.T) {
+	registry := NewPromptRegistryWithDefaults()
+
+	baseMessages := []shared.PromptMessage{
+		{
+			Role: "user",
+			Content: []shared.PromptContent{
+				{
+					Type: shared.PromptContentTypeText,
+					Text: "base",
+				},
+			},
+		},
+	}
+
+	err := registry.Register(&shared.MCPPrompt{
+		Name: "prompt-get-isolation",
+	}, func(args map[string]string) ([]shared.PromptMessage, error) {
+		if args == nil {
+			t.Fatal("expected args map to be non-nil in handler")
+		}
+		args["injected"] = "value"
+		return baseMessages, nil
+	})
+	if err != nil {
+		t.Fatalf("failed to register prompt: %v", err)
+	}
+
+	callerArgs := map[string]string{"existing": "ok"}
+	first, err := registry.Get("prompt-get-isolation", callerArgs)
+	if err != nil {
+		t.Fatalf("failed to get first prompt result: %v", err)
+	}
+	if len(first.Messages) != 1 {
+		t.Fatalf("expected one message in first prompt result, got %d", len(first.Messages))
+	}
+	if _, ok := callerArgs["injected"]; ok {
+		t.Fatalf("expected caller args map to remain unchanged, got %+v", callerArgs)
+	}
+
+	first.Messages[0].Content[0].Text = "mutated"
+
+	second, err := registry.Get("prompt-get-isolation", callerArgs)
+	if err != nil {
+		t.Fatalf("failed to get second prompt result: %v", err)
+	}
+	if len(second.Messages) != 1 {
+		t.Fatalf("expected one message in second prompt result, got %d", len(second.Messages))
+	}
+	if second.Messages[0].Content[0].Text != "base" {
+		t.Fatalf("expected defensive copy for prompt messages, got %q", second.Messages[0].Content[0].Text)
+	}
+}
