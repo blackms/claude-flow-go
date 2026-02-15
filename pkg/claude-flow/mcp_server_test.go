@@ -544,6 +544,44 @@ func TestNewMCPServer_WithoutMemory_RegistersNoMemoryTools(t *testing.T) {
 	}
 }
 
+func TestNewMCPServer_WithCoordinatorAndWithoutMemory_RegistersNoMemoryTools(t *testing.T) {
+	coord, err := NewSwarmCoordinator(SwarmConfig{
+		Topology: TopologyMesh,
+	})
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = coord.Shutdown()
+	})
+
+	server := NewMCPServer(MCPServerConfig{
+		Coordinator: coord,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	memoryTools := map[string]bool{
+		"memory_store":    true,
+		"memory_retrieve": true,
+		"memory_query":    true,
+		"memory_search":   true,
+		"memory_delete":   true,
+	}
+
+	for _, tool := range tools {
+		if memoryTools[tool.Name] {
+			t.Fatalf("expected memory tool %s to be absent in coordinator-only config", tool.Name)
+		}
+	}
+}
+
 func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 	backend, err := NewSQLiteBackend(":memory:")
 	if err != nil {
