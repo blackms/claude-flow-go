@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
@@ -113,6 +114,32 @@ func TestMCPServer_StopShutsDownFederationHub(t *testing.T) {
 	}
 	if err.Error() != "federation hub is shut down" {
 		t.Fatalf("expected shutdown lifecycle error, got %q", err.Error())
+	}
+}
+
+func TestMCPServer_StopHandlesMalformedFederationHubGracefully(t *testing.T) {
+	server := NewMCPServer(MCPServerConfig{})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	// Simulate malformed wiring: non-nil, unconfigured federation hub.
+	server.federationHub = &federation.FederationHub{}
+
+	err := server.Stop()
+	if err == nil {
+		t.Fatal("expected stop to surface malformed federation hub error")
+	}
+	if err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected malformed federation hub error, got %q", err.Error())
+	}
+	if server.federationHub != nil {
+		t.Fatal("expected stop to clear malformed federation hub reference")
+	}
+
+	// Subsequent stop should remain safe and non-panicking.
+	if err := server.Stop(); err != nil {
+		t.Fatalf("expected second stop to remain safe, got %v", err)
 	}
 }
 
