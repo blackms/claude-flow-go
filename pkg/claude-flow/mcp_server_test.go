@@ -59,6 +59,9 @@ func TestNewMCPServer_RegistersBuiltInHooksAndUniqueTools(t *testing.T) {
 	if toolCounts["federation/status"] != 1 {
 		t.Fatalf("expected exactly one federation/status tool, got %d", toolCounts["federation/status"])
 	}
+	if toolCounts["federation/spawn-ephemeral"] != 1 {
+		t.Fatalf("expected exactly one federation/spawn-ephemeral tool, got %d", toolCounts["federation/spawn-ephemeral"])
+	}
 }
 
 func TestNewMCPServer_NoDuplicateToolNames(t *testing.T) {
@@ -171,8 +174,14 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 	hasFederationStatus := false
 	hasFederationSpawn := false
 	hasHooksList := false
+	seen := make(map[string]bool, len(tools))
 
 	for _, tool := range tools {
+		if seen[tool.Name] {
+			t.Fatalf("duplicate tool name found: %s", tool.Name)
+		}
+		seen[tool.Name] = true
+
 		switch tool.Name {
 		case "agent_spawn":
 			hasAgentSpawn = true
