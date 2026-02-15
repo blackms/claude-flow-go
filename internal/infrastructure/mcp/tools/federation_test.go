@@ -390,12 +390,14 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 			"tags":   map[string]string{"owner": "team-a"},
 			"flags":  map[string]bool{"featureA": true},
 			"limits": map[string]int{"max": 10},
+			"quota":  map[string]int64{"hard": 20},
 		},
 		"items": []interface{}{
 			map[string]interface{}{"id": "a"},
 			[]interface{}{map[string]string{"kind": "x"}, map[string]bool{"ready": true}},
 		},
 		"counts": []int{1, 2, 3},
+		"longCounts": []int64{7, 8, 9},
 		"ratios": []float64{0.5, 0.75},
 		"stringMaps": []map[string]string{
 			{"env": "prod"},
@@ -408,6 +410,9 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 		},
 		"intMaps": []map[string]int{
 			{"max": 10},
+		},
+		"int64Maps": []map[string]int64{
+			{"hard": 20},
 		},
 	}
 
@@ -425,6 +430,7 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	clonedMeta["tags"].(map[string]string)["owner"] = "mutated-owner"
 	clonedMeta["flags"].(map[string]bool)["featureA"] = false
 	clonedMeta["limits"].(map[string]int)["max"] = 999
+	clonedMeta["quota"].(map[string]int64)["hard"] = 999
 
 	clonedItems := cloned["items"].([]interface{})
 	clonedItems[0].(map[string]interface{})["id"] = "mutated-id"
@@ -432,11 +438,13 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	clonedItems[1].([]interface{})[1].(map[string]bool)["ready"] = false
 
 	cloned["counts"].([]int)[0] = 100
+	cloned["longCounts"].([]int64)[0] = 700
 	cloned["ratios"].([]float64)[0] = 9.9
 	cloned["stringMaps"].([]map[string]string)[0]["env"] = "staging"
 	cloned["ifaceMaps"].([]map[string]interface{})[0]["status"] = "inactive"
 	cloned["boolMaps"].([]map[string]bool)[0]["enabled"] = false
 	cloned["intMaps"].([]map[string]int)[0]["max"] = 999
+	cloned["int64Maps"].([]map[string]int64)[0]["hard"] = 999
 
 	origMeta := original["meta"].(map[string]interface{})
 	if origMeta["nested"].(map[string]interface{})["k"] != "v" {
@@ -450,6 +458,9 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	}
 	if origMeta["limits"].(map[string]int)["max"] != 10 {
 		t.Fatalf("expected original typed limits map to remain unchanged, got %v", origMeta["limits"].(map[string]int)["max"])
+	}
+	if origMeta["quota"].(map[string]int64)["hard"] != 20 {
+		t.Fatalf("expected original typed int64 quota map to remain unchanged, got %v", origMeta["quota"].(map[string]int64)["hard"])
 	}
 
 	origItems := original["items"].([]interface{})
@@ -475,11 +486,17 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 	if original["counts"].([]int)[0] != 1 {
 		t.Fatalf("expected original []int entry to remain unchanged, got %v", original["counts"].([]int)[0])
 	}
+	if original["longCounts"].([]int64)[0] != 7 {
+		t.Fatalf("expected original []int64 entry to remain unchanged, got %v", original["longCounts"].([]int64)[0])
+	}
 	if original["ratios"].([]float64)[0] != 0.5 {
 		t.Fatalf("expected original []float64 entry to remain unchanged, got %v", original["ratios"].([]float64)[0])
 	}
 	if original["intMaps"].([]map[string]int)[0]["max"] != 10 {
 		t.Fatalf("expected original []map[string]int entry to remain unchanged, got %v", original["intMaps"].([]map[string]int)[0]["max"])
+	}
+	if original["int64Maps"].([]map[string]int64)[0]["hard"] != 20 {
+		t.Fatalf("expected original []map[string]int64 entry to remain unchanged, got %v", original["int64Maps"].([]map[string]int64)[0]["hard"])
 	}
 }
 

@@ -1013,6 +1013,16 @@ func cloneInterfaceValue(value interface{}) interface{} {
 			cloned[i] = item
 		}
 		return cloned
+	case []map[string]int64:
+		cloned := make([]map[string]int64, len(typed))
+		for i := range typed {
+			item := make(map[string]int64, len(typed[i]))
+			for key, val := range typed[i] {
+				item[key] = val
+			}
+			cloned[i] = item
+		}
+		return cloned
 	case []map[string]float64:
 		cloned := make([]map[string]float64, len(typed))
 		for i := range typed {
