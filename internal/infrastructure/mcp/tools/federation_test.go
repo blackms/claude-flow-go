@@ -4,6 +4,7 @@ package tools
 import (
 	"context"
 	"math"
+	"reflect"
 	"testing"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
@@ -313,6 +314,68 @@ func TestParseEphemeralAgentStatus(t *testing.T) {
 				t.Fatalf("expected status %q, got %q", tt.expected, got)
 			}
 		})
+	}
+}
+
+func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
+	original := map[string]interface{}{
+		"meta": map[string]interface{}{
+			"nested": map[string]interface{}{"k": "v"},
+			"tags":   map[string]string{"owner": "team-a"},
+		},
+		"items": []interface{}{
+			map[string]interface{}{"id": "a"},
+			[]interface{}{map[string]string{"kind": "x"}},
+		},
+		"stringMaps": []map[string]string{
+			{"env": "prod"},
+		},
+		"ifaceMaps": []map[string]interface{}{
+			{"status": "active"},
+		},
+	}
+
+	clonedRaw := cloneInterfaceValue(original)
+	cloned, ok := clonedRaw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected cloned type map[string]interface{}, got %T", clonedRaw)
+	}
+	if !reflect.DeepEqual(original, cloned) {
+		t.Fatalf("expected cloned value to match original before mutation; original=%v cloned=%v", original, cloned)
+	}
+
+	clonedMeta := cloned["meta"].(map[string]interface{})
+	clonedMeta["nested"].(map[string]interface{})["k"] = "mutated"
+	clonedMeta["tags"].(map[string]string)["owner"] = "mutated-owner"
+
+	clonedItems := cloned["items"].([]interface{})
+	clonedItems[0].(map[string]interface{})["id"] = "mutated-id"
+	clonedItems[1].([]interface{})[0].(map[string]string)["kind"] = "mutated-kind"
+
+	cloned["stringMaps"].([]map[string]string)[0]["env"] = "staging"
+	cloned["ifaceMaps"].([]map[string]interface{})[0]["status"] = "inactive"
+
+	origMeta := original["meta"].(map[string]interface{})
+	if origMeta["nested"].(map[string]interface{})["k"] != "v" {
+		t.Fatalf("expected original nested map to remain unchanged, got %v", origMeta["nested"].(map[string]interface{})["k"])
+	}
+	if origMeta["tags"].(map[string]string)["owner"] != "team-a" {
+		t.Fatalf("expected original typed tags map to remain unchanged, got %v", origMeta["tags"].(map[string]string)["owner"])
+	}
+
+	origItems := original["items"].([]interface{})
+	if origItems[0].(map[string]interface{})["id"] != "a" {
+		t.Fatalf("expected original items map to remain unchanged, got %v", origItems[0].(map[string]interface{})["id"])
+	}
+	if origItems[1].([]interface{})[0].(map[string]string)["kind"] != "x" {
+		t.Fatalf("expected original nested typed map in slice to remain unchanged, got %v", origItems[1].([]interface{})[0].(map[string]string)["kind"])
+	}
+
+	if original["stringMaps"].([]map[string]string)[0]["env"] != "prod" {
+		t.Fatalf("expected original []map[string]string entry to remain unchanged, got %v", original["stringMaps"].([]map[string]string)[0]["env"])
+	}
+	if original["ifaceMaps"].([]map[string]interface{})[0]["status"] != "active" {
+		t.Fatalf("expected original []map[string]interface{} entry to remain unchanged, got %v", original["ifaceMaps"].([]map[string]interface{})[0]["status"])
 	}
 }
 
