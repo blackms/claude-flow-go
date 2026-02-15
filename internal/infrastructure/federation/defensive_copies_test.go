@@ -215,6 +215,81 @@ func TestFederationHub_GettersReturnDefensiveCopies(t *testing.T) {
 	}
 }
 
+func TestFederationHub_CommandResultsReturnDefensiveCopies(t *testing.T) {
+	cfg := shared.DefaultFederationConfig()
+	cfg.ConsensusQuorum = 1.0
+
+	hub := NewFederationHub(cfg)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	registerTestSwarm(t, hub, "swarm-command-source", "Command Source")
+	registerTestSwarm(t, hub, "swarm-command-target", "Command Target")
+
+	returnedMessage, err := hub.SendMessage("swarm-command-source", "swarm-command-target", map[string]interface{}{
+		"payload": map[string]interface{}{"count": 3},
+	})
+	if err != nil {
+		t.Fatalf("failed to send message: %v", err)
+	}
+	requireMap(t, requireMap(t, returnedMessage.Payload, "returned direct message payload")["payload"], "returned direct message nested payload")["count"] = 999
+
+	storedMessage, ok := hub.GetMessage(returnedMessage.ID)
+	if !ok {
+		t.Fatal("expected stored direct message")
+	}
+	storedDirectPayload := requireMap(t, storedMessage.Payload, "stored direct message payload")
+	if requireMap(t, storedDirectPayload["payload"], "stored direct nested payload")["count"] != 3 {
+		t.Fatalf("expected stored direct payload count to remain unchanged, got %v", storedDirectPayload["payload"])
+	}
+
+	returnedBroadcast, err := hub.Broadcast("swarm-command-source", map[string]interface{}{
+		"payload": map[string]interface{}{"count": 5},
+	})
+	if err != nil {
+		t.Fatalf("failed to broadcast message: %v", err)
+	}
+	requireMap(t, requireMap(t, returnedBroadcast.Payload, "returned broadcast payload")["payload"], "returned broadcast nested payload")["count"] = 111
+
+	storedBroadcast, ok := hub.GetMessage(returnedBroadcast.ID)
+	if !ok {
+		t.Fatal("expected stored broadcast message")
+	}
+	storedBroadcastPayload := requireMap(t, storedBroadcast.Payload, "stored broadcast payload")
+	if requireMap(t, storedBroadcastPayload["payload"], "stored broadcast nested payload")["count"] != 5 {
+		t.Fatalf("expected stored broadcast payload count to remain unchanged, got %v", storedBroadcastPayload["payload"])
+	}
+
+	returnedProposal, err := hub.Propose("swarm-command-source", "rollout", map[string]interface{}{
+		"plan": map[string]interface{}{"step": "prepare"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create proposal: %v", err)
+	}
+	returnedProposal.Type = "tampered-type"
+	returnedProposal.Votes["swarm-command-target"] = false
+	requireMap(t, requireMap(t, returnedProposal.Value, "returned proposal value")["plan"], "returned proposal nested value")["step"] = "tampered-step"
+
+	storedProposal, ok := hub.GetProposal(returnedProposal.ID)
+	if !ok {
+		t.Fatal("expected stored proposal")
+	}
+	if storedProposal.Type != "rollout" {
+		t.Fatalf("expected stored proposal type to remain unchanged, got %q", storedProposal.Type)
+	}
+	if _, hasVote := storedProposal.Votes["swarm-command-target"]; hasVote {
+		t.Fatalf("expected returned proposal vote mutation not to persist, got votes=%v", storedProposal.Votes)
+	}
+	storedProposalValue := requireMap(t, storedProposal.Value, "stored proposal value")
+	if requireMap(t, storedProposalValue["plan"], "stored proposal nested value")["step"] != "prepare" {
+		t.Fatalf("expected stored proposal nested value to remain unchanged, got %v", storedProposalValue["plan"])
+	}
+}
+
 func requireMap(t *testing.T, value interface{}, context string) map[string]interface{} {
 	t.Helper()
 	mapped, ok := value.(map[string]interface{})

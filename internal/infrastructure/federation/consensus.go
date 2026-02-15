@@ -84,7 +84,7 @@ func (fh *FederationHub) Propose(proposerID, proposalType string, value interfac
 	// Check if quorum already reached (e.g., single swarm)
 	fh.checkQuorum(proposal)
 
-	return proposal, nil
+	return cloneFederationProposal(proposal), nil
 }
 
 // Vote submits a vote on a proposal.

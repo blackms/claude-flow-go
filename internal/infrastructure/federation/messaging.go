@@ -84,7 +84,7 @@ func (fh *FederationHub) SendMessage(sourceSwarmID, targetSwarmID string, payloa
 	deliveryTime := shared.Now() - startTime
 	fh.recordMessageTime(deliveryTime)
 
-	return msg, nil
+	return cloneFederationMessage(msg), nil
 }
 
 // Broadcast sends a message to all active swarms except the sender.
@@ -154,7 +154,7 @@ func (fh *FederationHub) Broadcast(sourceSwarmID string, payload interface{}) (*
 	deliveryTime := shared.Now() - startTime
 	fh.recordMessageTime(deliveryTime)
 
-	return msg, nil
+	return cloneFederationMessage(msg), nil
 }
 
 // SendHeartbeat sends a heartbeat message to a swarm.
@@ -205,7 +205,7 @@ func (fh *FederationHub) SendHeartbeat(sourceSwarmID, targetSwarmID string) (*sh
 	// Update heartbeat for source swarm
 	sourceSwarm.LastHeartbeat = now
 
-	return msg, nil
+	return cloneFederationMessage(msg), nil
 }
 
 // SendConsensusMessage sends a consensus-related message.
@@ -257,7 +257,7 @@ func (fh *FederationHub) SendConsensusMessage(sourceSwarmID string, payload inte
 
 	fh.messageCount.Add(1)
 
-	return msg, nil
+	return cloneFederationMessage(msg), nil
 }
 
 // addMessage adds a message to the history.
