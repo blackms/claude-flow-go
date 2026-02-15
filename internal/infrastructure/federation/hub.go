@@ -139,12 +139,16 @@ func (fh *FederationHub) RegisterSwarm(swarm shared.SwarmRegistration) error {
 	if swarmID == "" {
 		return fmt.Errorf("swarmId is required")
 	}
+	name := strings.TrimSpace(swarm.Name)
+	if name == "" {
+		return fmt.Errorf("name is required")
+	}
 	if swarm.MaxAgents <= 0 {
 		return fmt.Errorf("maxAgents must be greater than 0")
 	}
 
 	swarm.SwarmID = swarmID
-	swarm.Name = strings.TrimSpace(swarm.Name)
+	swarm.Name = name
 	swarm.Endpoint = strings.TrimSpace(swarm.Endpoint)
 	swarm.Capabilities = normalizeStringValues(swarm.Capabilities)
 

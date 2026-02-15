@@ -340,6 +340,15 @@ func TestFederationHub_RegisterSwarmRejectsInvalidInputs(t *testing.T) {
 			},
 			expectedErr: "maxAgents must be greater than 0",
 		},
+		{
+			name: "blank name",
+			registration: shared.SwarmRegistration{
+				SwarmID:   "swarm-blank-name",
+				Name:      "   ",
+				MaxAgents: 1,
+			},
+			expectedErr: "name is required",
+		},
 	}
 
 	for _, tc := range tests {
