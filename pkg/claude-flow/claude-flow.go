@@ -26,6 +26,7 @@ import (
 
 	"github.com/anthropics/claude-flow-go/internal/application/consensus"
 	"github.com/anthropics/claude-flow-go/internal/application/coordinator"
+	"github.com/anthropics/claude-flow-go/internal/application/executor"
 	"github.com/anthropics/claude-flow-go/internal/application/hivemind"
 	"github.com/anthropics/claude-flow-go/internal/application/workflow"
 	"github.com/anthropics/claude-flow-go/internal/domain/agent"
@@ -38,7 +39,6 @@ import (
 	mcplogging "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/logging"
 	mcpprompts "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/prompts"
 	mcpresources "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/resources"
-	"github.com/anthropics/claude-flow-go/internal/application/executor"
 	mcpsampling "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sampling"
 	mcpsessions "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/sessions"
 	mcptasks "github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/tasks"
@@ -89,14 +89,14 @@ type (
 	TrajectoryStep       = shared.TrajectoryStep
 
 	// Hive Mind Consensus types
-	ConsensusType    = shared.ConsensusType
-	ProposalStatus   = shared.ProposalStatus
-	Proposal         = shared.Proposal
-	WeightedVote     = shared.WeightedVote
-	ProposalResult   = shared.ProposalResult
-	HiveMindConfig   = shared.HiveMindConfig
-	HiveMindState    = shared.HiveMindState
-	ProposalOutcome  = shared.ProposalOutcome
+	ConsensusType   = shared.ConsensusType
+	ProposalStatus  = shared.ProposalStatus
+	Proposal        = shared.Proposal
+	WeightedVote    = shared.WeightedVote
+	ProposalResult  = shared.ProposalResult
+	HiveMindConfig  = shared.HiveMindConfig
+	HiveMindState   = shared.HiveMindState
+	ProposalOutcome = shared.ProposalOutcome
 
 	// Distributed Consensus Algorithm types
 	ConsensusAlgorithmType     = shared.ConsensusAlgorithmType
@@ -123,13 +123,13 @@ type (
 	AlgorithmStats             = shared.AlgorithmStats
 
 	// Message Bus types
-	MessagePriority   = shared.MessagePriority
-	BusMessageType    = shared.BusMessageType
-	BusMessage        = shared.BusMessage
-	MessageAck        = shared.MessageAck
-	MessageBusConfig  = shared.MessageBusConfig
-	MessageBusStats   = shared.MessageBusStats
-	MessageEntry      = shared.MessageEntry
+	MessagePriority  = shared.MessagePriority
+	BusMessageType   = shared.BusMessageType
+	BusMessage       = shared.BusMessage
+	MessageAck       = shared.MessageAck
+	MessageBusConfig = shared.MessageBusConfig
+	MessageBusStats  = shared.MessageBusStats
+	MessageEntry     = shared.MessageEntry
 
 	// Task types
 	TaskPriority = shared.TaskPriority
@@ -187,26 +187,26 @@ type (
 	FederationStats          = shared.FederationStats
 
 	// Attention Mechanism types
-	AttentionMechanism         = shared.AttentionMechanism
-	AttentionAgentOutput       = shared.AttentionAgentOutput
+	AttentionMechanism          = shared.AttentionMechanism
+	AttentionAgentOutput        = shared.AttentionAgentOutput
 	AttentionCoordinationResult = shared.AttentionCoordinationResult
-	FlashAttentionConfig       = shared.FlashAttentionConfig
-	MultiHeadAttentionConfig   = shared.MultiHeadAttentionConfig
-	LinearAttentionConfig      = shared.LinearAttentionConfig
-	HyperbolicAttentionConfig  = shared.HyperbolicAttentionConfig
-	MoEConfig                  = shared.MoEConfig
-	GraphRoPEConfig            = shared.GraphRoPEConfig
-	AttentionConfig            = shared.AttentionConfig
-	Expert                     = shared.Expert
-	ExpertRoutingResult        = shared.ExpertRoutingResult
-	ExpertSelection            = shared.ExpertSelection
-	AttentionPerformanceStats  = shared.AttentionPerformanceStats
+	FlashAttentionConfig        = shared.FlashAttentionConfig
+	MultiHeadAttentionConfig    = shared.MultiHeadAttentionConfig
+	LinearAttentionConfig       = shared.LinearAttentionConfig
+	HyperbolicAttentionConfig   = shared.HyperbolicAttentionConfig
+	MoEConfig                   = shared.MoEConfig
+	GraphRoPEConfig             = shared.GraphRoPEConfig
+	AttentionConfig             = shared.AttentionConfig
+	Expert                      = shared.Expert
+	ExpertRoutingResult         = shared.ExpertRoutingResult
+	ExpertSelection             = shared.ExpertSelection
+	AttentionPerformanceStats   = shared.AttentionPerformanceStats
 
 	// Plugin types
-	Plugin           = shared.Plugin
-	ExtensionPoint   = shared.ExtensionPoint
-	PluginMetadata   = shared.PluginMetadata
-	PluginManager    = shared.PluginManager
+	Plugin         = shared.Plugin
+	ExtensionPoint = shared.ExtensionPoint
+	PluginMetadata = shared.PluginMetadata
+	PluginManager  = shared.PluginManager
 
 	// MCP types
 	MCPTool         = shared.MCPTool
@@ -217,11 +217,11 @@ type (
 
 	// MCP 2025-11-25 Compliance Types
 	// Resource types
-	MCPResource        = shared.MCPResource
-	ResourceContent    = shared.ResourceContent
-	ResourceTemplate   = shared.ResourceTemplate
-	ResourceListResult = shared.ResourceListResult
-	ResourceReadResult = shared.ResourceReadResult
+	MCPResource         = shared.MCPResource
+	ResourceContent     = shared.ResourceContent
+	ResourceTemplate    = shared.ResourceTemplate
+	ResourceListResult  = shared.ResourceListResult
+	ResourceReadResult  = shared.ResourceReadResult
 	ResourceCacheConfig = shared.ResourceCacheConfig
 
 	// Prompt types
@@ -305,23 +305,23 @@ type (
 	PostCommandResult   = shared.PostCommandResult
 
 	// Session Management Types
-	SessionState         = shared.SessionState
-	TransportType        = shared.TransportType
-	Session              = shared.Session
-	SessionClientInfo    = shared.SessionClientInfo
-	SessionConfig        = shared.SessionConfig
-	SessionStats         = shared.SessionStats
-	SessionSaveRequest   = shared.SessionSaveRequest
-	SessionSaveResult    = shared.SessionSaveResult
+	SessionState          = shared.SessionState
+	TransportType         = shared.TransportType
+	Session               = shared.Session
+	SessionClientInfo     = shared.SessionClientInfo
+	SessionConfig         = shared.SessionConfig
+	SessionStats          = shared.SessionStats
+	SessionSaveRequest    = shared.SessionSaveRequest
+	SessionSaveResult     = shared.SessionSaveResult
 	SessionRestoreRequest = shared.SessionRestoreRequest
-	SessionRestoreResult = shared.SessionRestoreResult
-	SessionListRequest   = shared.SessionListRequest
-	SessionListResult    = shared.SessionListResult
-	SessionSummary       = shared.SessionSummary
-	SavedSession         = shared.SavedSession
-	SavedSessionAgent    = shared.SavedSessionAgent
-	SavedSessionTask     = shared.SavedSessionTask
-	SavedSessionMemory   = shared.SavedSessionMemory
+	SessionRestoreResult  = shared.SessionRestoreResult
+	SessionListRequest    = shared.SessionListRequest
+	SessionListResult     = shared.SessionListResult
+	SessionSummary        = shared.SessionSummary
+	SavedSession          = shared.SavedSession
+	SavedSessionAgent     = shared.SavedSessionAgent
+	SavedSessionTask      = shared.SavedSessionTask
+	SavedSessionMemory    = shared.SavedSessionMemory
 
 	// Backend types
 	MemoryBackend = shared.MemoryBackend
@@ -374,18 +374,18 @@ const (
 	AgentTypeReleaseManager      = shared.AgentTypeReleaseManager
 
 	// Extended Agent Types (12 additional types)
-	AgentTypeResearcher          = shared.AgentTypeResearcher
-	AgentTypeArchitect           = shared.AgentTypeArchitect
-	AgentTypeAnalyst             = shared.AgentTypeAnalyst
-	AgentTypeOptimizer           = shared.AgentTypeOptimizer
-	AgentTypeSecurityAuditor     = shared.AgentTypeSecurityAuditor
-	AgentTypeCoreArchitect       = shared.AgentTypeCoreArchitect
-	AgentTypeTestArchitect       = shared.AgentTypeTestArchitect
+	AgentTypeResearcher           = shared.AgentTypeResearcher
+	AgentTypeArchitect            = shared.AgentTypeArchitect
+	AgentTypeAnalyst              = shared.AgentTypeAnalyst
+	AgentTypeOptimizer            = shared.AgentTypeOptimizer
+	AgentTypeSecurityAuditor      = shared.AgentTypeSecurityAuditor
+	AgentTypeCoreArchitect        = shared.AgentTypeCoreArchitect
+	AgentTypeTestArchitect        = shared.AgentTypeTestArchitect
 	AgentTypeIntegrationArchitect = shared.AgentTypeIntegrationArchitect
-	AgentTypeHooksDeveloper      = shared.AgentTypeHooksDeveloper
-	AgentTypeMCPSpecialist       = shared.AgentTypeMCPSpecialist
-	AgentTypeDocumentationLead   = shared.AgentTypeDocumentationLead
-	AgentTypeDevOpsEngineer      = shared.AgentTypeDevOpsEngineer
+	AgentTypeHooksDeveloper       = shared.AgentTypeHooksDeveloper
+	AgentTypeMCPSpecialist        = shared.AgentTypeMCPSpecialist
+	AgentTypeDocumentationLead    = shared.AgentTypeDocumentationLead
+	AgentTypeDevOpsEngineer       = shared.AgentTypeDevOpsEngineer
 )
 
 // Domain constants
@@ -618,7 +618,7 @@ func (we *WorkflowEngine) Shutdown() error {
 
 // MCPServer wraps the internal MCP server for public use.
 type MCPServer struct {
-	internal       *mcp.Server
+	internal      *mcp.Server
 	federationHub *federation.FederationHub
 }
 
@@ -679,7 +679,7 @@ func NewMCPServer(config MCPServerConfig) *MCPServer {
 	}
 
 	return &MCPServer{
-		internal:       mcp.NewServer(opts),
+		internal:      mcp.NewServer(opts),
 		federationHub: fedHub,
 	}
 }
@@ -2186,6 +2186,9 @@ func NewFederationTools(hub *FederationHub) *tools.FederationTools {
 	if hub == nil {
 		return tools.NewFederationTools(nil)
 	}
+	if hub.internal == nil || !hub.internal.IsConfigured() {
+		return tools.NewFederationTools(nil)
+	}
 	return tools.NewFederationTools(hub.internal)
 }
 
@@ -3425,13 +3428,13 @@ type RoutingDecision struct {
 
 // Session state constants
 const (
-	SessionStateCreated  = shared.SessionStateCreated
-	SessionStateReady    = shared.SessionStateReady
-	SessionStateActive   = shared.SessionStateActive
-	SessionStateClosing  = shared.SessionStateClosing
-	SessionStateClosed   = shared.SessionStateClosed
-	SessionStateExpired  = shared.SessionStateExpired
-	SessionStateError    = shared.SessionStateError
+	SessionStateCreated = shared.SessionStateCreated
+	SessionStateReady   = shared.SessionStateReady
+	SessionStateActive  = shared.SessionStateActive
+	SessionStateClosing = shared.SessionStateClosing
+	SessionStateClosed  = shared.SessionStateClosed
+	SessionStateExpired = shared.SessionStateExpired
+	SessionStateError   = shared.SessionStateError
 )
 
 // Transport type constants

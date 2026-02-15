@@ -210,6 +210,10 @@ func TestNewFederationTools_UnknownToolErrorsTakePrecedence(t *testing.T) {
 			name: "zero-value wrapper",
 			hub:  &FederationHub{},
 		},
+		{
+			name: "wrapper with zero-value internal hub",
+			hub:  &FederationHub{internal: &federation.FederationHub{}},
+		},
 	}
 
 	for _, tc := range tests {
