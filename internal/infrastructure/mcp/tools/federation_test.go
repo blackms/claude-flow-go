@@ -519,6 +519,67 @@ func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmInterfaceSliceCapabi
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmTrimsWhitespaceInputsParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/register-swarm", map[string]interface{}{
+		"swarmId":   "  swarm-trim-exec  ",
+		"name":      "  Execute Swarm  ",
+		"endpoint":  "  http://execute.local  ",
+		"maxAgents": float64(4),
+	})
+	if execErr != nil {
+		t.Fatalf("Execute should succeed with padded fields, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/register-swarm", map[string]interface{}{
+		"swarmId":   "  swarm-trim-direct  ",
+		"name":      "  Direct Swarm  ",
+		"endpoint":  "  http://direct.local  ",
+		"maxAgents": int64(5),
+	})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed with padded fields, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execSwarm, ok := hub.GetSwarm("swarm-trim-exec")
+	if !ok {
+		t.Fatal("expected trimmed swarm ID swarm-trim-exec to exist")
+	}
+	if execSwarm.Name != "Execute Swarm" {
+		t.Fatalf("expected trimmed Execute swarm name, got %q", execSwarm.Name)
+	}
+	if execSwarm.Endpoint != "http://execute.local" {
+		t.Fatalf("expected trimmed Execute endpoint, got %q", execSwarm.Endpoint)
+	}
+
+	directSwarm, ok := hub.GetSwarm("swarm-trim-direct")
+	if !ok {
+		t.Fatal("expected trimmed swarm ID swarm-trim-direct to exist")
+	}
+	if directSwarm.Name != "Direct Swarm" {
+		t.Fatalf("expected trimmed ExecuteTool swarm name, got %q", directSwarm.Name)
+	}
+	if directSwarm.Endpoint != "http://direct.local" {
+		t.Fatalf("expected trimmed ExecuteTool endpoint, got %q", directSwarm.Endpoint)
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralSuccessParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
@@ -646,6 +707,76 @@ func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralIntegerTTLParity(t 
 	}
 	if directSpawn.EstimatedTTL != 23456 {
 		t.Fatalf("expected ExecuteTool estimated ttl 23456, got %d", directSpawn.EstimatedTTL)
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_SpawnEphemeralTrimsWhitespaceInputsParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-trim-spawn",
+		Name:      "Trim Spawn Swarm",
+		MaxAgents: 5,
+	}); err != nil {
+		t.Fatalf("failed to register trim spawn swarm: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/spawn-ephemeral", map[string]interface{}{
+		"swarmId": "  swarm-trim-spawn  ",
+		"type":    "  coder  ",
+		"task":    "  implement trimmed task  ",
+	})
+	if execErr != nil {
+		t.Fatalf("Execute should succeed with padded fields, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/spawn-ephemeral", map[string]interface{}{
+		"swarmId": "  swarm-trim-spawn  ",
+		"type":    "  reviewer  ",
+		"task":    "  review trimmed task  ",
+	})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed with padded fields, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execSpawn, ok := execResult.Data.(*shared.SpawnResult)
+	if !ok {
+		t.Fatalf("expected Execute data type *shared.SpawnResult, got %T", execResult.Data)
+	}
+	directSpawn, ok := directResult.Data.(*shared.SpawnResult)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type *shared.SpawnResult, got %T", directResult.Data)
+	}
+
+	execAgent, ok := hub.GetAgent(execSpawn.AgentID)
+	if !ok {
+		t.Fatalf("expected Execute agent %s to exist", execSpawn.AgentID)
+	}
+	if execAgent.SwarmID != "swarm-trim-spawn" || execAgent.Type != "coder" || execAgent.Task != "implement trimmed task" {
+		t.Fatalf("expected trimmed Execute agent fields, got swarm=%q type=%q task=%q", execAgent.SwarmID, execAgent.Type, execAgent.Task)
+	}
+
+	directAgent, ok := hub.GetAgent(directSpawn.AgentID)
+	if !ok {
+		t.Fatalf("expected ExecuteTool agent %s to exist", directSpawn.AgentID)
+	}
+	if directAgent.SwarmID != "swarm-trim-spawn" || directAgent.Type != "reviewer" || directAgent.Task != "review trimmed task" {
+		t.Fatalf("expected trimmed ExecuteTool agent fields, got swarm=%q type=%q task=%q", directAgent.SwarmID, directAgent.Type, directAgent.Task)
 	}
 }
 
@@ -895,6 +1026,80 @@ func TestFederationTools_ExecuteAndExecuteTool_TerminateEphemeralSuccessParity(t
 	}
 	if directData["terminated"] != directSpawn.AgentID {
 		t.Fatalf("expected ExecuteTool to terminate %s, got %v", directSpawn.AgentID, directData["terminated"])
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_TerminateEphemeralTrimmedAgentIDParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-terminate-trim",
+		Name:      "Terminate Trim Swarm",
+		MaxAgents: 5,
+	}); err != nil {
+		t.Fatalf("failed to register terminate trim swarm: %v", err)
+	}
+
+	execSpawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-terminate-trim",
+		Type:    "coder",
+		Task:    "exec terminate trim",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn Execute trim agent: %v", err)
+	}
+	directSpawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-terminate-trim",
+		Type:    "reviewer",
+		Task:    "direct terminate trim",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn ExecuteTool trim agent: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/terminate-ephemeral", map[string]interface{}{
+		"agentId": "  " + execSpawn.AgentID + "  ",
+	})
+	if execErr != nil {
+		t.Fatalf("Execute should accept trimmed agent ID, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute terminate result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/terminate-ephemeral", map[string]interface{}{
+		"agentId": "  " + directSpawn.AgentID + "  ",
+	})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should accept trimmed agent ID, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execData, ok := execResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute terminate data map, got %T", execResult.Data)
+	}
+	directData, ok := directResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool terminate data map, got %T", directResult.Data)
+	}
+
+	if execData["terminated"] != execSpawn.AgentID {
+		t.Fatalf("expected Execute terminated agent %s, got %v", execSpawn.AgentID, execData["terminated"])
+	}
+	if directData["terminated"] != directSpawn.AgentID {
+		t.Fatalf("expected ExecuteTool terminated agent %s, got %v", directSpawn.AgentID, directData["terminated"])
 	}
 }
 
