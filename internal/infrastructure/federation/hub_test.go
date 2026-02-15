@@ -144,6 +144,71 @@ func TestFederationHub_InitializeAllowsDisabledCleanupWithNonPositiveCleanupInte
 	})
 }
 
+func TestFederationHub_InitializeRejectsAlreadyInitialized(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("expected first initialize to succeed, got %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	err := hub.Initialize()
+	if err == nil {
+		t.Fatal("expected second initialize to fail")
+	}
+	if err.Error() != "federation hub is already initialized" {
+		t.Fatalf("expected already initialized error, got %q", err.Error())
+	}
+}
+
+func TestFederationHub_ShutdownIsIdempotent(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("expected first shutdown to succeed, got %v", err)
+	}
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("expected second shutdown to succeed, got %v", err)
+	}
+}
+
+func TestFederationHub_InitializeRejectsAfterShutdown(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("failed to shutdown federation hub: %v", err)
+	}
+
+	err := hub.Initialize()
+	if err == nil {
+		t.Fatal("expected initialize after shutdown to fail")
+	}
+	if err.Error() != "federation hub is shut down" {
+		t.Fatalf("expected shutdown lifecycle error, got %q", err.Error())
+	}
+}
+
+func TestFederationHub_InitializeRejectsWhenShutdownBeforeStart(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("shutdown before initialize should succeed, got %v", err)
+	}
+
+	err := hub.Initialize()
+	if err == nil {
+		t.Fatal("expected initialize to fail after pre-start shutdown")
+	}
+	if err.Error() != "federation hub is shut down" {
+		t.Fatalf("expected shutdown lifecycle error, got %q", err.Error())
+	}
+}
+
 func TestFederationHub_RegisterSwarmRejectsTrimmedDuplicateIDs(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {

@@ -53,6 +53,8 @@ type FederationHub struct {
 	cancel       context.CancelFunc
 	syncTicker   *time.Ticker
 	cleanupTicker *time.Ticker
+	initialized  bool
+	shutdown     bool
 
 	mu sync.RWMutex
 }
@@ -117,6 +119,16 @@ func (fh *FederationHub) Initialize() error {
 		return fmt.Errorf("max message history must be greater than 0")
 	}
 
+	fh.mu.Lock()
+	defer fh.mu.Unlock()
+
+	if fh.shutdown {
+		return fmt.Errorf("federation hub is shut down")
+	}
+	if fh.initialized {
+		return fmt.Errorf("federation hub is already initialized")
+	}
+
 	// Start sync loop
 	fh.syncTicker = time.NewTicker(time.Duration(fh.config.SyncInterval) * time.Millisecond)
 	go fh.syncLoop()
@@ -127,26 +139,35 @@ func (fh *FederationHub) Initialize() error {
 		go fh.cleanupLoop()
 	}
 
+	fh.initialized = true
+
 	return nil
 }
 
 // Shutdown stops the federation hub and cleans up resources.
 func (fh *FederationHub) Shutdown() error {
-	fh.cancel()
-
-	if fh.syncTicker != nil {
-		fh.syncTicker.Stop()
-	}
-	if fh.cleanupTicker != nil {
-		fh.cleanupTicker.Stop()
-	}
-
-	// Terminate all ephemeral agents
 	fh.mu.Lock()
+	if fh.shutdown {
+		fh.mu.Unlock()
+		return nil
+	}
+	fh.shutdown = true
+	fh.initialized = false
+	syncTicker := fh.syncTicker
+	cleanupTicker := fh.cleanupTicker
+
+	fh.cancel()
 	for agentID := range fh.ephemeralAgents {
 		fh.terminateAgentInternal(agentID, "federation shutdown")
 	}
 	fh.mu.Unlock()
+
+	if syncTicker != nil {
+		syncTicker.Stop()
+	}
+	if cleanupTicker != nil {
+		cleanupTicker.Stop()
+	}
 
 	return nil
 }
