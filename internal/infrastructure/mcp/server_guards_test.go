@@ -134,6 +134,25 @@ func (p nonSerializableResultProvider) Execute(ctx context.Context, toolName str
 	}, nil
 }
 
+type writableParamsProvider struct {
+	methodName string
+}
+
+func (p writableParamsProvider) GetTools() []shared.MCPTool {
+	return []shared.MCPTool{{Name: p.methodName}}
+}
+
+func (p writableParamsProvider) Execute(ctx context.Context, toolName string, params map[string]interface{}) (*shared.MCPToolResult, error) {
+	if toolName != p.methodName {
+		return nil, nil
+	}
+	if params == nil {
+		return nil, fmt.Errorf("params map is nil")
+	}
+	params["injected"] = "ok"
+	return &shared.MCPToolResult{Success: true, Data: map[string]interface{}{"ok": true}}, nil
+}
+
 func TestServer_NilReceiverMethodsFailGracefully(t *testing.T) {
 	var server *Server
 
@@ -738,6 +757,50 @@ func TestServer_HandleToolsCallProviderArgumentsAreDefensivelyCopied(t *testing.
 	}
 	if got, _ := arguments["flag"].(string); got != "original" {
 		t.Fatalf("expected caller arguments to remain unchanged, got %q", got)
+	}
+}
+
+func TestServer_HandleRequestProvidesWritableParamsForNilRequestParams(t *testing.T) {
+	const method = "guard/writable-params"
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			writableParamsProvider{methodName: method},
+		},
+	})
+
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "writable-params-method",
+		Method: method,
+		Params: nil,
+	})
+	if resp.Error != nil {
+		t.Fatalf("expected nil params to be normalized to writable map, got %v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Fatal("expected successful provider result with writable params")
+	}
+}
+
+func TestServer_HandleToolsCallProvidesWritableParamsWhenArgumentsMissing(t *testing.T) {
+	const method = "guard/writable-tool-args"
+	server := NewServer(Options{
+		Tools: []shared.MCPToolProvider{
+			writableParamsProvider{methodName: method},
+		},
+	})
+
+	resp := server.HandleRequest(context.Background(), shared.MCPRequest{
+		ID:     "writable-params-tool-call",
+		Method: "tools/call",
+		Params: map[string]interface{}{
+			"name": method,
+		},
+	})
+	if resp.Error != nil {
+		t.Fatalf("expected missing arguments to be normalized to writable map, got %v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Fatal("expected successful tools/call provider result with writable params")
 	}
 }
 

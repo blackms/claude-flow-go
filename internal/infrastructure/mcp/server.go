@@ -261,6 +261,17 @@ func cloneMapStringInterface(value map[string]interface{}) map[string]interface{
 	return cloned
 }
 
+func cloneParamsOrEmpty(value map[string]interface{}) map[string]interface{} {
+	if value == nil {
+		return map[string]interface{}{}
+	}
+	cloned := cloneMapStringInterface(value)
+	if cloned == nil {
+		return map[string]interface{}{}
+	}
+	return cloned
+}
+
 func normalizeAndCloneTool(tool shared.MCPTool) (shared.MCPTool, bool) {
 	toolName := normalizeToolName(tool.Name)
 	if toolName == "" {
@@ -655,7 +666,7 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 
 	// Find the tool provider that can handle this request
 	for _, provider := range providers {
-		result, err := providerExecute(provider, ctx, method, cloneMapStringInterface(request.Params))
+		result, err := providerExecute(provider, ctx, method, cloneParamsOrEmpty(request.Params))
 		if err != nil {
 			continue // Try next provider
 		}
@@ -757,7 +768,7 @@ func (s *Server) handleToolsCall(ctx context.Context, request shared.MCPRequest)
 	s.mu.RUnlock()
 
 	for _, provider := range providers {
-		result, err := providerExecute(provider, ctx, toolName, cloneMapStringInterface(arguments))
+		result, err := providerExecute(provider, ctx, toolName, cloneParamsOrEmpty(arguments))
 		if err != nil {
 			continue
 		}
