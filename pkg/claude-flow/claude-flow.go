@@ -2940,11 +2940,28 @@ type CompletionHandler struct {
 
 // NewCompletionHandler creates a new CompletionHandler.
 func NewCompletionHandler(res *ResourceRegistry, pr *PromptRegistry) *CompletionHandler {
-	return &CompletionHandler{internal: mcpcompletion.NewCompletionHandler(res.internal, pr.internal)}
+	var internalResources *mcpresources.ResourceRegistry
+	if res != nil {
+		internalResources = res.internal
+	}
+
+	var internalPrompts *mcpprompts.PromptRegistry
+	if pr != nil {
+		internalPrompts = pr.internal
+	}
+
+	return &CompletionHandler{internal: mcpcompletion.NewCompletionHandler(internalResources, internalPrompts)}
 }
 
 // Complete handles a completion request.
 func (ch *CompletionHandler) Complete(ref *CompletionReference, arg *CompletionArgument) *CompletionResult {
+	if ch == nil || ch.internal == nil {
+		return &CompletionResult{
+			Values:  []string{},
+			Total:   0,
+			HasMore: false,
+		}
+	}
 	return ch.internal.Complete(ref, arg)
 }
 
