@@ -111,6 +111,7 @@ func TestNewMCPServer_WithCoordinator_RegistersCoordinatorTools(t *testing.T) {
 	hasMemoryStore := false
 	hasMemoryRetrieve := false
 	hasFederationStatus := false
+	hasFederationSpawn := false
 	hasHooksList := false
 
 	for _, tool := range tools {
@@ -132,6 +133,8 @@ func TestNewMCPServer_WithCoordinator_RegistersCoordinatorTools(t *testing.T) {
 			hasMemoryRetrieve = true
 		case "federation/status":
 			hasFederationStatus = true
+		case "federation/spawn-ephemeral":
+			hasFederationSpawn = true
 		case "hooks/list":
 			hasHooksList = true
 		}
@@ -141,10 +144,10 @@ func TestNewMCPServer_WithCoordinator_RegistersCoordinatorTools(t *testing.T) {
 		t.Fatalf("expected memory tools to be absent when memory backend is not configured; got store=%v retrieve=%v", hasMemoryStore, hasMemoryRetrieve)
 	}
 
-	if !hasAgentSpawn || !hasConfigGet || !hasOrchestratePlan || !hasFederationStatus || !hasHooksList {
+	if !hasAgentSpawn || !hasConfigGet || !hasOrchestratePlan || !hasFederationStatus || !hasFederationSpawn || !hasHooksList {
 		t.Fatalf(
-			"expected core tool families from coordinator/federation/hooks to be present; got agent=%v config=%v orchestrate=%v federation=%v hooks=%v",
-			hasAgentSpawn, hasConfigGet, hasOrchestratePlan, hasFederationStatus, hasHooksList,
+			"expected core tool families from coordinator/federation/hooks to be present; got agent=%v config=%v orchestrate=%v federationStatus=%v federationSpawn=%v hooks=%v",
+			hasAgentSpawn, hasConfigGet, hasOrchestratePlan, hasFederationStatus, hasFederationSpawn, hasHooksList,
 		)
 	}
 }
@@ -166,6 +169,7 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 	hasMemoryStore := false
 	hasMemoryRetrieve := false
 	hasFederationStatus := false
+	hasFederationSpawn := false
 	hasHooksList := false
 
 	for _, tool := range tools {
@@ -182,6 +186,8 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 			hasMemoryRetrieve = true
 		case "federation/status":
 			hasFederationStatus = true
+		case "federation/spawn-ephemeral":
+			hasFederationSpawn = true
 		case "hooks/list":
 			hasHooksList = true
 		}
@@ -194,10 +200,10 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 		)
 	}
 
-	if !hasFederationStatus || !hasHooksList {
+	if !hasFederationStatus || !hasFederationSpawn || !hasHooksList {
 		t.Fatalf(
-			"expected federation/hooks tools even without coordinator; got federation=%v hooks=%v",
-			hasFederationStatus, hasHooksList,
+			"expected federation/hooks tools even without coordinator; got federationStatus=%v federationSpawn=%v hooks=%v",
+			hasFederationStatus, hasFederationSpawn, hasHooksList,
 		)
 	}
 }
@@ -226,6 +232,7 @@ func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 	hasConfigGet := false
 	hasOrchestratePlan := false
 	hasFederationStatus := false
+	hasFederationSpawn := false
 	hasHooksList := false
 	seen := make(map[string]bool, len(tools))
 
@@ -248,6 +255,8 @@ func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 			hasMemoryRetrieve = true
 		case "federation/status":
 			hasFederationStatus = true
+		case "federation/spawn-ephemeral":
+			hasFederationSpawn = true
 		case "hooks/list":
 			hasHooksList = true
 		}
@@ -262,8 +271,8 @@ func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
 			hasAgentSpawn, hasConfigGet, hasOrchestratePlan,
 		)
 	}
-	if !hasFederationStatus || !hasHooksList {
-		t.Fatalf("expected federation/hooks tools to remain registered; got federation=%v hooks=%v", hasFederationStatus, hasHooksList)
+	if !hasFederationStatus || !hasFederationSpawn || !hasHooksList {
+		t.Fatalf("expected federation/hooks tools to remain registered; got federationStatus=%v federationSpawn=%v hooks=%v", hasFederationStatus, hasFederationSpawn, hasHooksList)
 	}
 }
 
@@ -303,6 +312,7 @@ func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllToolFamilies(t *testi
 	hasMemoryStore := false
 	hasMemoryRetrieve := false
 	hasFederationStatus := false
+	hasFederationSpawn := false
 	hasHooksList := false
 
 	for _, tool := range tools {
@@ -324,15 +334,17 @@ func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllToolFamilies(t *testi
 			hasMemoryRetrieve = true
 		case "federation/status":
 			hasFederationStatus = true
+		case "federation/spawn-ephemeral":
+			hasFederationSpawn = true
 		case "hooks/list":
 			hasHooksList = true
 		}
 	}
 
-	if !hasAgentSpawn || !hasConfigGet || !hasOrchestratePlan || !hasMemoryStore || !hasMemoryRetrieve || !hasFederationStatus || !hasHooksList {
+	if !hasAgentSpawn || !hasConfigGet || !hasOrchestratePlan || !hasMemoryStore || !hasMemoryRetrieve || !hasFederationStatus || !hasFederationSpawn || !hasHooksList {
 		t.Fatalf(
-			"expected coordinator+memory+federation+hooks tools; got agent=%v config=%v orchestrate=%v memoryStore=%v memoryRetrieve=%v federation=%v hooks=%v",
-			hasAgentSpawn, hasConfigGet, hasOrchestratePlan, hasMemoryStore, hasMemoryRetrieve, hasFederationStatus, hasHooksList,
+			"expected coordinator+memory+federation+hooks tools; got agent=%v config=%v orchestrate=%v memoryStore=%v memoryRetrieve=%v federationStatus=%v federationSpawn=%v hooks=%v",
+			hasAgentSpawn, hasConfigGet, hasOrchestratePlan, hasMemoryStore, hasMemoryRetrieve, hasFederationStatus, hasFederationSpawn, hasHooksList,
 		)
 	}
 }
