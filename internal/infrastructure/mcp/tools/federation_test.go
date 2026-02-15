@@ -2282,6 +2282,20 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "list non-string swarmId",
+			toolName: "federation/list-ephemeral",
+			args: map[string]interface{}{
+				"swarmId": float64(1),
+			},
+		},
+		{
+			name:     "list non-string status",
+			toolName: "federation/list-ephemeral",
+			args: map[string]interface{}{
+				"status": true,
+			},
+		},
+		{
 			name:     "broadcast missing sourceSwarmId",
 			toolName: "federation/broadcast",
 			args: map[string]interface{}{

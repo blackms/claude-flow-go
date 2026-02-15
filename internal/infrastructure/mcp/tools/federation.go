@@ -371,22 +371,38 @@ func (t *FederationTools) terminateEphemeral(ctx context.Context, args map[strin
 // listEphemeral lists ephemeral agents.
 func (t *FederationTools) listEphemeral(ctx context.Context, args map[string]interface{}) (shared.MCPToolResult, error) {
 	swarmID := ""
-	if rawSwarmID, ok := args["swarmId"].(string); ok {
-		swarmID = strings.TrimSpace(rawSwarmID)
+	if rawSwarmID, exists := args["swarmId"]; exists {
+		swarmIDStr, ok := rawSwarmID.(string)
+		if !ok {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "swarmId must be a string",
+			}, fmt.Errorf("swarmId must be a string")
+		}
+		swarmID = strings.TrimSpace(swarmIDStr)
 	}
 
 	hasStatusFilter := false
 	var statusFilter shared.EphemeralAgentStatus
-	if rawStatus, ok := args["status"].(string); ok && strings.TrimSpace(rawStatus) != "" {
-		parsedStatus, valid := parseEphemeralAgentStatus(rawStatus)
-		if !valid {
+	if rawStatus, exists := args["status"]; exists {
+		statusStr, ok := rawStatus.(string)
+		if !ok {
 			return shared.MCPToolResult{
 				Success: false,
-				Error:   "status must be one of: spawning, active, completing, terminated",
-			}, fmt.Errorf("status must be one of: spawning, active, completing, terminated")
+				Error:   "status must be a string",
+			}, fmt.Errorf("status must be a string")
 		}
-		hasStatusFilter = true
-		statusFilter = parsedStatus
+		if strings.TrimSpace(statusStr) != "" {
+			parsedStatus, valid := parseEphemeralAgentStatus(statusStr)
+			if !valid {
+				return shared.MCPToolResult{
+					Success: false,
+					Error:   "status must be one of: spawning, active, completing, terminated",
+				}, fmt.Errorf("status must be one of: spawning, active, completing, terminated")
+			}
+			hasStatusFilter = true
+			statusFilter = parsedStatus
+		}
 	}
 
 	var agents []*shared.EphemeralAgent
