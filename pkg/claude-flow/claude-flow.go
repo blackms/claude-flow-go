@@ -622,6 +622,13 @@ type MCPServer struct {
 	federationHub *federation.FederationHub
 }
 
+func (ms *MCPServer) internalOrError() (*mcp.Server, error) {
+	if ms == nil || ms.internal == nil || !ms.internal.IsConfigured() {
+		return nil, fmt.Errorf("mcp server is not initialized")
+	}
+	return ms.internal, nil
+}
+
 // MCPServerConfig holds configuration for creating an MCP server.
 type MCPServerConfig struct {
 	Port        int
@@ -686,10 +693,11 @@ func NewMCPServer(config MCPServerConfig) *MCPServer {
 
 // Start starts the MCP server.
 func (ms *MCPServer) Start() error {
-	if ms == nil || ms.internal == nil {
-		return fmt.Errorf("mcp server is not initialized")
+	internal, err := ms.internalOrError()
+	if err != nil {
+		return err
 	}
-	return ms.internal.Start()
+	return internal.Start()
 }
 
 // Stop stops the MCP server.
@@ -699,7 +707,7 @@ func (ms *MCPServer) Stop() error {
 	}
 
 	var stopErr error
-	if ms.internal != nil {
+	if ms.internal != nil && ms.internal.IsConfigured() {
 		stopErr = ms.internal.Stop()
 	} else {
 		stopErr = fmt.Errorf("mcp server is not initialized")
@@ -718,27 +726,30 @@ func (ms *MCPServer) Stop() error {
 
 // ListTools returns available tools.
 func (ms *MCPServer) ListTools() []MCPTool {
-	if ms == nil || ms.internal == nil {
+	internal, err := ms.internalOrError()
+	if err != nil {
 		return []MCPTool{}
 	}
-	return ms.internal.ListTools()
+	return internal.ListTools()
 }
 
 // GetStatus returns server status.
 func (ms *MCPServer) GetStatus() map[string]interface{} {
-	if ms == nil || ms.internal == nil {
+	internal, err := ms.internalOrError()
+	if err != nil {
 		return map[string]interface{}{
 			"running": false,
 			"error":   "mcp server is not initialized",
 		}
 	}
-	return ms.internal.GetStatus()
+	return internal.GetStatus()
 }
 
 // RunStdio runs the MCP server using stdio transport (stdin/stdout).
 func (ms *MCPServer) RunStdio(ctx context.Context, reader io.Reader, writer io.Writer) error {
-	if ms == nil || ms.internal == nil {
-		return fmt.Errorf("mcp server is not initialized")
+	internal, err := ms.internalOrError()
+	if err != nil {
+		return err
 	}
 	if ctx == nil {
 		return fmt.Errorf("context is required")
@@ -749,7 +760,7 @@ func (ms *MCPServer) RunStdio(ctx context.Context, reader io.Reader, writer io.W
 	if writer == nil {
 		return fmt.Errorf("writer is required")
 	}
-	transport := mcp.NewStdioTransport(ms.internal, reader, writer)
+	transport := mcp.NewStdioTransport(internal, reader, writer)
 	return transport.Run(ctx)
 }
 

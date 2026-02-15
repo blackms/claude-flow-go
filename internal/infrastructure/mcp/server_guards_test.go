@@ -216,6 +216,26 @@ func TestServer_ZeroValueMethodsFailGracefully(t *testing.T) {
 	}
 }
 
+func TestServer_IsConfiguredReflectsStructuralState(t *testing.T) {
+	var nilServer *Server
+	if nilServer.IsConfigured() {
+		t.Fatal("expected nil server to be unconfigured")
+	}
+
+	var zeroValue Server
+	if zeroValue.IsConfigured() {
+		t.Fatal("expected zero-value server to be unconfigured")
+	}
+
+	configured := NewServer(Options{})
+	if configured == nil {
+		t.Fatal("expected configured server")
+	}
+	if !configured.IsConfigured() {
+		t.Fatal("expected NewServer instance to be configured")
+	}
+}
+
 func TestServer_NewServerConfiguredPathStillWorks(t *testing.T) {
 	server := NewServer(Options{})
 	if server == nil {

@@ -92,6 +92,11 @@ func (s *Server) configuredOrError() error {
 	return nil
 }
 
+// IsConfigured reports whether the server has all required runtime dependencies initialized.
+func (s *Server) IsConfigured() bool {
+	return s.isConfigured()
+}
+
 func cloneCapabilities(c *shared.MCPCapabilities) *shared.MCPCapabilities {
 	if c == nil {
 		return nil

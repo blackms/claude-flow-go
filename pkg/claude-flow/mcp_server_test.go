@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp"
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
@@ -356,6 +357,37 @@ func TestMCPServer_NilReceiverMethodsFailGracefully(t *testing.T) {
 	}
 	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), nil); err == nil || err.Error() != "mcp server is not initialized" {
 		t.Fatalf("expected nil-receiver stdio error precedence for nil writer, got %v", err)
+	}
+}
+
+func TestMCPServer_MalformedInternalServerFailsGracefully(t *testing.T) {
+	server := MCPServer{
+		internal: &mcp.Server{},
+	}
+
+	if err := server.Start(); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected malformed-internal start error, got %v", err)
+	}
+	if err := server.Stop(); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected malformed-internal stop error, got %v", err)
+	}
+
+	if tools := server.ListTools(); len(tools) != 0 {
+		t.Fatalf("expected malformed-internal to expose no tools, got %d", len(tools))
+	}
+	status := server.GetStatus()
+	if running, ok := status["running"].(bool); !ok || running {
+		t.Fatalf("expected malformed-internal status running=false, got %v", status["running"])
+	}
+	if status["error"] != "mcp server is not initialized" {
+		t.Fatalf("expected malformed-internal status error, got %v", status["error"])
+	}
+
+	if err := server.RunStdio(context.Background(), bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected malformed-internal stdio init error, got %v", err)
+	}
+	if err := server.RunStdio(nil, nil, nil); err == nil || err.Error() != "mcp server is not initialized" {
+		t.Fatalf("expected malformed-internal stdio init error precedence, got %v", err)
 	}
 }
 
