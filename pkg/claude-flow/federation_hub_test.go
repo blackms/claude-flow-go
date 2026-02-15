@@ -503,3 +503,44 @@ func TestFederationHub_PublicUnconfiguredReadDefaults(t *testing.T) {
 	// Should be a no-op and not panic for unconfigured wrapper.
 	hub.SetEventHandler(func(event FederationEvent) {})
 }
+
+func TestFederationHub_PublicWrapperWithZeroValueInternalHubFailsGracefully(t *testing.T) {
+	hub := &FederationHub{internal: &federation.FederationHub{}}
+
+	if err := hub.Initialize(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected initialize configuration error, got %v", err)
+	}
+	if err := hub.Shutdown(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected shutdown configuration error, got %v", err)
+	}
+
+	spawnResult, spawnErr := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{Type: "coder", Task: "wrapped zero internal"})
+	if spawnErr == nil || spawnErr.Error() != "federation hub is not configured" {
+		t.Fatalf("expected spawn configuration error, got %v", spawnErr)
+	}
+	if spawnResult == nil || spawnResult.Error != "federation hub is not configured" {
+		t.Fatalf("expected spawn result configuration error, got %+v", spawnResult)
+	}
+
+	if swarms := hub.GetSwarms(); len(swarms) != 0 {
+		t.Fatalf("expected malformed wrapper swarms empty, got %d", len(swarms))
+	}
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected malformed wrapper agents empty, got %d", len(agents))
+	}
+	if _, ok := hub.GetSwarm("swarm"); ok {
+		t.Fatal("expected malformed wrapper GetSwarm to fail")
+	}
+
+	activeSwarms, requiredVotes, quorum := hub.GetQuorumInfo()
+	if activeSwarms != 0 || requiredVotes != 0 || quorum != 0 {
+		t.Fatalf("expected malformed wrapper quorum defaults 0, got active=%d required=%d quorum=%v", activeSwarms, requiredVotes, quorum)
+	}
+	expectedConfig := DefaultFederationConfig()
+	if config := hub.GetConfig(); !reflect.DeepEqual(config, expectedConfig) {
+		t.Fatalf("expected malformed wrapper default config %+v, got %+v", expectedConfig, config)
+	}
+
+	// Should be a no-op and not panic for malformed wrapper.
+	hub.SetEventHandler(func(event FederationEvent) {})
+}

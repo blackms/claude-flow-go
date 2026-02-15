@@ -1897,6 +1897,9 @@ func (fh *FederationHub) internalOrError() (*federation.FederationHub, error) {
 	if fh == nil || fh.internal == nil {
 		return nil, fmt.Errorf("federation hub is not configured")
 	}
+	if !fh.internal.IsConfigured() {
+		return nil, fmt.Errorf("federation hub is not configured")
+	}
 	return fh.internal, nil
 }
 
