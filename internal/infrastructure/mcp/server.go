@@ -1144,6 +1144,10 @@ func (s *Server) AddToolProvider(provider shared.MCPToolProvider) {
 // ============================================================================
 
 func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
+	if w == nil || r == nil {
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1172,6 +1176,10 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListTools(w http.ResponseWriter, r *http.Request) {
+	if w == nil || r == nil {
+		return
+	}
+
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1185,6 +1193,10 @@ func (s *Server) handleListTools(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if w == nil || r == nil {
+		return
+	}
+
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return

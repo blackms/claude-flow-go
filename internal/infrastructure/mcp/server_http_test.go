@@ -12,6 +12,16 @@ import (
 	"github.com/anthropics/claude-flow-go/internal/shared"
 )
 
+func assertNoPanic(t *testing.T, fn func()) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("unexpected panic: %v", r)
+		}
+	}()
+	fn()
+}
+
 type errReadCloser struct {
 	closed bool
 }
@@ -35,6 +45,31 @@ func TestServer_HTTPHandleRequestRejectsNonPOST(t *testing.T) {
 	if recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405 for non-POST handleRequest, got %d", recorder.Code)
 	}
+}
+
+func TestServer_HTTPHandlersIgnoreNilRequestOrWriter(t *testing.T) {
+	server := NewServer(Options{})
+
+	assertNoPanic(t, func() {
+		server.handleRequest(nil, nil)
+	})
+	assertNoPanic(t, func() {
+		server.handleListTools(nil, nil)
+	})
+	assertNoPanic(t, func() {
+		server.handleHealth(nil, nil)
+	})
+
+	recorder := httptest.NewRecorder()
+	assertNoPanic(t, func() {
+		server.handleRequest(recorder, nil)
+	})
+	assertNoPanic(t, func() {
+		server.handleListTools(recorder, nil)
+	})
+	assertNoPanic(t, func() {
+		server.handleHealth(recorder, nil)
+	})
 }
 
 func TestServer_HTTPHandleRequestReturnsParseErrorForInvalidJSON(t *testing.T) {
