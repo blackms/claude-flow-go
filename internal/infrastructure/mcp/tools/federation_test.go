@@ -326,6 +326,42 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationErrorParity(t *testing.
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmValidationParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{
+		"name":      "missing-id",
+		"maxAgents": float64(5),
+	} // swarmId intentionally omitted
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/register-swarm", args)
+	if execErr == nil {
+		t.Fatal("expected Execute validation error")
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/register-swarm", args)
+	if directErr == nil {
+		t.Fatal("expected ExecuteTool validation error")
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+	if execResult.Error != directResult.Error {
+		t.Fatalf("expected error message parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_UnknownToolParity(t *testing.T) {
 	ft := &FederationTools{}
 
