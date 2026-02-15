@@ -384,6 +384,9 @@ func TestServer_GetCapabilitiesReturnsDefensiveCopy(t *testing.T) {
 	server.mu.Lock()
 	server.capabilities.Experimental = map[string]interface{}{
 		"alpha": "one",
+		"nested": map[string]interface{}{
+			"enabled": true,
+		},
 	}
 	server.mu.Unlock()
 
@@ -398,6 +401,8 @@ func TestServer_GetCapabilitiesReturnsDefensiveCopy(t *testing.T) {
 	caps.Tools.ListChanged = false
 	caps.Experimental["alpha"] = "mutated"
 	caps.Experimental["beta"] = "new"
+	nested, _ := caps.Experimental["nested"].(map[string]interface{})
+	nested["enabled"] = false
 
 	// Re-read and ensure internal state is unchanged.
 	refetched := server.GetCapabilities()
@@ -415,6 +420,10 @@ func TestServer_GetCapabilitiesReturnsDefensiveCopy(t *testing.T) {
 	}
 	if got := refetched.Experimental["alpha"]; got != "one" {
 		t.Fatalf("expected experimental alpha to remain \"one\", got %v", got)
+	}
+	refetchedNested, _ := refetched.Experimental["nested"].(map[string]interface{})
+	if got := refetchedNested["enabled"]; got != true {
+		t.Fatalf("expected nested experimental flag to remain true, got %v", got)
 	}
 	if _, ok := refetched.Experimental["beta"]; ok {
 		t.Fatalf("expected experimental beta key to be absent, got %v", refetched.Experimental["beta"])

@@ -95,7 +95,7 @@ func cloneCapabilities(c *shared.MCPCapabilities) *shared.MCPCapabilities {
 	if c.Experimental != nil {
 		experimental := make(map[string]interface{}, len(c.Experimental))
 		for key, value := range c.Experimental {
-			experimental[key] = value
+			experimental[key] = cloneInterfaceValue(value)
 		}
 		cloned.Experimental = experimental
 	}
