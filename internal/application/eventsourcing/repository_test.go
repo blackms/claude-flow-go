@@ -446,6 +446,55 @@ func TestAggregateRepository_Load_ExpiredSnapshotIsIgnored(t *testing.T) {
 	}
 }
 
+func TestAggregateRepository_Load_ExpiredSnapshotAndNoEventsReturnsNotFound(t *testing.T) {
+	ctx := context.Background()
+	aggregateID := "aggregate-expired-no-events"
+
+	eventStore := infra.NewInMemoryEventStore()
+	snapshotStore := infra.NewInMemorySnapshotStore()
+	serializer := infra.NewJSONEventSerializer()
+
+	// Snapshot is intentionally expired and there are no events to replay.
+	if err := snapshotStore.Save(ctx, &domain.Snapshot{
+		AggregateID:   aggregateID,
+		AggregateType: "repository-test",
+		Version:       2,
+		State:         []byte(`{"restored":true}`),
+		CreatedAt:     time.Now().Add(-time.Hour).UnixMilli(),
+	}); err != nil {
+		t.Fatalf("failed to save snapshot: %v", err)
+	}
+
+	var created *repositoryTestAggregate
+	repo := NewAggregateRepository(RepositoryConfig{
+		EventStore:    eventStore,
+		SnapshotStore: snapshotStore,
+		Serializer:    serializer,
+		SnapshotConfig: infra.SnapshotConfig{
+			MaxAgeMs: 1,
+		},
+		Factory: func(id string) domain.Aggregate {
+			created = &repositoryTestAggregate{id: id}
+			return created
+		},
+	})
+
+	_, err := repo.Load(ctx, aggregateID)
+	if !errors.Is(err, domain.ErrAggregateNotFound) {
+		t.Fatalf("expected ErrAggregateNotFound for expired snapshot with no events, got %v", err)
+	}
+
+	if created == nil {
+		t.Fatal("expected aggregate factory to be invoked")
+	}
+	if created.fromSnapshotCall {
+		t.Fatal("expired snapshot should not be restored")
+	}
+	if created.setVersionCall {
+		t.Fatal("setVersion should not be called for expired snapshot")
+	}
+}
+
 func TestAggregateRepository_Load_NonStatefulAggregateIgnoresSnapshot(t *testing.T) {
 	ctx := context.Background()
 	aggregateID := "aggregate-non-stateful"
