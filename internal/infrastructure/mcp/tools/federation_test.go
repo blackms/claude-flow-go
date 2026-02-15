@@ -125,6 +125,49 @@ func TestFederationTools_GetTools_HaveObjectSchemasAndRequiredFields(t *testing.
 	}
 }
 
+func TestNormalizeCapabilities(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected []string
+	}{
+		{
+			name:     "nil input",
+			input:    nil,
+			expected: []string{},
+		},
+		{
+			name:     "string slice trims and deduplicates",
+			input:    []string{"go", " docker ", "go", "", "   ", "docker"},
+			expected: []string{"go", "docker"},
+		},
+		{
+			name:     "interface slice trims filters and deduplicates",
+			input:    []interface{}{"gpu", " gpu ", "", "  ", 42, nil, "ml", "gpu"},
+			expected: []string{"gpu", "ml"},
+		},
+		{
+			name:     "unsupported input type",
+			input:    "gpu",
+			expected: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeCapabilities(tt.input)
+			if len(got) != len(tt.expected) {
+				t.Fatalf("expected %d capabilities, got %d (%v)", len(tt.expected), len(got), got)
+			}
+			for i := range tt.expected {
+				if got[i] != tt.expected[i] {
+					t.Fatalf("capability mismatch at index %d: expected %q, got %q", i, tt.expected[i], got[i])
+				}
+			}
+		})
+	}
+}
+
 func TestFederationTools_Execute_UnknownTool(t *testing.T) {
 	ft := &FederationTools{}
 

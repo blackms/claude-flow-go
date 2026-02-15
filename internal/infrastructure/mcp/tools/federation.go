@@ -555,11 +555,16 @@ func (t *FederationTools) vote(ctx context.Context, args map[string]interface{})
 
 func normalizeCapabilities(raw interface{}) []string {
 	capabilities := make([]string, 0)
+	seen := make(map[string]bool)
 	appendCapability := func(value string) {
 		cleaned := strings.TrimSpace(value)
 		if cleaned == "" {
 			return
 		}
+		if seen[cleaned] {
+			return
+		}
+		seen[cleaned] = true
 		capabilities = append(capabilities, cleaned)
 	}
 
