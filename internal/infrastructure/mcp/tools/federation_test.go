@@ -3277,6 +3277,113 @@ func TestFederationTools_ExecuteAndExecuteTool_VoteSuccessParity(t *testing.T) {
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_VoteDuplicateRejectedParity(t *testing.T) {
+	config := shared.DefaultFederationConfig()
+	config.ConsensusQuorum = 1.0
+	hub := federation.NewFederationHub(config)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	registered := []string{"swarm-proposer-exec", "swarm-proposer-direct", "swarm-voter-exec", "swarm-voter-direct", "swarm-voter-third"}
+	for _, swarmID := range registered {
+		if err := hub.RegisterSwarm(shared.SwarmRegistration{
+			SwarmID:   swarmID,
+			Name:      swarmID,
+			MaxAgents: 10,
+		}); err != nil {
+			t.Fatalf("failed to register swarm %s: %v", swarmID, err)
+		}
+	}
+
+	ft := NewFederationTools(hub)
+
+	execProposalRaw, err := ft.ExecuteTool(context.Background(), "federation/propose", map[string]interface{}{
+		"proposerId":   "swarm-proposer-exec",
+		"proposalType": "exec-dup-vote",
+		"value":        map[string]interface{}{"threshold": 1},
+	})
+	if err != nil {
+		t.Fatalf("failed to create execute proposal: %v", err)
+	}
+	execProposal, ok := execProposalRaw.Data.(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected execute proposal type *shared.FederationProposal, got %T", execProposalRaw.Data)
+	}
+
+	directProposalRaw, err := ft.ExecuteTool(context.Background(), "federation/propose", map[string]interface{}{
+		"proposerId":   "swarm-proposer-direct",
+		"proposalType": "direct-dup-vote",
+		"value":        map[string]interface{}{"threshold": 2},
+	})
+	if err != nil {
+		t.Fatalf("failed to create direct proposal: %v", err)
+	}
+	directProposal, ok := directProposalRaw.Data.(*shared.FederationProposal)
+	if !ok {
+		t.Fatalf("expected direct proposal type *shared.FederationProposal, got %T", directProposalRaw.Data)
+	}
+
+	if _, err := ft.Execute(context.Background(), "federation/vote", map[string]interface{}{
+		"voterId":    "swarm-voter-exec",
+		"proposalId": execProposal.ID,
+		"approve":    true,
+	}); err != nil {
+		t.Fatalf("expected initial Execute vote to succeed, got %v", err)
+	}
+
+	if _, err := ft.ExecuteTool(context.Background(), "federation/vote", map[string]interface{}{
+		"voterId":    "swarm-voter-direct",
+		"proposalId": directProposal.ID,
+		"approve":    true,
+	}); err != nil {
+		t.Fatalf("expected initial ExecuteTool vote to succeed, got %v", err)
+	}
+
+	execDuplicateResult, execDuplicateErr := ft.Execute(context.Background(), "federation/vote", map[string]interface{}{
+		"voterId":    "swarm-voter-exec",
+		"proposalId": execProposal.ID,
+		"approve":    false,
+	})
+	if execDuplicateErr == nil {
+		t.Fatal("expected duplicate Execute vote to fail")
+	}
+	if execDuplicateResult == nil {
+		t.Fatal("expected duplicate Execute vote result")
+	}
+
+	directDuplicateResult, directDuplicateErr := ft.ExecuteTool(context.Background(), "federation/vote", map[string]interface{}{
+		"voterId":    "swarm-voter-direct",
+		"proposalId": directProposal.ID,
+		"approve":    false,
+	})
+	if directDuplicateErr == nil {
+		t.Fatal("expected duplicate ExecuteTool vote to fail")
+	}
+
+	expectedExecError := "voter swarm-voter-exec has already voted on proposal " + execProposal.ID
+	expectedDirectError := "voter swarm-voter-direct has already voted on proposal " + directProposal.ID
+
+	if execDuplicateErr.Error() != expectedExecError {
+		t.Fatalf("expected Execute duplicate error %q, got %q", expectedExecError, execDuplicateErr.Error())
+	}
+	if directDuplicateErr.Error() != expectedDirectError {
+		t.Fatalf("expected ExecuteTool duplicate error %q, got %q", expectedDirectError, directDuplicateErr.Error())
+	}
+	if execDuplicateResult.Error != expectedExecError {
+		t.Fatalf("expected Execute duplicate result error %q, got %q", expectedExecError, execDuplicateResult.Error)
+	}
+	if directDuplicateResult.Error != expectedDirectError {
+		t.Fatalf("expected ExecuteTool duplicate result error %q, got %q", expectedDirectError, directDuplicateResult.Error)
+	}
+	if execDuplicateResult.Success || directDuplicateResult.Success {
+		t.Fatalf("expected duplicate vote failures, got Execute=%v ExecuteTool=%v", execDuplicateResult.Success, directDuplicateResult.Success)
+	}
+}
+
 func TestFederationTools_ProposeAndVoteReturnDefensiveProposalCopies(t *testing.T) {
 	config := shared.DefaultFederationConfig()
 	config.ConsensusQuorum = 1.0
