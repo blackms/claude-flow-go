@@ -3433,6 +3433,110 @@ func TestFederationTools_ExecuteAndExecuteTool_ProposeInvalidQuorumConfigParity(
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_MutatingToolsRejectAfterHubShutdownParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("failed to shutdown federation hub: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		toolName string
+		args     map[string]interface{}
+	}{
+		{
+			name:     "register swarm",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "shutdown-swarm",
+				"name":      "Shutdown Swarm",
+				"maxAgents": 2,
+			},
+		},
+		{
+			name:     "spawn ephemeral",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "shutdown spawn",
+			},
+		},
+		{
+			name:     "terminate ephemeral",
+			toolName: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": "shutdown-agent",
+			},
+		},
+		{
+			name:     "broadcast",
+			toolName: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": "shutdown-source",
+				"payload":       map[string]interface{}{"ok": true},
+			},
+		},
+		{
+			name:     "propose",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "shutdown-proposer",
+				"proposalType": "shutdown-proposal",
+				"value":        map[string]interface{}{"ok": true},
+			},
+		},
+		{
+			name:     "vote",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "shutdown-voter",
+				"proposalId": "shutdown-proposal-id",
+				"approve":    true,
+			},
+		},
+	}
+
+	const expectedErr = "federation hub is shut down"
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			execResult, execErr := ft.Execute(context.Background(), tc.toolName, tc.args)
+			if execErr == nil {
+				t.Fatalf("expected Execute error for %s", tc.toolName)
+			}
+			if execResult == nil {
+				t.Fatalf("expected Execute result for %s", tc.toolName)
+			}
+
+			directResult, directErr := ft.ExecuteTool(context.Background(), tc.toolName, tc.args)
+			if directErr == nil {
+				t.Fatalf("expected ExecuteTool error for %s", tc.toolName)
+			}
+
+			if execErr.Error() != expectedErr {
+				t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
+			}
+			if directErr.Error() != expectedErr {
+				t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
+			}
+			if execResult.Error != expectedErr {
+				t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
+			}
+			if directResult.Error != expectedErr {
+				t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
+			}
+			if execResult.Success || directResult.Success {
+				t.Fatalf("expected failure parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+			}
+		})
+	}
+}
+
 func TestFederationTools_ProposeAndVoteReturnDefensiveProposalCopies(t *testing.T) {
 	config := shared.DefaultFederationConfig()
 	config.ConsensusQuorum = 1.0
