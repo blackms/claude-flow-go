@@ -140,6 +140,7 @@ func (rr *ResourceRegistry) List(cursor string, pageSize int) *shared.ResourceLi
 	// Find starting point
 	startIdx := 0
 	if cursor != "" {
+		startIdx = len(allResources)
 		for i, res := range allResources {
 			if res.URI > cursor {
 				startIdx = i

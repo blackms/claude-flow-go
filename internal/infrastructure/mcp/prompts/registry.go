@@ -94,6 +94,7 @@ func (pr *PromptRegistry) List(cursor string, pageSize int) *shared.PromptListRe
 	// Find starting point
 	startIdx := 0
 	if cursor != "" {
+		startIdx = len(allPrompts)
 		for i, p := range allPrompts {
 			if p.Name > cursor {
 				startIdx = i
