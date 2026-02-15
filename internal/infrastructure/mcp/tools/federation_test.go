@@ -266,6 +266,61 @@ func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralParity(t *testing.T)
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmSuccessParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	execArgs := map[string]interface{}{
+		"swarmId":   "swarm-execute",
+		"name":      "Execute Swarm",
+		"maxAgents": float64(4),
+	}
+	execResult, execErr := ft.Execute(context.Background(), "federation/register-swarm", execArgs)
+	if execErr != nil {
+		t.Fatalf("Execute should succeed, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result to be non-nil")
+	}
+
+	directArgs := map[string]interface{}{
+		"swarmId":   "swarm-direct",
+		"name":      "Direct Swarm",
+		"maxAgents": float64(5),
+	}
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/register-swarm", directArgs)
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed, got error: %v", directErr)
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+
+	execData, ok := execResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute data map, got %T", execResult.Data)
+	}
+	if execData["registered"] != "swarm-execute" {
+		t.Fatalf("expected Execute registered swarm to be swarm-execute, got %v", execData["registered"])
+	}
+
+	directData, ok := directResult.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool data map, got %T", directResult.Data)
+	}
+	if directData["registered"] != "swarm-direct" {
+		t.Fatalf("expected ExecuteTool registered swarm to be swarm-direct, got %v", directData["registered"])
+	}
+}
+
 func TestFederationTools_Execute_ValidationErrorPropagation(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
