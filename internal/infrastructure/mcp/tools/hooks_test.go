@@ -906,11 +906,7 @@ func TestHooksTools_ToolParameters(t *testing.T) {
 				t.Error("tool should have a description")
 			}
 
-			params, ok := tool.Parameters.(map[string]interface{})
-			if !ok {
-				t.Error("parameters should be a map")
-				return
-			}
+			params := tool.Parameters
 
 			if params["type"] != "object" {
 				t.Error("parameters type should be 'object'")

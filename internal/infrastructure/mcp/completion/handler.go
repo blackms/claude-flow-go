@@ -2,6 +2,7 @@
 package completion
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/mcp/prompts"
@@ -28,7 +29,15 @@ func NewCompletionHandler(res *resources.ResourceRegistry, pr *prompts.PromptReg
 
 // Complete handles a completion request.
 func (ch *CompletionHandler) Complete(ref *shared.CompletionReference, arg *shared.CompletionArgument) *shared.CompletionResult {
-	switch ref.Type {
+	if ch == nil || ref == nil {
+		return emptyResult()
+	}
+	if arg == nil {
+		arg = &shared.CompletionArgument{}
+	}
+
+	refType := shared.CompletionReferenceType(strings.TrimSpace(string(ref.Type)))
+	switch refType {
 	case shared.CompletionRefPrompt:
 		return ch.completePrompt(ref.Name, arg)
 	case shared.CompletionRefResource:
@@ -47,6 +56,10 @@ func (ch *CompletionHandler) completePrompt(name string, arg *shared.CompletionA
 	if ch.prompts == nil {
 		return emptyResult()
 	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return emptyResult()
+	}
 
 	// Get prompt argument names
 	argNames := ch.prompts.GetArgumentNames(name)
@@ -56,13 +69,14 @@ func (ch *CompletionHandler) completePrompt(name string, arg *shared.CompletionA
 
 	// Filter by argument name prefix
 	var matches []string
-	prefix := strings.ToLower(arg.Value)
+	prefix := strings.ToLower(strings.TrimSpace(arg.Value))
 
 	for _, argName := range argNames {
 		if strings.HasPrefix(strings.ToLower(argName), prefix) {
 			matches = append(matches, argName)
 		}
 	}
+	sort.Strings(matches)
 
 	return buildResult(matches)
 }
@@ -74,13 +88,19 @@ func (ch *CompletionHandler) completeResource(uriPrefix string, arg *shared.Comp
 	}
 
 	// Use the value as prefix if provided, otherwise use uriPrefix
-	prefix := arg.Value
+	prefix := strings.TrimSpace(arg.Value)
 	if prefix == "" {
-		prefix = uriPrefix
+		prefix = strings.TrimSpace(uriPrefix)
 	}
 
 	// Find matching resources
 	resources := ch.resources.ListResourcesByPrefix(prefix)
+	sort.Slice(resources, func(i, j int) bool {
+		if resources[i].URI == resources[j].URI {
+			return resources[i].Name < resources[j].Name
+		}
+		return resources[i].URI < resources[j].URI
+	})
 
 	// Extract URIs
 	uris := make([]string, len(resources))
@@ -102,6 +122,10 @@ func emptyResult() *shared.CompletionResult {
 
 // buildResult builds a completion result with pagination.
 func buildResult(matches []string) *shared.CompletionResult {
+	if matches == nil {
+		matches = []string{}
+	}
+
 	total := len(matches)
 	hasMore := total > MaxCompletionResults
 
