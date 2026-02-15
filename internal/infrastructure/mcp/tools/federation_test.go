@@ -652,11 +652,17 @@ func TestFederationTools_ListEphemeralReturnsDefensiveCopies(t *testing.T) {
 		Type:    "coder",
 		Task:    "original task",
 		Metadata: map[string]interface{}{
-			"role": "original",
+			"role":   "original",
+			"nested": map[string]interface{}{"k": "v"},
 		},
 	})
 	if err != nil {
 		t.Fatalf("failed to spawn agent: %v", err)
+	}
+	if err := hub.CompleteAgent(spawn.AgentID, map[string]interface{}{
+		"outcome": map[string]interface{}{"score": float64(1)},
+	}); err != nil {
+		t.Fatalf("failed to complete agent: %v", err)
 	}
 
 	ft := NewFederationTools(hub)
@@ -690,6 +696,20 @@ func TestFederationTools_ListEphemeralReturnsDefensiveCopies(t *testing.T) {
 		execListed.Metadata = map[string]interface{}{}
 	}
 	execListed.Metadata["role"] = "mutated-execute"
+	nestedExec, ok := execListed.Metadata["nested"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute nested metadata map, got %T", execListed.Metadata["nested"])
+	}
+	nestedExec["k"] = "mutated-execute-nested"
+	execResultMap, ok := execListed.Result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute result map, got %T", execListed.Result)
+	}
+	execOutcome, ok := execResultMap["outcome"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Execute nested outcome map, got %T", execResultMap["outcome"])
+	}
+	execOutcome["score"] = float64(99)
 
 	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", map[string]interface{}{
 		"swarmId": "swarm-defensive-copy",
@@ -716,6 +736,20 @@ func TestFederationTools_ListEphemeralReturnsDefensiveCopies(t *testing.T) {
 		directListed.Metadata = map[string]interface{}{}
 	}
 	directListed.Metadata["role"] = "mutated-direct"
+	nestedDirect, ok := directListed.Metadata["nested"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool nested metadata map, got %T", directListed.Metadata["nested"])
+	}
+	nestedDirect["k"] = "mutated-direct-nested"
+	directResultMap, ok := directListed.Result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool result map, got %T", directListed.Result)
+	}
+	directOutcome, ok := directResultMap["outcome"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ExecuteTool nested outcome map, got %T", directResultMap["outcome"])
+	}
+	directOutcome["score"] = float64(123)
 
 	stored, ok := hub.GetAgent(spawn.AgentID)
 	if !ok {
@@ -726,6 +760,24 @@ func TestFederationTools_ListEphemeralReturnsDefensiveCopies(t *testing.T) {
 	}
 	if stored.Metadata["role"] != "original" {
 		t.Fatalf("expected hub metadata role to remain original, got %v", stored.Metadata["role"])
+	}
+	storedNested, ok := stored.Metadata["nested"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stored nested metadata map, got %T", stored.Metadata["nested"])
+	}
+	if storedNested["k"] != "v" {
+		t.Fatalf("expected stored nested metadata to remain original, got %v", storedNested["k"])
+	}
+	storedResult, ok := stored.Result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stored result map, got %T", stored.Result)
+	}
+	storedOutcome, ok := storedResult["outcome"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stored outcome map, got %T", storedResult["outcome"])
+	}
+	if storedOutcome["score"] != float64(1) {
+		t.Fatalf("expected stored outcome score to remain original, got %v", storedOutcome["score"])
 	}
 }
 

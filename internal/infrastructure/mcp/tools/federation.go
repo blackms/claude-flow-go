@@ -699,6 +699,7 @@ func cloneEphemeralAgents(agents []*shared.EphemeralAgent) []*shared.EphemeralAg
 		}
 		copyAgent := *agent
 		copyAgent.Metadata = cloneStringInterfaceMap(agent.Metadata)
+		copyAgent.Result = cloneInterfaceValue(agent.Result)
 		cloned = append(cloned, &copyAgent)
 	}
 	return cloned
@@ -710,7 +711,26 @@ func cloneStringInterfaceMap(input map[string]interface{}) map[string]interface{
 	}
 	output := make(map[string]interface{}, len(input))
 	for key, value := range input {
-		output[key] = value
+		output[key] = cloneInterfaceValue(value)
 	}
 	return output
+}
+
+func cloneInterfaceValue(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		return cloneStringInterfaceMap(typed)
+	case []interface{}:
+		cloned := make([]interface{}, len(typed))
+		for i := range typed {
+			cloned[i] = cloneInterfaceValue(typed[i])
+		}
+		return cloned
+	case []string:
+		cloned := make([]string, len(typed))
+		copy(cloned, typed)
+		return cloned
+	default:
+		return value
+	}
 }
