@@ -392,6 +392,30 @@ func TestMCPServer_GetStatusReturnsDefensiveCopy(t *testing.T) {
 	}
 }
 
+func TestMCPServer_StartRejectsInvalidPort(t *testing.T) {
+	invalidPortServer := NewMCPServer(MCPServerConfig{Port: -1})
+	if invalidPortServer == nil {
+		t.Fatal("expected server with invalid port")
+	}
+	t.Cleanup(func() {
+		_ = invalidPortServer.Stop()
+	})
+	if err := invalidPortServer.Start(); err == nil || err.Error() != "invalid port: -1" {
+		t.Fatalf("expected invalid-port start error, got %v", err)
+	}
+
+	overflowPortServer := NewMCPServer(MCPServerConfig{Port: 70000})
+	if overflowPortServer == nil {
+		t.Fatal("expected server with overflow port")
+	}
+	t.Cleanup(func() {
+		_ = overflowPortServer.Stop()
+	})
+	if err := overflowPortServer.Start(); err == nil || err.Error() != "invalid port: 70000" {
+		t.Fatalf("expected overflow-port start error, got %v", err)
+	}
+}
+
 func TestMCPServer_NilReceiverMethodsFailGracefully(t *testing.T) {
 	var server *MCPServer
 
