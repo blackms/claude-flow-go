@@ -540,6 +540,35 @@ func TestCloneInterfaceValue_ReflectionFallbackForTypedContainers(t *testing.T) 
 	if originalNestedTypedMap["quota"]["hard"] != 2 {
 		t.Fatalf("expected original map[string]map[string]int to remain unchanged, got %v", originalNestedTypedMap["quota"]["hard"])
 	}
+
+	originalArrayOfMaps := [1]map[string][]string{
+		{"labels": {"alpha", "beta"}},
+	}
+	clonedArrayOfMapsRaw := cloneInterfaceValue(originalArrayOfMaps)
+	clonedArrayOfMaps, ok := clonedArrayOfMapsRaw.([1]map[string][]string)
+	if !ok {
+		t.Fatalf("expected cloned [1]map[string][]string, got %T", clonedArrayOfMapsRaw)
+	}
+	clonedArrayOfMaps[0]["labels"][0] = "mutated"
+	if originalArrayOfMaps[0]["labels"][0] != "alpha" {
+		t.Fatalf("expected original array map/slice value to remain unchanged, got %v", originalArrayOfMaps[0]["labels"][0])
+	}
+
+	originalPointerMap := &map[string][]string{
+		"teams": {"core", "ml"},
+	}
+	clonedPointerMapRaw := cloneInterfaceValue(originalPointerMap)
+	clonedPointerMap, ok := clonedPointerMapRaw.(*map[string][]string)
+	if !ok {
+		t.Fatalf("expected cloned *map[string][]string, got %T", clonedPointerMapRaw)
+	}
+	if clonedPointerMap == originalPointerMap {
+		t.Fatal("expected cloned pointer map to use a distinct allocation")
+	}
+	(*clonedPointerMap)["teams"][0] = "mutated"
+	if (*originalPointerMap)["teams"][0] != "core" {
+		t.Fatalf("expected original pointer map value to remain unchanged, got %v", (*originalPointerMap)["teams"][0])
+	}
 }
 
 func TestCloneFederationMessage_DeepCopiesPayload(t *testing.T) {

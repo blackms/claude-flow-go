@@ -1091,6 +1091,10 @@ func cloneReflectContainer(value interface{}) interface{} {
 		return cloneMapValue(reflected).Interface()
 	case reflect.Slice:
 		return cloneSliceValue(reflected).Interface()
+	case reflect.Array:
+		return cloneArrayValue(reflected).Interface()
+	case reflect.Ptr:
+		return clonePointerValue(reflected).Interface()
 	default:
 		return value
 	}
@@ -1121,6 +1125,26 @@ func cloneSliceValue(value reflect.Value) reflect.Value {
 		cloned.Index(i).Set(cloneValueForType(elemType, value.Index(i)))
 	}
 	return cloned
+}
+
+func cloneArrayValue(value reflect.Value) reflect.Value {
+	cloned := reflect.New(value.Type()).Elem()
+	elemType := value.Type().Elem()
+	for i := 0; i < value.Len(); i++ {
+		cloned.Index(i).Set(cloneValueForType(elemType, value.Index(i)))
+	}
+	return cloned
+}
+
+func clonePointerValue(value reflect.Value) reflect.Value {
+	if value.IsNil() {
+		return reflect.Zero(value.Type())
+	}
+
+	elemType := value.Type().Elem()
+	clonedPtr := reflect.New(elemType)
+	clonedPtr.Elem().Set(cloneValueForType(elemType, value.Elem()))
+	return clonedPtr
 }
 
 func cloneValueForType(targetType reflect.Type, value reflect.Value) reflect.Value {
