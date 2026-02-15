@@ -1043,6 +1043,115 @@ func TestFederationTools_ExecuteAndExecuteTool_RuntimeErrorParity(t *testing.T) 
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ConsensusDisabledParity(t *testing.T) {
+	config := shared.DefaultFederationConfig()
+	config.EnableConsensus = false
+
+	hub := federation.NewFederationHub(config)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	ft := NewFederationTools(hub)
+
+	tests := []struct {
+		name     string
+		toolName string
+		args     map[string]interface{}
+	}{
+		{
+			name:     "propose when consensus disabled",
+			toolName: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "swarm-1",
+				"proposalType": "scale",
+				"value":        map[string]interface{}{"maxAgents": 10},
+			},
+		},
+		{
+			name:     "vote when consensus disabled",
+			toolName: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "swarm-1",
+				"proposalId": "proposal-1",
+				"approve":    true,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			execResult, execErr := ft.Execute(context.Background(), tc.toolName, tc.args)
+			if execErr == nil {
+				t.Fatalf("expected Execute error for %s", tc.toolName)
+			}
+			if execResult == nil {
+				t.Fatalf("expected Execute result for %s", tc.toolName)
+			}
+
+			directResult, directErr := ft.ExecuteTool(context.Background(), tc.toolName, tc.args)
+			if directErr == nil {
+				t.Fatalf("expected ExecuteTool error for %s", tc.toolName)
+			}
+
+			if execResult.Success != directResult.Success {
+				t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+			}
+			if execResult.Error != directResult.Error {
+				t.Fatalf("expected error parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
+			}
+		})
+	}
+}
+
+func TestFederationTools_ExecuteAndExecuteTool_VoteProposalNotFoundParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-voter",
+		Name:      "Swarm Voter",
+		MaxAgents: 10,
+	}); err != nil {
+		t.Fatalf("failed to register voter swarm: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{
+		"voterId":    "swarm-voter",
+		"proposalId": "missing-proposal",
+		"approve":    true,
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/vote", args)
+	if execErr == nil {
+		t.Fatal("expected Execute error for missing proposal")
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result for missing proposal")
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/vote", args)
+	if directErr == nil {
+		t.Fatal("expected ExecuteTool error for missing proposal")
+	}
+
+	if execResult.Success != directResult.Success {
+		t.Fatalf("expected success parity, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+	}
+	if execResult.Error != directResult.Error {
+		t.Fatalf("expected error parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_UnknownToolParity(t *testing.T) {
 	ft := &FederationTools{}
 
