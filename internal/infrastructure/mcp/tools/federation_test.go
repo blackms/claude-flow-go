@@ -188,6 +188,47 @@ func TestFederationTools_GetTools_ListEphemeralStatusEnum(t *testing.T) {
 	}
 }
 
+func TestFederationTools_GetTools_IntegerNumericParameters(t *testing.T) {
+	ft := &FederationTools{}
+
+	tools := ft.GetTools()
+	toolByName := make(map[string]shared.MCPTool, len(tools))
+	for _, tool := range tools {
+		toolByName[tool.Name] = tool
+	}
+
+	assertPropertyType := func(toolName, propertyName, expectedType string) {
+		t.Helper()
+
+		tool, ok := toolByName[toolName]
+		if !ok {
+			t.Fatalf("expected tool %s to be present", toolName)
+		}
+		propertiesRaw, ok := tool.Parameters["properties"]
+		if !ok {
+			t.Fatalf("expected properties for tool %s", toolName)
+		}
+		properties, ok := propertiesRaw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected properties map for tool %s, got %T", toolName, propertiesRaw)
+		}
+		propertyRaw, ok := properties[propertyName]
+		if !ok {
+			t.Fatalf("expected property %s on tool %s", propertyName, toolName)
+		}
+		property, ok := propertyRaw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected property map for %s.%s, got %T", toolName, propertyName, propertyRaw)
+		}
+		if property["type"] != expectedType {
+			t.Fatalf("expected %s.%s type %q, got %v", toolName, propertyName, expectedType, property["type"])
+		}
+	}
+
+	assertPropertyType("federation/spawn-ephemeral", "ttl", "integer")
+	assertPropertyType("federation/register-swarm", "maxAgents", "integer")
+}
+
 func TestNormalizeCapabilities(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -54,7 +54,7 @@ func (t *FederationTools) GetTools() []shared.MCPTool {
 						"description": "Task description",
 					},
 					"ttl": map[string]interface{}{
-						"type":        "number",
+						"type":        "integer",
 						"description": "Time-to-live in milliseconds",
 					},
 					"capabilities": map[string]interface{}{
@@ -123,7 +123,7 @@ func (t *FederationTools) GetTools() []shared.MCPTool {
 						"description": "Swarm endpoint URL",
 					},
 					"maxAgents": map[string]interface{}{
-						"type":        "number",
+						"type":        "integer",
 						"description": "Maximum agents capacity",
 					},
 					"capabilities": map[string]interface{}{
