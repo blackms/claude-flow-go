@@ -11,6 +11,10 @@ import (
 	infra "github.com/anthropics/claude-flow-go/internal/infrastructure/eventsourcing"
 )
 
+type aggregateVersionSetter interface {
+	SetVersion(version int)
+}
+
 // AggregateRepository provides storage and retrieval of event-sourced aggregates.
 type AggregateRepository struct {
 	mu             sync.RWMutex
@@ -108,8 +112,8 @@ func (r *AggregateRepository) Load(ctx context.Context, id string) (domain.Aggre
 					aggregate = r.factory(id)
 				} else {
 					fromVersion = snapshot.Version + 1
-					if root, ok := aggregate.(*domain.AggregateRoot); ok {
-						root.SetVersion(snapshot.Version)
+					if setter, ok := aggregate.(aggregateVersionSetter); ok {
+						setter.SetVersion(snapshot.Version)
 					}
 				}
 			}

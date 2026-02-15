@@ -129,6 +129,11 @@ type AggregateState interface {
 	FromSnapshot(data []byte) error
 }
 
+// versionSetter defines aggregates that can restore version state.
+type versionSetter interface {
+	SetVersion(version int)
+}
+
 // Snapshot represents a point-in-time snapshot of an aggregate.
 type Snapshot struct {
 	// AggregateID is the aggregate identifier.
@@ -198,8 +203,8 @@ func RebuildFromSnapshot(aggregate Aggregate, snapshot *Snapshot, events []Event
 	}
 
 	// Set version from snapshot
-	if root, ok := aggregate.(*AggregateRoot); ok {
-		root.SetVersion(snapshot.Version)
+	if setter, ok := aggregate.(versionSetter); ok {
+		setter.SetVersion(snapshot.Version)
 	}
 
 	// Apply events after snapshot
