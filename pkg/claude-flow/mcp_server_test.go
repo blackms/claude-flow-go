@@ -280,6 +280,7 @@ func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllToolFamilies(t *testi
 	hasConfigGet := false
 	hasOrchestratePlan := false
 	hasMemoryStore := false
+	hasMemoryRetrieve := false
 	hasFederationStatus := false
 	hasHooksList := false
 
@@ -298,6 +299,8 @@ func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllToolFamilies(t *testi
 			hasOrchestratePlan = true
 		case "memory_store":
 			hasMemoryStore = true
+		case "memory_retrieve":
+			hasMemoryRetrieve = true
 		case "federation/status":
 			hasFederationStatus = true
 		case "hooks/list":
@@ -305,10 +308,10 @@ func TestNewMCPServer_WithCoordinatorAndMemory_RegistersAllToolFamilies(t *testi
 		}
 	}
 
-	if !hasAgentSpawn || !hasConfigGet || !hasOrchestratePlan || !hasMemoryStore || !hasFederationStatus || !hasHooksList {
+	if !hasAgentSpawn || !hasConfigGet || !hasOrchestratePlan || !hasMemoryStore || !hasMemoryRetrieve || !hasFederationStatus || !hasHooksList {
 		t.Fatalf(
-			"expected coordinator+memory+federation+hooks tools; got agent=%v config=%v orchestrate=%v memory=%v federation=%v hooks=%v",
-			hasAgentSpawn, hasConfigGet, hasOrchestratePlan, hasMemoryStore, hasFederationStatus, hasHooksList,
+			"expected coordinator+memory+federation+hooks tools; got agent=%v config=%v orchestrate=%v memoryStore=%v memoryRetrieve=%v federation=%v hooks=%v",
+			hasAgentSpawn, hasConfigGet, hasOrchestratePlan, hasMemoryStore, hasMemoryRetrieve, hasFederationStatus, hasHooksList,
 		)
 	}
 }
