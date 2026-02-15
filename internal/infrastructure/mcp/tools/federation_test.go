@@ -1921,6 +1921,54 @@ func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmDuplicateIDParity(t 
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmTrimmedDuplicateIDParity(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-dup-trim",
+		Name:      "Existing Trim Swarm",
+		MaxAgents: 4,
+	}); err != nil {
+		t.Fatalf("failed to register seed swarm: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+	args := map[string]interface{}{
+		"swarmId":   "  swarm-dup-trim  ",
+		"name":      "Duplicate Trimmed Swarm",
+		"maxAgents": float64(5),
+	}
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/register-swarm", args)
+	if execErr == nil {
+		t.Fatal("expected Execute duplicate trimmed swarm registration to fail")
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+	if execResult.Error != "swarmId already exists" {
+		t.Fatalf("expected Execute error %q, got %q", "swarmId already exists", execResult.Error)
+	}
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/register-swarm", args)
+	if directErr == nil {
+		t.Fatal("expected ExecuteTool duplicate trimmed swarm registration to fail")
+	}
+	if directResult.Error != "swarmId already exists" {
+		t.Fatalf("expected ExecuteTool error %q, got %q", "swarmId already exists", directResult.Error)
+	}
+
+	if execResult.Error != directResult.Error {
+		t.Fatalf("expected error parity, got Execute=%q ExecuteTool=%q", execResult.Error, directResult.Error)
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_RegisterSwarmIntegerMaxAgentsParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
