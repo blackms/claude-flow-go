@@ -278,6 +278,12 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 	}
 	switch ttl := args["ttl"].(type) {
 	case float64:
+		if math.IsNaN(ttl) || math.IsInf(ttl, 0) {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "ttl must be a finite integer",
+			}, fmt.Errorf("ttl must be a finite integer")
+		}
 		if math.Trunc(ttl) != ttl {
 			return shared.MCPToolResult{
 				Success: false,
@@ -428,6 +434,12 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 
 	switch maxAgents := args["maxAgents"].(type) {
 	case float64:
+		if math.IsNaN(maxAgents) || math.IsInf(maxAgents, 0) {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "maxAgents must be a finite integer",
+			}, fmt.Errorf("maxAgents must be a finite integer")
+		}
 		if math.Trunc(maxAgents) != maxAgents {
 			return shared.MCPToolResult{
 				Success: false,

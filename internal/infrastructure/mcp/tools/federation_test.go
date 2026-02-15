@@ -3,6 +3,7 @@ package tools
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
@@ -1838,6 +1839,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "spawn non-finite ttl",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  math.Inf(1),
+			},
+		},
+		{
 			name:     "spawn blank type",
 			toolName: "federation/spawn-ephemeral",
 			args: map[string]interface{}{
@@ -1991,6 +2001,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 				"swarmId":   "swarm-1",
 				"name":      "swarm-one",
 				"maxAgents": 3.14,
+			},
+		},
+		{
+			name:     "register swarm non-finite maxAgents",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      "swarm-one",
+				"maxAgents": math.Inf(1),
 			},
 		},
 		{
