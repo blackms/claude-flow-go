@@ -1032,12 +1032,12 @@ func (t *StdioTransport) Run(ctx context.Context) error {
 			if err == io.EOF {
 				return nil
 			}
-			continue
+			return fmt.Errorf("failed to decode mcp request: %w", err)
 		}
 
 		response := t.server.HandleRequest(ctx, request)
 		if err := encoder.Encode(response); err != nil {
-			continue
+			return fmt.Errorf("failed to encode mcp response: %w", err)
 		}
 	}
 }

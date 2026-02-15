@@ -3,6 +3,8 @@ package mcp
 import (
 	"bytes"
 	"context"
+	"errors"
+	"strings"
 	"testing"
 )
 
@@ -52,5 +54,50 @@ func TestStdioTransport_RunValidationPrecedence(t *testing.T) {
 	}
 	if err := NewStdioTransport(server, nil, nil).Run(context.Background()); err == nil || err.Error() != "reader is required" {
 		t.Fatalf("expected reader-required precedence error, got %v", err)
+	}
+}
+
+type failingWriter struct{}
+
+func (f failingWriter) Write(p []byte) (int, error) {
+	return 0, errors.New("write failure")
+}
+
+func TestStdioTransport_RunEOFReturnsNil(t *testing.T) {
+	server := NewServer(Options{})
+	transport := NewStdioTransport(server, bytes.NewBuffer(nil), bytes.NewBuffer(nil))
+
+	if err := transport.Run(context.Background()); err != nil {
+		t.Fatalf("expected EOF-only run to return nil, got %v", err)
+	}
+}
+
+func TestStdioTransport_RunReturnsDecodeError(t *testing.T) {
+	server := NewServer(Options{})
+	transport := NewStdioTransport(server, bytes.NewBufferString("{invalid-json"), bytes.NewBuffer(nil))
+
+	err := transport.Run(context.Background())
+	if err == nil {
+		t.Fatal("expected decode error")
+	}
+	if !strings.Contains(err.Error(), "failed to decode mcp request:") {
+		t.Fatalf("expected decode failure prefix, got %v", err)
+	}
+}
+
+func TestStdioTransport_RunReturnsEncodeError(t *testing.T) {
+	server := NewServer(Options{})
+	transport := NewStdioTransport(
+		server,
+		bytes.NewBufferString(`{"id":"1","method":"initialize","params":{}}`),
+		failingWriter{},
+	)
+
+	err := transport.Run(context.Background())
+	if err == nil {
+		t.Fatal("expected encode error")
+	}
+	if !strings.Contains(err.Error(), "failed to encode mcp response:") {
+		t.Fatalf("expected encode failure prefix, got %v", err)
 	}
 }
