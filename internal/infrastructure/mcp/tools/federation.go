@@ -4,6 +4,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
@@ -276,6 +277,12 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 	}
 	switch ttl := args["ttl"].(type) {
 	case float64:
+		if math.Trunc(ttl) != ttl {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "ttl must be an integer",
+			}, fmt.Errorf("ttl must be an integer")
+		}
 		opts.TTL = int64(ttl)
 	case int:
 		opts.TTL = int64(ttl)
@@ -394,6 +401,12 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 
 	switch maxAgents := args["maxAgents"].(type) {
 	case float64:
+		if math.Trunc(maxAgents) != maxAgents {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "maxAgents must be an integer",
+			}, fmt.Errorf("maxAgents must be an integer")
+		}
 		swarm.MaxAgents = int(maxAgents)
 	case int:
 		swarm.MaxAgents = maxAgents

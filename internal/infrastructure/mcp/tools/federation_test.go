@@ -1496,6 +1496,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "spawn non-integer ttl",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  12.5,
+			},
+		},
+		{
 			name:     "spawn blank type",
 			toolName: "federation/spawn-ephemeral",
 			args: map[string]interface{}{
@@ -1640,6 +1649,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 				"swarmId":   "swarm-1",
 				"name":      "   ",
 				"maxAgents": float64(5),
+			},
+		},
+		{
+			name:     "register swarm non-integer maxAgents",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      "swarm-one",
+				"maxAgents": 3.14,
 			},
 		},
 		{
