@@ -412,7 +412,7 @@ func (t *FederationTools) listEphemeral(ctx context.Context, args map[string]int
 
 	return shared.MCPToolResult{
 		Success: true,
-		Data:    agents,
+		Data:    cloneEphemeralAgents(agents),
 	}, nil
 }
 
@@ -689,4 +689,28 @@ func sortEphemeralAgents(agents []*shared.EphemeralAgent) {
 		}
 		return left.CreatedAt < right.CreatedAt
 	})
+}
+
+func cloneEphemeralAgents(agents []*shared.EphemeralAgent) []*shared.EphemeralAgent {
+	cloned := make([]*shared.EphemeralAgent, 0, len(agents))
+	for _, agent := range agents {
+		if agent == nil {
+			continue
+		}
+		copyAgent := *agent
+		copyAgent.Metadata = cloneStringInterfaceMap(agent.Metadata)
+		cloned = append(cloned, &copyAgent)
+	}
+	return cloned
+}
+
+func cloneStringInterfaceMap(input map[string]interface{}) map[string]interface{} {
+	if input == nil {
+		return nil
+	}
+	output := make(map[string]interface{}, len(input))
+	for key, value := range input {
+		output[key] = value
+	}
+	return output
 }

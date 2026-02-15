@@ -586,6 +586,105 @@ func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralDeterministicOrderPa
 	}
 }
 
+func TestFederationTools_ListEphemeralReturnsDefensiveCopies(t *testing.T) {
+	hub := federation.NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{
+		SwarmID:   "swarm-defensive-copy",
+		Name:      "Defensive Copy Swarm",
+		MaxAgents: 5,
+	}); err != nil {
+		t.Fatalf("failed to register swarm: %v", err)
+	}
+
+	spawn, err := hub.SpawnEphemeralAgent(shared.SpawnEphemeralOptions{
+		SwarmID: "swarm-defensive-copy",
+		Type:    "coder",
+		Task:    "original task",
+		Metadata: map[string]interface{}{
+			"role": "original",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn agent: %v", err)
+	}
+
+	ft := NewFederationTools(hub)
+
+	execResult, execErr := ft.Execute(context.Background(), "federation/list-ephemeral", map[string]interface{}{
+		"swarmId": "swarm-defensive-copy",
+	})
+	if execErr != nil {
+		t.Fatalf("Execute should succeed, got error: %v", execErr)
+	}
+	if execResult == nil {
+		t.Fatal("expected Execute result")
+	}
+
+	execAgents, ok := execResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected Execute data type []*shared.EphemeralAgent, got %T", execResult.Data)
+	}
+	var execListed *shared.EphemeralAgent
+	for _, agent := range execAgents {
+		if agent.ID == spawn.AgentID {
+			execListed = agent
+			break
+		}
+	}
+	if execListed == nil {
+		t.Fatalf("expected Execute list to include spawned agent %s", spawn.AgentID)
+	}
+	execListed.Task = "mutated via execute"
+	if execListed.Metadata == nil {
+		execListed.Metadata = map[string]interface{}{}
+	}
+	execListed.Metadata["role"] = "mutated-execute"
+
+	directResult, directErr := ft.ExecuteTool(context.Background(), "federation/list-ephemeral", map[string]interface{}{
+		"swarmId": "swarm-defensive-copy",
+	})
+	if directErr != nil {
+		t.Fatalf("ExecuteTool should succeed, got error: %v", directErr)
+	}
+	directAgents, ok := directResult.Data.([]*shared.EphemeralAgent)
+	if !ok {
+		t.Fatalf("expected ExecuteTool data type []*shared.EphemeralAgent, got %T", directResult.Data)
+	}
+	var directListed *shared.EphemeralAgent
+	for _, agent := range directAgents {
+		if agent.ID == spawn.AgentID {
+			directListed = agent
+			break
+		}
+	}
+	if directListed == nil {
+		t.Fatalf("expected ExecuteTool list to include spawned agent %s", spawn.AgentID)
+	}
+	directListed.Task = "mutated via executeTool"
+	if directListed.Metadata == nil {
+		directListed.Metadata = map[string]interface{}{}
+	}
+	directListed.Metadata["role"] = "mutated-direct"
+
+	stored, ok := hub.GetAgent(spawn.AgentID)
+	if !ok {
+		t.Fatalf("expected spawned agent %s to still exist", spawn.AgentID)
+	}
+	if stored.Task != "original task" {
+		t.Fatalf("expected hub state task to remain original, got %q", stored.Task)
+	}
+	if stored.Metadata["role"] != "original" {
+		t.Fatalf("expected hub metadata role to remain original, got %v", stored.Metadata["role"])
+	}
+}
+
 func TestFederationTools_ExecuteAndExecuteTool_ListEphemeralSwarmFilterParity(t *testing.T) {
 	hub := federation.NewFederationHubWithDefaults()
 	if err := hub.Initialize(); err != nil {
