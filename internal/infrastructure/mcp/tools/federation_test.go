@@ -867,6 +867,22 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "spawn blank type",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "   ",
+				"task": "implement feature",
+			},
+		},
+		{
+			name:     "spawn blank task",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "   ",
+			},
+		},
+		{
 			name:     "broadcast missing sourceSwarmId",
 			toolName: "federation/broadcast",
 			args: map[string]interface{}{
@@ -935,6 +951,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			args: map[string]interface{}{
 				"swarmId": "swarm-1",
 				"name":    "swarm-one",
+			},
+		},
+		{
+			name:     "register swarm blank name",
+			toolName: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "swarm-1",
+				"name":      "   ",
+				"maxAgents": float64(5),
 			},
 		},
 	}
