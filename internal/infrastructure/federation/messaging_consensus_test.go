@@ -176,6 +176,54 @@ func TestFederationHub_ConsensusOperationsTrimIdentifiersAndValidateInputs(t *te
 	}
 }
 
+func TestFederationHub_VoteRejectsDuplicateVotes(t *testing.T) {
+	cfg := shared.DefaultFederationConfig()
+	cfg.ConsensusQuorum = 1.0
+	hub := NewFederationHub(cfg)
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	registerTestSwarm(t, hub, "swarm-dupvote-proposer", "Duplicate Vote Proposer")
+	registerTestSwarm(t, hub, "swarm-dupvote-voter", "Duplicate Vote Voter")
+	registerTestSwarm(t, hub, "swarm-dupvote-third", "Duplicate Vote Third")
+
+	proposal, err := hub.Propose("swarm-dupvote-proposer", "policy-update", map[string]interface{}{"value": "on"})
+	if err != nil {
+		t.Fatalf("failed to create proposal: %v", err)
+	}
+
+	if err := hub.Vote("swarm-dupvote-voter", proposal.ID, true); err != nil {
+		t.Fatalf("expected first vote to succeed, got %v", err)
+	}
+
+	err = hub.Vote("swarm-dupvote-voter", proposal.ID, false)
+	if err == nil {
+		t.Fatal("expected duplicate vote to be rejected")
+	}
+	expectedErr := "voter swarm-dupvote-voter has already voted on proposal " + proposal.ID
+	if err.Error() != expectedErr {
+		t.Fatalf("expected duplicate vote error %q, got %q", expectedErr, err.Error())
+	}
+
+	storedProposal, ok := hub.GetProposal(proposal.ID)
+	if !ok {
+		t.Fatal("expected proposal to remain stored")
+	}
+	if storedProposal.Status != shared.FederationProposalPending {
+		t.Fatalf("expected proposal to remain pending before third vote, got %q", storedProposal.Status)
+	}
+	if len(storedProposal.Votes) != 2 {
+		t.Fatalf("expected votes map size to remain 2 after duplicate vote attempt, got %d", len(storedProposal.Votes))
+	}
+	if !storedProposal.Votes["swarm-dupvote-voter"] {
+		t.Fatalf("expected original voter decision to remain true, got votes=%v", storedProposal.Votes)
+	}
+}
+
 func TestFederationHub_ProposeRejectsInvalidProposalTimeoutConfiguration(t *testing.T) {
 	zeroTimeoutCfg := shared.DefaultFederationConfig()
 	zeroTimeoutCfg.ProposalTimeout = 0

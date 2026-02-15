@@ -136,6 +136,10 @@ func (fh *FederationHub) Vote(voterID, proposalID string, approve bool) error {
 		return fmt.Errorf("proposal %s has expired", proposalID)
 	}
 
+	if _, hasVoted := proposal.Votes[voterID]; hasVoted {
+		return fmt.Errorf("voter %s has already voted on proposal %s", voterID, proposalID)
+	}
+
 	// Record vote
 	proposal.Votes[voterID] = approve
 
