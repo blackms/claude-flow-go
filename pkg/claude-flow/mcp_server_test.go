@@ -153,6 +153,7 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 	hasAgentSpawn := false
 	hasConfigGet := false
 	hasOrchestratePlan := false
+	hasMemoryStore := false
 	hasFederationStatus := false
 	hasHooksList := false
 
@@ -164,6 +165,8 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 			hasConfigGet = true
 		case "orchestrate_plan":
 			hasOrchestratePlan = true
+		case "memory_store":
+			hasMemoryStore = true
 		case "federation/status":
 			hasFederationStatus = true
 		case "hooks/list":
@@ -171,10 +174,10 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 		}
 	}
 
-	if hasAgentSpawn || hasConfigGet || hasOrchestratePlan {
+	if hasAgentSpawn || hasConfigGet || hasOrchestratePlan || hasMemoryStore {
 		t.Fatalf(
-			"expected coordinator-dependent tools to be absent; got agent=%v config=%v orchestrate=%v",
-			hasAgentSpawn, hasConfigGet, hasOrchestratePlan,
+			"expected coordinator/memory tools to be absent; got agent=%v config=%v orchestrate=%v memory=%v",
+			hasAgentSpawn, hasConfigGet, hasOrchestratePlan, hasMemoryStore,
 		)
 	}
 
@@ -183,5 +186,49 @@ func TestNewMCPServer_WithoutCoordinator_DoesNotRegisterCoordinatorTools(t *test
 			"expected federation/hooks tools even without coordinator; got federation=%v hooks=%v",
 			hasFederationStatus, hasHooksList,
 		)
+	}
+}
+
+func TestNewMCPServer_WithMemory_RegistersMemoryTools(t *testing.T) {
+	backend, err := NewSQLiteBackend(":memory:")
+	if err != nil {
+		t.Fatalf("failed to initialize sqlite backend: %v", err)
+	}
+
+	server := NewMCPServer(MCPServerConfig{
+		Memory: backend,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	hasMemoryStore := false
+	hasMemoryRetrieve := false
+	hasFederationStatus := false
+	hasHooksList := false
+
+	for _, tool := range tools {
+		switch tool.Name {
+		case "memory_store":
+			hasMemoryStore = true
+		case "memory_retrieve":
+			hasMemoryRetrieve = true
+		case "federation/status":
+			hasFederationStatus = true
+		case "hooks/list":
+			hasHooksList = true
+		}
+	}
+
+	if !hasMemoryStore || !hasMemoryRetrieve {
+		t.Fatalf("expected memory tools to be registered; got store=%v retrieve=%v", hasMemoryStore, hasMemoryRetrieve)
+	}
+	if !hasFederationStatus || !hasHooksList {
+		t.Fatalf("expected federation/hooks tools to remain registered; got federation=%v hooks=%v", hasFederationStatus, hasHooksList)
 	}
 }
