@@ -169,6 +169,125 @@ func TestNewMCPServer_FederationToolSchemas_ExposeValidatedStatusAndIntegers(t *
 	}
 }
 
+func TestNewMCPServer_WithCoordinatorAndMemory_FederationToolSchemas_ExposeValidatedStatusAndIntegers(t *testing.T) {
+	coord, err := NewSwarmCoordinator(SwarmConfig{
+		Topology: TopologyMesh,
+	})
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = coord.Shutdown()
+	})
+
+	backend, err := NewSQLiteBackend(":memory:")
+	if err != nil {
+		t.Fatalf("failed to initialize sqlite backend: %v", err)
+	}
+
+	server := NewMCPServer(MCPServerConfig{
+		Coordinator: coord,
+		Memory:      backend,
+	})
+	if server == nil {
+		t.Fatal("expected MCP server to be created")
+	}
+
+	tools := server.ListTools()
+	if len(tools) == 0 {
+		t.Fatal("expected MCP server to expose tools")
+	}
+
+	toolByName := make(map[string]map[string]interface{}, len(tools))
+	for _, tool := range tools {
+		toolByName[tool.Name] = tool.Parameters
+	}
+
+	requirePropertyType := func(toolName, propertyName, expectedType string) {
+		t.Helper()
+
+		params, ok := toolByName[toolName]
+		if !ok {
+			t.Fatalf("expected tool %s to be present", toolName)
+		}
+		propertiesRaw, ok := params["properties"]
+		if !ok {
+			t.Fatalf("expected properties in %s schema", toolName)
+		}
+		properties, ok := propertiesRaw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected properties map for %s, got %T", toolName, propertiesRaw)
+		}
+		propertyRaw, ok := properties[propertyName]
+		if !ok {
+			t.Fatalf("expected property %s in %s schema", propertyName, toolName)
+		}
+		property, ok := propertyRaw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected property map for %s.%s, got %T", toolName, propertyName, propertyRaw)
+		}
+		if property["type"] != expectedType {
+			t.Fatalf("expected %s.%s type %q, got %v", toolName, propertyName, expectedType, property["type"])
+		}
+	}
+
+	requirePropertyType("federation/spawn-ephemeral", "ttl", "integer")
+	requirePropertyType("federation/register-swarm", "maxAgents", "integer")
+
+	params, ok := toolByName["federation/list-ephemeral"]
+	if !ok {
+		t.Fatal("expected federation/list-ephemeral tool to be present")
+	}
+	propertiesRaw, ok := params["properties"]
+	if !ok {
+		t.Fatal("expected properties in federation/list-ephemeral schema")
+	}
+	properties, ok := propertiesRaw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected list-ephemeral properties map, got %T", propertiesRaw)
+	}
+	statusRaw, ok := properties["status"]
+	if !ok {
+		t.Fatal("expected status property in federation/list-ephemeral schema")
+	}
+	statusProperty, ok := statusRaw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected status property map, got %T", statusRaw)
+	}
+	enumRaw, ok := statusProperty["enum"]
+	if !ok {
+		t.Fatal("expected enum in list-ephemeral status property")
+	}
+
+	enumValues := map[string]bool{}
+	switch values := enumRaw.(type) {
+	case []string:
+		for _, value := range values {
+			enumValues[value] = true
+		}
+	case []interface{}:
+		for _, value := range values {
+			s, ok := value.(string)
+			if !ok {
+				t.Fatalf("expected enum entries to be strings, got %T", value)
+			}
+			enumValues[s] = true
+		}
+	default:
+		t.Fatalf("expected status enum to be []string or []interface{}, got %T", enumRaw)
+	}
+
+	expectedEnum := []string{"spawning", "active", "completing", "terminated"}
+	if len(enumValues) != len(expectedEnum) {
+		t.Fatalf("expected %d unique status enum values, got %d (%v)", len(expectedEnum), len(enumValues), enumValues)
+	}
+	for _, expected := range expectedEnum {
+		if !enumValues[expected] {
+			t.Fatalf("expected status enum to include %q", expected)
+		}
+	}
+}
+
 func TestNewMCPServer_RegistersBuiltInHooksAndUniqueTools(t *testing.T) {
 	server := NewMCPServer(MCPServerConfig{})
 	if server == nil {
