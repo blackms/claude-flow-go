@@ -222,7 +222,7 @@ func (t *FederationTools) ExecuteTool(ctx context.Context, name string, args map
 		}, fmt.Errorf("unknown tool: %s", name)
 	}
 
-	if t.hub == nil {
+	if t.hub == nil || !t.hub.IsConfigured() {
 		return shared.MCPToolResult{
 			Success: false,
 			Error:   "federation hub is not configured",
@@ -294,9 +294,9 @@ func (t *FederationTools) getStatus(ctx context.Context, args map[string]interfa
 	return shared.MCPToolResult{
 		Success: true,
 		Data: map[string]interface{}{
-			"federationId":  config.FederationID,
-			"stats":         stats,
-			"swarms":        swarmInfos,
+			"federationId":     config.FederationID,
+			"stats":            stats,
+			"swarms":           swarmInfos,
 			"consensusEnabled": config.EnableConsensus,
 			"consensusQuorum":  config.ConsensusQuorum,
 		},

@@ -188,6 +188,57 @@ func TestFederationTools_ExecuteAndExecuteTool_ZeroValueInternalHubRejectsMutati
 	}
 }
 
+func TestFederationTools_ExecuteAndExecuteTool_ZeroValueInternalHubRejectsReadTools(t *testing.T) {
+	ft := NewFederationTools(&federation.FederationHub{})
+	testCases := []struct {
+		name string
+		args map[string]interface{}
+	}{
+		{
+			name: "federation/status",
+			args: map[string]interface{}{},
+		},
+		{
+			name: "federation/list-ephemeral",
+			args: map[string]interface{}{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			execResult, execErr := ft.Execute(context.Background(), tc.name, tc.args)
+			if execErr == nil {
+				t.Fatal("expected Execute to fail with zero-value internal hub")
+			}
+			if execResult == nil {
+				t.Fatal("expected Execute result with zero-value internal hub")
+			}
+
+			directResult, directErr := ft.ExecuteTool(context.Background(), tc.name, tc.args)
+			if directErr == nil {
+				t.Fatal("expected ExecuteTool to fail with zero-value internal hub")
+			}
+
+			const expectedErr = "federation hub is not configured"
+			if execErr.Error() != expectedErr {
+				t.Fatalf("expected Execute error %q, got %q", expectedErr, execErr.Error())
+			}
+			if directErr.Error() != expectedErr {
+				t.Fatalf("expected ExecuteTool error %q, got %q", expectedErr, directErr.Error())
+			}
+			if execResult.Error != expectedErr {
+				t.Fatalf("expected Execute result error %q, got %q", expectedErr, execResult.Error)
+			}
+			if directResult.Error != expectedErr {
+				t.Fatalf("expected ExecuteTool result error %q, got %q", expectedErr, directResult.Error)
+			}
+			if execResult.Success || directResult.Success {
+				t.Fatalf("expected both paths to fail, got Execute=%v ExecuteTool=%v", execResult.Success, directResult.Success)
+			}
+		})
+	}
+}
+
 func TestFederationTools_GetTools_HaveObjectSchemasAndRequiredFields(t *testing.T) {
 	ft := &FederationTools{}
 
@@ -463,10 +514,10 @@ func TestValidateCapabilitiesInput(t *testing.T) {
 
 func TestParseEphemeralAgentStatus(t *testing.T) {
 	tests := []struct {
-		name         string
-		input        string
-		expected     shared.EphemeralAgentStatus
-		expectValid  bool
+		name        string
+		input       string
+		expected    shared.EphemeralAgentStatus
+		expectValid bool
 	}{
 		{
 			name:        "valid lowercase",
@@ -518,9 +569,9 @@ func TestCloneInterfaceValue_DeepCloneBehavior(t *testing.T) {
 			map[string]interface{}{"id": "a"},
 			[]interface{}{map[string]string{"kind": "x"}, map[string]bool{"ready": true}},
 		},
-		"counts": []int{1, 2, 3},
+		"counts":     []int{1, 2, 3},
 		"longCounts": []int64{7, 8, 9},
-		"ratios": []float64{0.5, 0.75},
+		"ratios":     []float64{0.5, 0.75},
 		"stringMaps": []map[string]string{
 			{"env": "prod"},
 		},

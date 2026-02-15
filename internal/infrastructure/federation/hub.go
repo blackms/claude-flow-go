@@ -112,6 +112,11 @@ func (fh *FederationHub) isConfigured() bool {
 	return true
 }
 
+// IsConfigured reports whether the federation hub instance is constructed and safe to use.
+func (fh *FederationHub) IsConfigured() bool {
+	return fh.isConfigured()
+}
+
 func (fh *FederationHub) configuredOrError() error {
 	if !fh.isConfigured() {
 		return fmt.Errorf("federation hub is not configured")
