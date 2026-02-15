@@ -345,6 +345,12 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 				Error:   "ttl must be greater than 0",
 			}, fmt.Errorf("ttl must be greater than 0")
 		}
+		if opts.TTL > math.MaxInt64-shared.Now() {
+			return shared.MCPToolResult{
+				Success: false,
+				Error:   "ttl is out of range",
+			}, fmt.Errorf("ttl is out of range")
+		}
 	}
 	if capsRaw, ok := args["capabilities"]; ok {
 		if err := validateCapabilitiesInput(capsRaw); err != nil {

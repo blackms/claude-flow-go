@@ -3416,6 +3416,15 @@ func TestFederationTools_ExecuteAndExecuteTool_ValidationParityForRequiredFields
 			},
 		},
 		{
+			name:     "spawn overflow ttl int64",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  int64(math.MaxInt64),
+			},
+		},
+		{
 			name:     "spawn non-positive ttl",
 			toolName: "federation/spawn-ephemeral",
 			args: map[string]interface{}{
@@ -3947,6 +3956,16 @@ func TestFederationTools_ExecuteAndExecuteTool_TypeValidationMessages(t *testing
 				"type": "coder",
 				"task": "implement feature",
 				"ttl":  1e20,
+			},
+			expectedError: "ttl is out of range",
+		},
+		{
+			name:     "spawn ttl overflow int64",
+			toolName: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "implement feature",
+				"ttl":  int64(math.MaxInt64),
 			},
 			expectedError: "ttl is out of range",
 		},
