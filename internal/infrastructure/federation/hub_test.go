@@ -1,6 +1,7 @@
 package federation
 
 import (
+	"errors"
 	"math"
 	"strings"
 	"sync/atomic"
@@ -159,7 +160,7 @@ func TestFederationHub_InitializeRejectsAlreadyInitialized(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected second initialize to fail")
 	}
-	if err.Error() != "federation hub is already initialized" {
+	if !errors.Is(err, shared.ErrHubAlreadyInit) {
 		t.Fatalf("expected already initialized error, got %q", err.Error())
 	}
 }
@@ -191,7 +192,7 @@ func TestFederationHub_InitializeRejectsAfterShutdown(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected initialize after shutdown to fail")
 	}
-	if err.Error() != "federation hub is shut down" {
+	if !errors.Is(err, shared.ErrHubShutDown) {
 		t.Fatalf("expected shutdown lifecycle error, got %q", err.Error())
 	}
 }
@@ -206,7 +207,7 @@ func TestFederationHub_InitializeRejectsWhenShutdownBeforeStart(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected initialize to fail after pre-start shutdown")
 	}
-	if err.Error() != "federation hub is shut down" {
+	if !errors.Is(err, shared.ErrHubShutDown) {
 		t.Fatalf("expected shutdown lifecycle error, got %q", err.Error())
 	}
 }
@@ -373,15 +374,15 @@ func TestFederationHub_MutatingOperationsRejectAfterShutdown(t *testing.T) {
 		t.Fatalf("failed to shutdown federation hub: %v", err)
 	}
 
-	const expectedErr = "federation hub is shut down"
+	expectedErr := shared.ErrHubShutDown
 
-	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || err.Error() != expectedErr {
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected register swarm shutdown error %q, got %v", expectedErr, err)
 	}
-	if err := hub.UnregisterSwarm("swarm"); err == nil || err.Error() != expectedErr {
+	if err := hub.UnregisterSwarm("swarm"); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected unregister swarm shutdown error %q, got %v", expectedErr, err)
 	}
-	if err := hub.Heartbeat("swarm"); err == nil || err.Error() != expectedErr {
+	if err := hub.Heartbeat("swarm"); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected heartbeat shutdown error %q, got %v", expectedErr, err)
 	}
 
@@ -389,37 +390,37 @@ func TestFederationHub_MutatingOperationsRejectAfterShutdown(t *testing.T) {
 		Type: "coder",
 		Task: "shutdown-check",
 	})
-	if spawnErr == nil || spawnErr.Error() != expectedErr {
+	if spawnErr == nil || !errors.Is(spawnErr, expectedErr) {
 		t.Fatalf("expected spawn shutdown error %q, got %v", expectedErr, spawnErr)
 	}
-	if spawnResult == nil || spawnResult.Error != expectedErr {
+	if spawnResult == nil || spawnResult.Error != expectedErr.Error() {
 		t.Fatalf("expected spawn result shutdown error %q, got %+v", expectedErr, spawnResult)
 	}
 
-	if err := hub.CompleteAgent("agent-id", nil); err == nil || err.Error() != expectedErr {
+	if err := hub.CompleteAgent("agent-id", nil); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected complete agent shutdown error %q, got %v", expectedErr, err)
 	}
-	if err := hub.TerminateAgent("agent-id", ""); err == nil || err.Error() != expectedErr {
+	if err := hub.TerminateAgent("agent-id", ""); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected terminate agent shutdown error %q, got %v", expectedErr, err)
 	}
 
-	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"ok": true}); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected send message shutdown error %q, got %v", expectedErr, err)
 	}
-	if _, err := hub.Broadcast("source", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+	if _, err := hub.Broadcast("source", map[string]interface{}{"ok": true}); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected broadcast shutdown error %q, got %v", expectedErr, err)
 	}
-	if _, err := hub.SendHeartbeat("source", "target"); err == nil || err.Error() != expectedErr {
+	if _, err := hub.SendHeartbeat("source", "target"); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected send heartbeat shutdown error %q, got %v", expectedErr, err)
 	}
-	if _, err := hub.SendConsensusMessage("source", map[string]interface{}{"ok": true}, "target"); err == nil || err.Error() != expectedErr {
+	if _, err := hub.SendConsensusMessage("source", map[string]interface{}{"ok": true}, "target"); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected send consensus message shutdown error %q, got %v", expectedErr, err)
 	}
 
-	if _, err := hub.Propose("source", "proposal", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+	if _, err := hub.Propose("source", "proposal", map[string]interface{}{"ok": true}); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected propose shutdown error %q, got %v", expectedErr, err)
 	}
-	if err := hub.Vote("source", "proposal", true); err == nil || err.Error() != expectedErr {
+	if err := hub.Vote("source", "proposal", true); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected vote shutdown error %q, got %v", expectedErr, err)
 	}
 }
@@ -427,15 +428,15 @@ func TestFederationHub_MutatingOperationsRejectAfterShutdown(t *testing.T) {
 func TestFederationHub_MutatingOperationsRejectBeforeInitialize(t *testing.T) {
 	hub := NewFederationHubWithDefaults()
 
-	const expectedErr = "federation hub is not initialized"
+	expectedErr := shared.ErrHubNotInitialized
 
-	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || err.Error() != expectedErr {
+	if err := hub.RegisterSwarm(shared.SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected register swarm pre-init error %q, got %v", expectedErr, err)
 	}
-	if err := hub.UnregisterSwarm("swarm"); err == nil || err.Error() != expectedErr {
+	if err := hub.UnregisterSwarm("swarm"); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected unregister swarm pre-init error %q, got %v", expectedErr, err)
 	}
-	if err := hub.Heartbeat("swarm"); err == nil || err.Error() != expectedErr {
+	if err := hub.Heartbeat("swarm"); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected heartbeat pre-init error %q, got %v", expectedErr, err)
 	}
 
@@ -443,37 +444,37 @@ func TestFederationHub_MutatingOperationsRejectBeforeInitialize(t *testing.T) {
 		Type: "coder",
 		Task: "pre-init-check",
 	})
-	if spawnErr == nil || spawnErr.Error() != expectedErr {
+	if spawnErr == nil || !errors.Is(spawnErr, expectedErr) {
 		t.Fatalf("expected spawn pre-init error %q, got %v", expectedErr, spawnErr)
 	}
-	if spawnResult == nil || spawnResult.Error != expectedErr {
+	if spawnResult == nil || spawnResult.Error != expectedErr.Error() {
 		t.Fatalf("expected spawn result pre-init error %q, got %+v", expectedErr, spawnResult)
 	}
 
-	if err := hub.CompleteAgent("agent-id", nil); err == nil || err.Error() != expectedErr {
+	if err := hub.CompleteAgent("agent-id", nil); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected complete agent pre-init error %q, got %v", expectedErr, err)
 	}
-	if err := hub.TerminateAgent("agent-id", ""); err == nil || err.Error() != expectedErr {
+	if err := hub.TerminateAgent("agent-id", ""); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected terminate agent pre-init error %q, got %v", expectedErr, err)
 	}
 
-	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"ok": true}); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected send message pre-init error %q, got %v", expectedErr, err)
 	}
-	if _, err := hub.Broadcast("source", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+	if _, err := hub.Broadcast("source", map[string]interface{}{"ok": true}); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected broadcast pre-init error %q, got %v", expectedErr, err)
 	}
-	if _, err := hub.SendHeartbeat("source", "target"); err == nil || err.Error() != expectedErr {
+	if _, err := hub.SendHeartbeat("source", "target"); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected send heartbeat pre-init error %q, got %v", expectedErr, err)
 	}
-	if _, err := hub.SendConsensusMessage("source", map[string]interface{}{"ok": true}, "target"); err == nil || err.Error() != expectedErr {
+	if _, err := hub.SendConsensusMessage("source", map[string]interface{}{"ok": true}, "target"); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected send consensus message pre-init error %q, got %v", expectedErr, err)
 	}
 
-	if _, err := hub.Propose("source", "proposal", map[string]interface{}{"ok": true}); err == nil || err.Error() != expectedErr {
+	if _, err := hub.Propose("source", "proposal", map[string]interface{}{"ok": true}); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected propose pre-init error %q, got %v", expectedErr, err)
 	}
-	if err := hub.Vote("source", "proposal", true); err == nil || err.Error() != expectedErr {
+	if err := hub.Vote("source", "proposal", true); err == nil || !errors.Is(err, expectedErr) {
 		t.Fatalf("expected vote pre-init error %q, got %v", expectedErr, err)
 	}
 }
@@ -803,8 +804,8 @@ func TestFederationHub_SpawnEphemeralRejectsNonPositiveDefaultTTL(t *testing.T) 
 	if err == nil {
 		t.Fatal("expected spawn to fail when default ttl is non-positive")
 	}
-	if err.Error() != "ttl must be greater than 0" {
-		t.Fatalf("expected non-positive ttl error %q, got %q", "ttl must be greater than 0", err.Error())
+	if !errors.Is(err, shared.ErrTTLRequired) {
+		t.Fatalf("expected non-positive ttl error %q, got %q", shared.ErrTTLRequired, err.Error())
 	}
 	if agents := hub.GetAgents(); len(agents) != 0 {
 		t.Fatalf("expected no agents to be created when default ttl is non-positive, got %d", len(agents))
@@ -829,9 +830,9 @@ func TestFederationHub_SpawnEphemeralRejectsBlankTypeOrTask(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		opts      shared.SpawnEphemeralOptions
-		expected  string
+		name     string
+		opts     shared.SpawnEphemeralOptions
+		expected error
 	}{
 		{
 			name: "blank type",
@@ -840,7 +841,7 @@ func TestFederationHub_SpawnEphemeralRejectsBlankTypeOrTask(t *testing.T) {
 				Type:    "   ",
 				Task:    "task",
 			},
-			expected: "type is required",
+			expected: shared.ErrTypeRequired,
 		},
 		{
 			name: "blank task",
@@ -849,7 +850,7 @@ func TestFederationHub_SpawnEphemeralRejectsBlankTypeOrTask(t *testing.T) {
 				Type:    "coder",
 				Task:    "   ",
 			},
-			expected: "task is required",
+			expected: shared.ErrTaskRequired,
 		},
 	}
 
@@ -859,7 +860,7 @@ func TestFederationHub_SpawnEphemeralRejectsBlankTypeOrTask(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected spawn validation error %q", tc.expected)
 			}
-			if err.Error() != tc.expected {
+			if !errors.Is(err, tc.expected) {
 				t.Fatalf("expected error %q, got %q", tc.expected, err.Error())
 			}
 		})
@@ -1053,7 +1054,7 @@ func TestFederationHub_RegisterSwarmRejectsInvalidInputs(t *testing.T) {
 	tests := []struct {
 		name         string
 		registration shared.SwarmRegistration
-		expectedErr  string
+		expectedErr  error
 	}{
 		{
 			name: "blank swarm id",
@@ -1062,7 +1063,7 @@ func TestFederationHub_RegisterSwarmRejectsInvalidInputs(t *testing.T) {
 				Name:      "blank-id",
 				MaxAgents: 1,
 			},
-			expectedErr: "swarmId is required",
+			expectedErr: shared.ErrSwarmIDRequired,
 		},
 		{
 			name: "non-positive maxAgents",
@@ -1071,7 +1072,7 @@ func TestFederationHub_RegisterSwarmRejectsInvalidInputs(t *testing.T) {
 				Name:      "invalid-capacity",
 				MaxAgents: 0,
 			},
-			expectedErr: "maxAgents must be greater than 0",
+			expectedErr: shared.ErrMaxAgentsRequired,
 		},
 		{
 			name: "blank name",
@@ -1080,7 +1081,7 @@ func TestFederationHub_RegisterSwarmRejectsInvalidInputs(t *testing.T) {
 				Name:      "   ",
 				MaxAgents: 1,
 			},
-			expectedErr: "name is required",
+			expectedErr: shared.ErrNameRequired,
 		},
 	}
 
@@ -1090,7 +1091,7 @@ func TestFederationHub_RegisterSwarmRejectsInvalidInputs(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected registration error %q", tc.expectedErr)
 			}
-			if err.Error() != tc.expectedErr {
+			if !errors.Is(err, tc.expectedErr) {
 				t.Fatalf("expected error %q, got %q", tc.expectedErr, err.Error())
 			}
 		})
@@ -1196,11 +1197,11 @@ func TestFederationHub_SwarmOperationsTrimIdentifiers(t *testing.T) {
 		t.Fatal("expected swarm to be unregistered")
 	}
 
-	if err := hub.Heartbeat("   "); err == nil || err.Error() != "swarmId is required" {
+	if err := hub.Heartbeat("   "); err == nil || !errors.Is(err, shared.ErrSwarmIDRequired) {
 		t.Fatalf("expected heartbeat blank id error, got %v", err)
 	}
 
-	if err := hub.UnregisterSwarm("   "); err == nil || err.Error() != "swarmId is required" {
+	if err := hub.UnregisterSwarm("   "); err == nil || !errors.Is(err, shared.ErrSwarmIDRequired) {
 		t.Fatalf("expected unregister blank id error, got %v", err)
 	}
 }
@@ -1268,10 +1269,10 @@ func TestFederationHub_AgentOperationsTrimIdentifiers(t *testing.T) {
 		t.Fatalf("expected terminate error to be recorded, got %q", secondAgent.Error)
 	}
 
-	if err := hub.CompleteAgent("   ", nil); err == nil || err.Error() != "agentId is required" {
+	if err := hub.CompleteAgent("   ", nil); err == nil || !errors.Is(err, shared.ErrAgentIDRequired) {
 		t.Fatalf("expected complete blank id error, got %v", err)
 	}
-	if err := hub.TerminateAgent("   ", ""); err == nil || err.Error() != "agentId is required" {
+	if err := hub.TerminateAgent("   ", ""); err == nil || !errors.Is(err, shared.ErrAgentIDRequired) {
 		t.Fatalf("expected terminate blank id error, got %v", err)
 	}
 	if _, ok := hub.GetAgent("   "); ok {

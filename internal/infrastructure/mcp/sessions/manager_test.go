@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
@@ -127,7 +128,7 @@ func TestSessionManager_SaveSessionRejectsNilRequest(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nil save request")
 	}
-	if err.Error() != "session save request is required" {
+	if !errors.Is(err, shared.ErrSessionSaveRequired) {
 		t.Fatalf("expected nil save request error, got %q", err.Error())
 	}
 }

@@ -1,6 +1,7 @@
 package federation
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -12,7 +13,7 @@ func assertNotConfiguredError(t *testing.T, err error) {
 	if err == nil {
 		t.Fatal("expected not-configured error")
 	}
-	if err.Error() != "federation hub is not configured" {
+	if !errors.Is(err, shared.ErrHubNotConfigured) {
 		t.Fatalf("expected not-configured error, got %q", err.Error())
 	}
 }

@@ -30,14 +30,14 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 	if fh.shutdown {
 		return &shared.SpawnResult{
 			Status: "failed",
-			Error:  "federation hub is shut down",
-		}, fmt.Errorf("federation hub is shut down")
+			Error:  shared.ErrHubShutDown.Error(),
+		}, shared.ErrHubShutDown
 	}
 	if !fh.initialized {
 		return &shared.SpawnResult{
 			Status: "failed",
-			Error:  "federation hub is not initialized",
-		}, fmt.Errorf("federation hub is not initialized")
+			Error:  shared.ErrHubNotInitialized.Error(),
+		}, shared.ErrHubNotInitialized
 	}
 
 	opts.SwarmID = strings.TrimSpace(opts.SwarmID)
@@ -47,14 +47,14 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 	if opts.Type == "" {
 		return &shared.SpawnResult{
 			Status: "failed",
-			Error:  "type is required",
-		}, fmt.Errorf("type is required")
+			Error:  shared.ErrTypeRequired.Error(),
+		}, shared.ErrTypeRequired
 	}
 	if opts.Task == "" {
 		return &shared.SpawnResult{
 			Status: "failed",
-			Error:  "task is required",
-		}, fmt.Errorf("task is required")
+			Error:  shared.ErrTaskRequired.Error(),
+		}, shared.ErrTaskRequired
 	}
 
 	// Set default TTL
@@ -64,8 +64,8 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 	if opts.TTL <= 0 {
 		return &shared.SpawnResult{
 			Status: "failed",
-			Error:  "ttl must be greater than 0",
-		}, fmt.Errorf("ttl must be greater than 0")
+			Error:  shared.ErrTTLRequired.Error(),
+		}, shared.ErrTTLRequired
 	}
 
 	// Select optimal swarm if not specified
@@ -123,7 +123,7 @@ func (fh *FederationHub) SpawnEphemeralAgent(opts shared.SpawnEphemeralOptions) 
 		TTL:       opts.TTL,
 		CreatedAt: now,
 		ExpiresAt: now + opts.TTL,
-		Metadata:  cloneStringInterfaceMap(opts.Metadata),
+		Metadata:  shared.CloneStringInterfaceMap(opts.Metadata),
 	}
 
 	// Add to indexes
@@ -192,15 +192,15 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
-		return fmt.Errorf("federation hub is shut down")
+		return shared.ErrHubShutDown
 	}
 	if !fh.initialized {
-		return fmt.Errorf("federation hub is not initialized")
+		return shared.ErrHubNotInitialized
 	}
 
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {
-		return fmt.Errorf("agentId is required")
+		return shared.ErrAgentIDRequired
 	}
 
 	agent, exists := fh.ephemeralAgents[agentID]
@@ -219,7 +219,7 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 	fh.agentsByStatus[shared.EphemeralStatusCompleting][agentID] = true
 
 	agent.Status = shared.EphemeralStatusCompleting
-	agent.Result = cloneInterfaceValue(result)
+	agent.Result = shared.CloneInterfaceValue(result)
 	agent.CompletedAt = now
 
 	// Emit event
@@ -227,7 +227,7 @@ func (fh *FederationHub) CompleteAgent(agentID string, result interface{}) error
 		Type:      shared.FederationEventAgentCompleted,
 		SwarmID:   agent.SwarmID,
 		AgentID:   agentID,
-		Data:      cloneInterfaceValue(result),
+		Data:      shared.CloneInterfaceValue(result),
 		Timestamp: now,
 	})
 
@@ -249,14 +249,14 @@ func (fh *FederationHub) TerminateAgent(agentID string, errorMsg string) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
-		return fmt.Errorf("federation hub is shut down")
+		return shared.ErrHubShutDown
 	}
 	if !fh.initialized {
-		return fmt.Errorf("federation hub is not initialized")
+		return shared.ErrHubNotInitialized
 	}
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {
-		return fmt.Errorf("agentId is required")
+		return shared.ErrAgentIDRequired
 	}
 	return fh.terminateAgentInternal(agentID, errorMsg)
 }

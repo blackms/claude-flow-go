@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -159,10 +160,10 @@ func (p writableParamsProvider) Execute(ctx context.Context, toolName string, pa
 func TestServer_NilReceiverMethodsFailGracefully(t *testing.T) {
 	var server *Server
 
-	if err := server.Start(); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.Start(); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected nil Start initialization error, got %v", err)
 	}
-	if err := server.Stop(); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.Stop(); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected nil Stop initialization error, got %v", err)
 	}
 
@@ -201,10 +202,10 @@ func TestServer_NilReceiverMethodsFailGracefully(t *testing.T) {
 func TestServer_ZeroValueMethodsFailGracefully(t *testing.T) {
 	var server Server
 
-	if err := server.Start(); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.Start(); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected zero-value Start initialization error, got %v", err)
 	}
-	if err := server.Stop(); err == nil || err.Error() != "mcp server is not initialized" {
+	if err := server.Stop(); err == nil || !errors.Is(err, shared.ErrNotInitialized) {
 		t.Fatalf("expected zero-value Stop initialization error, got %v", err)
 	}
 
@@ -323,7 +324,7 @@ func TestServer_StartRejectsInvalidPortAndHost(t *testing.T) {
 	if invalidPortServer == nil {
 		t.Fatal("expected server with invalid port to be constructed")
 	}
-	if err := invalidPortServer.Start(); err == nil || err.Error() != "invalid port: -1" {
+	if err := invalidPortServer.Start(); err == nil || !errors.Is(err, shared.ErrInvalidPort) {
 		t.Fatalf("expected invalid-port start error, got %v", err)
 	}
 
@@ -331,7 +332,7 @@ func TestServer_StartRejectsInvalidPortAndHost(t *testing.T) {
 	if overflowPortServer == nil {
 		t.Fatal("expected server with overflow port to be constructed")
 	}
-	if err := overflowPortServer.Start(); err == nil || err.Error() != "invalid port: 70000" {
+	if err := overflowPortServer.Start(); err == nil || !errors.Is(err, shared.ErrInvalidPort) {
 		t.Fatalf("expected overflow-port start error, got %v", err)
 	}
 
@@ -340,7 +341,7 @@ func TestServer_StartRejectsInvalidPortAndHost(t *testing.T) {
 		t.Fatal("expected server for malformed-host test")
 	}
 	malformedHostServer.host = "   "
-	if err := malformedHostServer.Start(); err == nil || err.Error() != "host is required" {
+	if err := malformedHostServer.Start(); err == nil || !errors.Is(err, shared.ErrHostRequired) {
 		t.Fatalf("expected host-required start error, got %v", err)
 	}
 }

@@ -23,22 +23,22 @@ func (fh *FederationHub) SendMessage(sourceSwarmID, targetSwarmID string, payloa
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
-		return nil, fmt.Errorf("federation hub is shut down")
+		return nil, shared.ErrHubShutDown
 	}
 	if !fh.initialized {
-		return nil, fmt.Errorf("federation hub is not initialized")
+		return nil, shared.ErrHubNotInitialized
 	}
 
 	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
 	targetSwarmID = strings.TrimSpace(targetSwarmID)
 	if sourceSwarmID == "" {
-		return nil, fmt.Errorf("sourceSwarmId is required")
+		return nil, shared.ErrSourceSwarmRequired
 	}
 	if targetSwarmID == "" {
-		return nil, fmt.Errorf("targetSwarmId is required")
+		return nil, shared.ErrTargetSwarmRequired
 	}
 	if payload == nil {
-		return nil, fmt.Errorf("payload is required")
+		return nil, shared.ErrPayloadRequired
 	}
 
 	// Validate source swarm
@@ -65,7 +65,7 @@ func (fh *FederationHub) SendMessage(sourceSwarmID, targetSwarmID string, payloa
 		Type:          shared.FederationMsgDirect,
 		SourceSwarmID: sourceSwarmID,
 		TargetSwarmID: targetSwarmID,
-		Payload:       cloneInterfaceValue(payload),
+		Payload:       shared.CloneInterfaceValue(payload),
 		Timestamp:     now,
 	}
 
@@ -108,18 +108,18 @@ func (fh *FederationHub) Broadcast(sourceSwarmID string, payload interface{}) (*
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
-		return nil, fmt.Errorf("federation hub is shut down")
+		return nil, shared.ErrHubShutDown
 	}
 	if !fh.initialized {
-		return nil, fmt.Errorf("federation hub is not initialized")
+		return nil, shared.ErrHubNotInitialized
 	}
 
 	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
 	if sourceSwarmID == "" {
-		return nil, fmt.Errorf("sourceSwarmId is required")
+		return nil, shared.ErrSourceSwarmRequired
 	}
 	if payload == nil {
-		return nil, fmt.Errorf("payload is required")
+		return nil, shared.ErrPayloadRequired
 	}
 
 	// Validate source swarm
@@ -137,7 +137,7 @@ func (fh *FederationHub) Broadcast(sourceSwarmID string, payload interface{}) (*
 		Type:          shared.FederationMsgBroadcast,
 		SourceSwarmID: sourceSwarmID,
 		TargetSwarmID: "", // Empty for broadcast
-		Payload:       cloneInterfaceValue(payload),
+		Payload:       shared.CloneInterfaceValue(payload),
 		Timestamp:     now,
 	}
 
@@ -186,19 +186,19 @@ func (fh *FederationHub) SendHeartbeat(sourceSwarmID, targetSwarmID string) (*sh
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
-		return nil, fmt.Errorf("federation hub is shut down")
+		return nil, shared.ErrHubShutDown
 	}
 	if !fh.initialized {
-		return nil, fmt.Errorf("federation hub is not initialized")
+		return nil, shared.ErrHubNotInitialized
 	}
 
 	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
 	targetSwarmID = strings.TrimSpace(targetSwarmID)
 	if sourceSwarmID == "" {
-		return nil, fmt.Errorf("sourceSwarmId is required")
+		return nil, shared.ErrSourceSwarmRequired
 	}
 	if targetSwarmID == "" {
-		return nil, fmt.Errorf("targetSwarmId is required")
+		return nil, shared.ErrTargetSwarmRequired
 	}
 
 	// Validate source swarm
@@ -247,19 +247,19 @@ func (fh *FederationHub) SendConsensusMessage(sourceSwarmID string, payload inte
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 	if fh.shutdown {
-		return nil, fmt.Errorf("federation hub is shut down")
+		return nil, shared.ErrHubShutDown
 	}
 	if !fh.initialized {
-		return nil, fmt.Errorf("federation hub is not initialized")
+		return nil, shared.ErrHubNotInitialized
 	}
 
 	sourceSwarmID = strings.TrimSpace(sourceSwarmID)
 	targetSwarmID = strings.TrimSpace(targetSwarmID)
 	if sourceSwarmID == "" {
-		return nil, fmt.Errorf("sourceSwarmId is required")
+		return nil, shared.ErrSourceSwarmRequired
 	}
 	if payload == nil {
-		return nil, fmt.Errorf("payload is required")
+		return nil, shared.ErrPayloadRequired
 	}
 
 	// Validate source swarm
@@ -288,7 +288,7 @@ func (fh *FederationHub) SendConsensusMessage(sourceSwarmID string, payload inte
 		Type:          shared.FederationMsgConsensus,
 		SourceSwarmID: sourceSwarmID,
 		TargetSwarmID: targetSwarmID,
-		Payload:       cloneInterfaceValue(payload),
+		Payload:       shared.CloneInterfaceValue(payload),
 		Timestamp:     now,
 	}
 

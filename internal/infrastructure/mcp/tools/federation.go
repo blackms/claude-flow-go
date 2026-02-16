@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"reflect"
 	"sort"
 	"strings"
 
@@ -225,8 +224,8 @@ func (t *FederationTools) ExecuteTool(ctx context.Context, name string, args map
 	if t.hub == nil || !t.hub.IsConfigured() {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "federation hub is not configured",
-		}, fmt.Errorf("federation hub is not configured")
+			Error:   shared.ErrHubNotConfigured.Error(),
+		}, shared.ErrHubNotConfigured
 	}
 
 	switch name {
@@ -372,8 +371,8 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 		if opts.TTL <= 0 {
 			return shared.MCPToolResult{
 				Success: false,
-				Error:   "ttl must be greater than 0",
-			}, fmt.Errorf("ttl must be greater than 0")
+				Error:   shared.ErrTTLRequired.Error(),
+			}, shared.ErrTTLRequired
 		}
 		if opts.TTL > math.MaxInt64-shared.Now() {
 			return shared.MCPToolResult{
@@ -395,15 +394,15 @@ func (t *FederationTools) spawnEphemeral(ctx context.Context, args map[string]in
 	if strings.TrimSpace(opts.Type) == "" {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "type is required",
-		}, fmt.Errorf("type is required")
+			Error:   shared.ErrTypeRequired.Error(),
+		}, shared.ErrTypeRequired
 	}
 
 	if strings.TrimSpace(opts.Task) == "" {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "task is required",
-		}, fmt.Errorf("task is required")
+			Error:   shared.ErrTaskRequired.Error(),
+		}, shared.ErrTaskRequired
 	}
 
 	result, err := t.hub.SpawnEphemeralAgent(opts)
@@ -426,8 +425,8 @@ func (t *FederationTools) terminateEphemeral(ctx context.Context, args map[strin
 	if !hasAgentID {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "agentId is required",
-		}, fmt.Errorf("agentId is required")
+			Error:   shared.ErrAgentIDRequired.Error(),
+		}, shared.ErrAgentIDRequired
 	}
 	agentID, ok := rawAgentID.(string)
 	if !ok {
@@ -440,8 +439,8 @@ func (t *FederationTools) terminateEphemeral(ctx context.Context, args map[strin
 	if agentID == "" {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "agentId is required",
-		}, fmt.Errorf("agentId is required")
+			Error:   shared.ErrAgentIDRequired.Error(),
+		}, shared.ErrAgentIDRequired
 	}
 
 	errorMsg := ""
@@ -544,8 +543,8 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 	if !hasSwarmID {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "swarmId is required",
-		}, fmt.Errorf("swarmId is required")
+			Error:   shared.ErrSwarmIDRequired.Error(),
+		}, shared.ErrSwarmIDRequired
 	}
 	swarmID, ok := rawSwarmID.(string)
 	if !ok {
@@ -557,8 +556,8 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 	if strings.TrimSpace(swarmID) == "" {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "swarmId is required",
-		}, fmt.Errorf("swarmId is required")
+			Error:   shared.ErrSwarmIDRequired.Error(),
+		}, shared.ErrSwarmIDRequired
 	}
 	swarm.SwarmID = strings.TrimSpace(swarmID)
 
@@ -566,8 +565,8 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 	if !hasName {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "name is required",
-		}, fmt.Errorf("name is required")
+			Error:   shared.ErrNameRequired.Error(),
+		}, shared.ErrNameRequired
 	}
 	name, ok := rawName.(string)
 	if !ok {
@@ -579,8 +578,8 @@ func (t *FederationTools) registerSwarm(ctx context.Context, args map[string]int
 	if strings.TrimSpace(name) == "" {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "name is required",
-		}, fmt.Errorf("name is required")
+			Error:   shared.ErrNameRequired.Error(),
+		}, shared.ErrNameRequired
 	}
 	swarm.Name = strings.TrimSpace(name)
 
@@ -681,8 +680,8 @@ func (t *FederationTools) broadcast(ctx context.Context, args map[string]interfa
 	if !hasSourceSwarmID {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "sourceSwarmId is required",
-		}, fmt.Errorf("sourceSwarmId is required")
+			Error:   shared.ErrSourceSwarmRequired.Error(),
+		}, shared.ErrSourceSwarmRequired
 	}
 	sourceSwarmID, ok := rawSourceSwarmID.(string)
 	if !ok {
@@ -695,16 +694,16 @@ func (t *FederationTools) broadcast(ctx context.Context, args map[string]interfa
 	if sourceSwarmID == "" {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "sourceSwarmId is required",
-		}, fmt.Errorf("sourceSwarmId is required")
+			Error:   shared.ErrSourceSwarmRequired.Error(),
+		}, shared.ErrSourceSwarmRequired
 	}
 
 	payload, hasPayload := args["payload"]
 	if !hasPayload || payload == nil {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "payload is required",
-		}, fmt.Errorf("payload is required")
+			Error:   shared.ErrPayloadRequired.Error(),
+		}, shared.ErrPayloadRequired
 	}
 	payloadMap, ok := payload.(map[string]interface{})
 	if !ok {
@@ -714,7 +713,7 @@ func (t *FederationTools) broadcast(ctx context.Context, args map[string]interfa
 		}, fmt.Errorf("payload must be an object")
 	}
 
-	msg, err := t.hub.Broadcast(sourceSwarmID, cloneStringInterfaceMap(payloadMap))
+	msg, err := t.hub.Broadcast(sourceSwarmID, shared.CloneStringInterfaceMap(payloadMap))
 	if err != nil {
 		return shared.MCPToolResult{
 			Success: false,
@@ -734,8 +733,8 @@ func (t *FederationTools) propose(ctx context.Context, args map[string]interface
 	if !hasProposerID {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "proposerId is required",
-		}, fmt.Errorf("proposerId is required")
+			Error:   shared.ErrProposerRequired.Error(),
+		}, shared.ErrProposerRequired
 	}
 	proposerID, ok := rawProposerID.(string)
 	if !ok {
@@ -748,16 +747,16 @@ func (t *FederationTools) propose(ctx context.Context, args map[string]interface
 	if proposerID == "" {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "proposerId is required",
-		}, fmt.Errorf("proposerId is required")
+			Error:   shared.ErrProposerRequired.Error(),
+		}, shared.ErrProposerRequired
 	}
 
 	rawProposalType, hasProposalType := args["proposalType"]
 	if !hasProposalType {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "proposalType is required",
-		}, fmt.Errorf("proposalType is required")
+			Error:   shared.ErrProposalTypeRequired.Error(),
+		}, shared.ErrProposalTypeRequired
 	}
 	proposalType, ok := rawProposalType.(string)
 	if !ok {
@@ -770,16 +769,16 @@ func (t *FederationTools) propose(ctx context.Context, args map[string]interface
 	if proposalType == "" {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "proposalType is required",
-		}, fmt.Errorf("proposalType is required")
+			Error:   shared.ErrProposalTypeRequired.Error(),
+		}, shared.ErrProposalTypeRequired
 	}
 
 	value, hasValue := args["value"]
 	if !hasValue || value == nil {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "value is required",
-		}, fmt.Errorf("value is required")
+			Error:   shared.ErrValueRequired.Error(),
+		}, shared.ErrValueRequired
 	}
 	valueMap, ok := value.(map[string]interface{})
 	if !ok {
@@ -789,7 +788,7 @@ func (t *FederationTools) propose(ctx context.Context, args map[string]interface
 		}, fmt.Errorf("value must be an object")
 	}
 
-	proposal, err := t.hub.Propose(proposerID, proposalType, cloneStringInterfaceMap(valueMap))
+	proposal, err := t.hub.Propose(proposerID, proposalType, shared.CloneStringInterfaceMap(valueMap))
 	if err != nil {
 		return shared.MCPToolResult{
 			Success: false,
@@ -809,8 +808,8 @@ func (t *FederationTools) vote(ctx context.Context, args map[string]interface{})
 	if !hasVoterID {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "voterId is required",
-		}, fmt.Errorf("voterId is required")
+			Error:   shared.ErrVoterRequired.Error(),
+		}, shared.ErrVoterRequired
 	}
 	voterID, ok := rawVoterID.(string)
 	if !ok {
@@ -823,16 +822,16 @@ func (t *FederationTools) vote(ctx context.Context, args map[string]interface{})
 	if voterID == "" {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "voterId is required",
-		}, fmt.Errorf("voterId is required")
+			Error:   shared.ErrVoterRequired.Error(),
+		}, shared.ErrVoterRequired
 	}
 
 	rawProposalID, hasProposalID := args["proposalId"]
 	if !hasProposalID {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "proposalId is required",
-		}, fmt.Errorf("proposalId is required")
+			Error:   shared.ErrProposalIDRequired.Error(),
+		}, shared.ErrProposalIDRequired
 	}
 	proposalID, ok := rawProposalID.(string)
 	if !ok {
@@ -845,8 +844,8 @@ func (t *FederationTools) vote(ctx context.Context, args map[string]interface{})
 	if proposalID == "" {
 		return shared.MCPToolResult{
 			Success: false,
-			Error:   "proposalId is required",
-		}, fmt.Errorf("proposalId is required")
+			Error:   shared.ErrProposalIDRequired.Error(),
+		}, shared.ErrProposalIDRequired
 	}
 
 	rawApprove, hasApprove := args["approve"]
@@ -982,128 +981,11 @@ func cloneEphemeralAgents(agents []*shared.EphemeralAgent) []*shared.EphemeralAg
 			continue
 		}
 		copyAgent := *agent
-		copyAgent.Metadata = cloneStringInterfaceMap(agent.Metadata)
-		copyAgent.Result = cloneInterfaceValue(agent.Result)
+		copyAgent.Metadata = shared.CloneStringInterfaceMap(agent.Metadata)
+		copyAgent.Result = shared.CloneInterfaceValue(agent.Result)
 		cloned = append(cloned, &copyAgent)
 	}
 	return cloned
-}
-
-func cloneStringInterfaceMap(input map[string]interface{}) map[string]interface{} {
-	if input == nil {
-		return nil
-	}
-	output := make(map[string]interface{}, len(input))
-	for key, value := range input {
-		output[key] = cloneInterfaceValue(value)
-	}
-	return output
-}
-
-type cloneVisit struct {
-	typ reflect.Type
-	ptr uintptr
-}
-
-func cloneInterfaceValue(value interface{}) interface{} {
-	if value == nil {
-		return nil
-	}
-	cloned := cloneReflectValue(reflect.ValueOf(value), make(map[cloneVisit]reflect.Value))
-	if !cloned.IsValid() {
-		return nil
-	}
-	return cloned.Interface()
-}
-
-func cloneReflectValue(value reflect.Value, seen map[cloneVisit]reflect.Value) reflect.Value {
-	if !value.IsValid() {
-		return value
-	}
-
-	switch value.Kind() {
-	case reflect.Map:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
-		if visit.ptr != 0 {
-			if cached, ok := seen[visit]; ok {
-				return cached
-			}
-		}
-		clonedMap := reflect.MakeMapWithSize(value.Type(), value.Len())
-		if visit.ptr != 0 {
-			seen[visit] = clonedMap
-		}
-		for _, key := range value.MapKeys() {
-			clonedKey := cloneReflectValue(key, seen)
-			clonedMap.SetMapIndex(clonedKey, cloneReflectValue(value.MapIndex(key), seen))
-		}
-		return clonedMap
-	case reflect.Slice:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
-		if visit.ptr != 0 {
-			if cached, ok := seen[visit]; ok {
-				return cached
-			}
-		}
-		clonedSlice := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
-		if visit.ptr != 0 {
-			seen[visit] = clonedSlice
-		}
-		for i := 0; i < value.Len(); i++ {
-			clonedSlice.Index(i).Set(cloneReflectValue(value.Index(i), seen))
-		}
-		return clonedSlice
-	case reflect.Array:
-		clonedArray := reflect.New(value.Type()).Elem()
-		for i := 0; i < value.Len(); i++ {
-			clonedArray.Index(i).Set(cloneReflectValue(value.Index(i), seen))
-		}
-		return clonedArray
-	case reflect.Ptr:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
-		if cached, ok := seen[visit]; ok {
-			return cached
-		}
-		clonedPointer := reflect.New(value.Type().Elem())
-		seen[visit] = clonedPointer
-		clonedPointer.Elem().Set(cloneReflectValue(value.Elem(), seen))
-		return clonedPointer
-	case reflect.Interface:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-		return cloneReflectValue(value.Elem(), seen)
-	case reflect.Struct:
-		clonedStruct := reflect.New(value.Type()).Elem()
-		clonedStruct.Set(value)
-		for i := 0; i < value.NumField(); i++ {
-			destinationField := clonedStruct.Field(i)
-			if !destinationField.CanSet() {
-				continue
-			}
-			clonedField := cloneReflectValue(value.Field(i), seen)
-			if !clonedField.IsValid() {
-				continue
-			}
-			if clonedField.Type().AssignableTo(destinationField.Type()) {
-				destinationField.Set(clonedField)
-			} else if clonedField.Type().ConvertibleTo(destinationField.Type()) {
-				destinationField.Set(clonedField.Convert(destinationField.Type()))
-			}
-		}
-		return clonedStruct
-	default:
-		return value
-	}
 }
 
 func cloneFederationMessage(msg *shared.FederationMessage) *shared.FederationMessage {
@@ -1111,7 +993,7 @@ func cloneFederationMessage(msg *shared.FederationMessage) *shared.FederationMes
 		return nil
 	}
 	cloned := *msg
-	cloned.Payload = cloneInterfaceValue(msg.Payload)
+	cloned.Payload = shared.CloneInterfaceValue(msg.Payload)
 	return &cloned
 }
 
@@ -1120,7 +1002,7 @@ func cloneFederationProposal(proposal *shared.FederationProposal) *shared.Federa
 		return nil
 	}
 	cloned := *proposal
-	cloned.Value = cloneInterfaceValue(proposal.Value)
+	cloned.Value = shared.CloneInterfaceValue(proposal.Value)
 	if proposal.Votes != nil {
 		cloned.Votes = make(map[string]bool, len(proposal.Votes))
 		for swarmID, vote := range proposal.Votes {
