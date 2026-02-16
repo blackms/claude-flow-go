@@ -2,6 +2,7 @@
 package resources
 
 import (
+	"math"
 	"sync"
 
 	"github.com/anthropics/claude-flow-go/internal/shared"
@@ -15,19 +16,38 @@ type CachedResource struct {
 
 // ResourceCache implements an LRU cache for resources with TTL.
 type ResourceCache struct {
-	mu         sync.RWMutex
-	entries    map[string]*CachedResource
+	mu          sync.RWMutex
+	entries     map[string]*CachedResource
 	accessOrder []string // For LRU eviction
-	config     shared.ResourceCacheConfig
+	config      shared.ResourceCacheConfig
 }
 
 // NewResourceCache creates a new resource cache.
 func NewResourceCache(config shared.ResourceCacheConfig) *ResourceCache {
+	config = normalizeResourceCacheConfig(config)
 	return &ResourceCache{
 		entries:     make(map[string]*CachedResource),
 		accessOrder: make([]string, 0),
 		config:      config,
 	}
+}
+
+func normalizeResourceCacheConfig(config shared.ResourceCacheConfig) shared.ResourceCacheConfig {
+	defaults := shared.DefaultResourceCacheConfig()
+
+	if config.MaxEntries <= 0 {
+		config.MaxEntries = defaults.MaxEntries
+	}
+	if config.TTLSeconds <= 0 {
+		config.TTLSeconds = defaults.TTLSeconds
+	}
+
+	maxTTLSec := int64(math.MaxInt64 / 1000)
+	if config.TTLSeconds > maxTTLSec {
+		config.TTLSeconds = maxTTLSec
+	}
+
+	return config
 }
 
 // NewResourceCacheWithDefaults creates a resource cache with default configuration.
@@ -54,7 +74,7 @@ func (c *ResourceCache) Get(uri string) (*shared.ResourceContent, bool) {
 	// Update access order for LRU
 	c.updateAccessOrderLocked(uri)
 
-	return entry.Content, true
+	return cloneResourceContent(entry.Content), true
 }
 
 // Set adds or updates a resource in the cache.
@@ -67,10 +87,15 @@ func (c *ResourceCache) Set(uri string, content *shared.ResourceContent) {
 		c.evictOldestLocked()
 	}
 
-	expiresAt := shared.Now() + (c.config.TTLSeconds * 1000)
+	now := shared.Now()
+	ttlMillis := c.config.TTLSeconds * 1000
+	expiresAt := now + ttlMillis
+	if ttlMillis > math.MaxInt64-now {
+		expiresAt = math.MaxInt64
+	}
 
 	c.entries[uri] = &CachedResource{
-		Content:   content,
+		Content:   cloneResourceContent(content),
 		ExpiresAt: expiresAt,
 	}
 

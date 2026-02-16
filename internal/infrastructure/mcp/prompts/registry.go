@@ -19,6 +19,45 @@ type PromptDefinition struct {
 	Handler PromptHandler
 }
 
+func clonePrompt(prompt *shared.MCPPrompt) *shared.MCPPrompt {
+	if prompt == nil {
+		return nil
+	}
+
+	cloned := *prompt
+	if prompt.Arguments != nil {
+		cloned.Arguments = append([]shared.PromptArgument(nil), prompt.Arguments...)
+	}
+	return &cloned
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	if source == nil {
+		return map[string]string{}
+	}
+
+	cloned := make(map[string]string, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func clonePromptMessages(messages []shared.PromptMessage) []shared.PromptMessage {
+	if messages == nil {
+		return nil
+	}
+
+	cloned := make([]shared.PromptMessage, len(messages))
+	for i := range messages {
+		cloned[i] = messages[i]
+		if messages[i].Content != nil {
+			cloned[i].Content = append([]shared.PromptContent(nil), messages[i].Content...)
+		}
+	}
+	return cloned
+}
+
 // PromptRegistry manages MCP prompts.
 type PromptRegistry struct {
 	mu         sync.RWMutex
@@ -52,7 +91,7 @@ func (pr *PromptRegistry) Register(prompt *shared.MCPPrompt, handler PromptHandl
 	}
 
 	pr.prompts[prompt.Name] = &PromptDefinition{
-		Prompt:  prompt,
+		Prompt:  clonePrompt(prompt),
 		Handler: handler,
 	}
 
@@ -94,6 +133,7 @@ func (pr *PromptRegistry) List(cursor string, pageSize int) *shared.PromptListRe
 	// Find starting point
 	startIdx := 0
 	if cursor != "" {
+		startIdx = len(allPrompts)
 		for i, p := range allPrompts {
 			if p.Name > cursor {
 				startIdx = i
@@ -111,7 +151,7 @@ func (pr *PromptRegistry) List(cursor string, pageSize int) *shared.PromptListRe
 	page := allPrompts[startIdx:endIdx]
 	prompts := make([]shared.MCPPrompt, len(page))
 	for i, p := range page {
-		prompts[i] = *p
+		prompts[i] = *clonePrompt(p)
 	}
 
 	result := &shared.PromptListResult{
@@ -135,20 +175,22 @@ func (pr *PromptRegistry) Get(name string, args map[string]string) (*shared.Prom
 		return nil, shared.ErrPromptNotFound
 	}
 
+	argsCopy := cloneStringMap(args)
+
 	// Validate required arguments
-	if err := pr.validateArguments(def.Prompt, args); err != nil {
+	if err := pr.validateArguments(def.Prompt, argsCopy); err != nil {
 		return nil, err
 	}
 
 	// Generate messages
-	messages, err := def.Handler(args)
+	messages, err := def.Handler(argsCopy)
 	if err != nil {
 		return nil, err
 	}
 
 	return &shared.PromptGetResult{
 		Description: def.Prompt.Description,
-		Messages:    messages,
+		Messages:    clonePromptMessages(messages),
 	}, nil
 }
 
@@ -173,7 +215,7 @@ func (pr *PromptRegistry) GetPrompt(name string) *shared.MCPPrompt {
 	if !exists {
 		return nil
 	}
-	return def.Prompt
+	return clonePrompt(def.Prompt)
 }
 
 // HasPrompt checks if a prompt exists.

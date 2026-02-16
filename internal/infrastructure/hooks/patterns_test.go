@@ -99,6 +99,33 @@ func TestPatternStore_StoreUpdate(t *testing.T) {
 	}
 }
 
+func TestPatternStore_StoreUpdate_MonotonicTimestamp(t *testing.T) {
+	ps := NewPatternStore(1000)
+
+	pattern := &shared.Pattern{
+		ID:           "pattern-monotonic",
+		Type:         shared.PatternTypeEdit,
+		Content:      "test pattern",
+		Keywords:     []string{"test"},
+		SuccessCount: 1,
+	}
+
+	_ = ps.Store(pattern)
+
+	// Force a future timestamp to ensure update path must enforce monotonicity.
+	stored := ps.Get(pattern.ID)
+	stored.UpdatedAt = shared.Now() + 100000
+	previousUpdatedAt := stored.UpdatedAt
+
+	pattern.SuccessCount = 2
+	_ = ps.Store(pattern)
+
+	updated := ps.Get(pattern.ID)
+	if updated.UpdatedAt <= previousUpdatedAt {
+		t.Fatalf("expected updated timestamp to be strictly greater than %d, got %d", previousUpdatedAt, updated.UpdatedAt)
+	}
+}
+
 func TestPatternStore_StoreEviction(t *testing.T) {
 	ps := NewPatternStore(3)
 
@@ -609,8 +636,8 @@ func TestPatternStore_CalculateSimilarity(t *testing.T) {
 
 func TestPattern_GetSuccessRate(t *testing.T) {
 	tests := []struct {
-		success  int
-		failure  int
+		success  int64
+		failure  int64
 		expected float64
 	}{
 		{10, 0, 1.0},

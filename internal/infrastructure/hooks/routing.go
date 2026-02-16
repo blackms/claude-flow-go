@@ -232,9 +232,14 @@ func (re *RoutingEngine) Explain(task string, context map[string]interface{}, ve
 
 	// Add historical data
 	if verbose {
+		successRate := 0.0
+		if re.totalRoutings > 0 {
+			successRate = float64(re.successCount) / float64(re.totalRoutings)
+		}
+
 		explanation.HistoricalData = &shared.RoutingHistory{
 			TotalRoutings: re.totalRoutings,
-			SuccessRate:   re.GetSuccessRate(),
+			SuccessRate:   successRate,
 			AgentStats:    make(map[string]shared.AgentRoutingStats),
 		}
 		for agentType, stats := range re.agentStats {
@@ -370,17 +375,24 @@ func (re *RoutingEngine) getKeywordMatchScore(agentType, task string) float64 {
 func (re *RoutingEngine) extractTaskType(task string) string {
 	taskLower := strings.ToLower(task)
 
-	typeKeywords := map[string][]string{
-		"code":     {"implement", "code", "develop", "create", "build", "add", "feature"},
-		"test":     {"test", "spec", "coverage", "unit test", "integration test"},
-		"review":   {"review", "check", "inspect", "audit", "examine"},
-		"deploy":   {"deploy", "release", "ship", "publish"},
-		"design":   {"design", "architect", "structure", "plan"},
-		"fix":      {"fix", "bug", "patch", "repair", "resolve"},
-		"refactor": {"refactor", "clean", "improve", "optimize"},
+	type keywordGroup struct {
+		taskType string
+		keywords []string
 	}
 
-	for taskType, keywords := range typeKeywords {
+	typeKeywords := []keywordGroup{
+		{taskType: "review", keywords: []string{"review", "check", "inspect", "audit", "examine"}},
+		{taskType: "test", keywords: []string{"test", "spec", "coverage", "unit test", "integration test"}},
+		{taskType: "deploy", keywords: []string{"deploy", "release", "ship", "publish"}},
+		{taskType: "design", keywords: []string{"design", "architect", "structure", "plan"}},
+		{taskType: "fix", keywords: []string{"fix", "bug", "patch", "repair", "resolve"}},
+		{taskType: "refactor", keywords: []string{"refactor", "clean", "improve", "optimize"}},
+		{taskType: "code", keywords: []string{"implement", "code", "develop", "create", "build", "add", "feature"}},
+	}
+
+	for _, group := range typeKeywords {
+		taskType := group.taskType
+		keywords := group.keywords
 		for _, kw := range keywords {
 			if strings.Contains(taskLower, kw) {
 				return taskType

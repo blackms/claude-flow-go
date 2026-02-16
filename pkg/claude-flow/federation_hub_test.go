@@ -1,0 +1,803 @@
+package claudeflow
+
+import (
+	"context"
+	"reflect"
+	"testing"
+
+	"github.com/anthropics/claude-flow-go/internal/infrastructure/federation"
+)
+
+func TestFederationHub_PublicLifecycleInitializeGuards(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if hub == nil {
+		t.Fatal("expected federation hub wrapper")
+	}
+
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("expected first initialize to succeed, got %v", err)
+	}
+	t.Cleanup(func() {
+		_ = hub.Shutdown()
+	})
+
+	err := hub.Initialize()
+	if err == nil {
+		t.Fatal("expected second initialize to fail")
+	}
+	if err.Error() != "federation hub is already initialized" {
+		t.Fatalf("expected already initialized error, got %q", err.Error())
+	}
+}
+
+func TestFederationHub_PublicLifecycleShutdownBlocksMutationsButKeepsReads(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub: %v", err)
+	}
+
+	if err := hub.RegisterSwarm(SwarmRegistration{
+		SwarmID:   "public-shutdown-source",
+		Name:      "Public Shutdown Source",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register source swarm: %v", err)
+	}
+	if err := hub.RegisterSwarm(SwarmRegistration{
+		SwarmID:   "public-shutdown-target",
+		Name:      "Public Shutdown Target",
+		MaxAgents: 2,
+	}); err != nil {
+		t.Fatalf("failed to register target swarm: %v", err)
+	}
+
+	spawn, err := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{
+		SwarmID: "public-shutdown-source",
+		Type:    "coder",
+		Task:    "public wrapper shutdown",
+	})
+	if err != nil {
+		t.Fatalf("failed to spawn agent: %v", err)
+	}
+
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("failed to shutdown federation hub: %v", err)
+	}
+
+	err = hub.RegisterSwarm(SwarmRegistration{
+		SwarmID:   "public-shutdown-blocked",
+		Name:      "Public Shutdown Blocked",
+		MaxAgents: 1,
+	})
+	if err == nil {
+		t.Fatal("expected register swarm to fail after shutdown")
+	}
+	if err.Error() != "federation hub is shut down" {
+		t.Fatalf("expected shutdown lifecycle error, got %q", err.Error())
+	}
+
+	agents := hub.GetAgents()
+	if len(agents) != 1 {
+		t.Fatalf("expected one historical agent after shutdown, got %d", len(agents))
+	}
+	if agents[0].ID != spawn.AgentID {
+		t.Fatalf("expected historical agent ID %s, got %s", spawn.AgentID, agents[0].ID)
+	}
+	if agents[0].Status != EphemeralStatusTerminated {
+		t.Fatalf("expected historical agent to be terminated, got %q", agents[0].Status)
+	}
+
+	swarms := hub.GetSwarms()
+	if len(swarms) != 2 {
+		t.Fatalf("expected two historical swarms after shutdown, got %d", len(swarms))
+	}
+}
+
+func TestFederationHub_PublicLifecycleMutationsRequireInitialize(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+
+	err := hub.RegisterSwarm(SwarmRegistration{
+		SwarmID:   "preinit-public-swarm",
+		Name:      "Preinit Public Swarm",
+		MaxAgents: 1,
+	})
+	if err == nil {
+		t.Fatal("expected register swarm to fail before initialize")
+	}
+	if err.Error() != "federation hub is not initialized" {
+		t.Fatalf("expected pre-init lifecycle error, got %q", err.Error())
+	}
+
+	spawnResult, spawnErr := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{
+		Type: "coder",
+		Task: "preinit-public-spawn",
+	})
+	if spawnErr == nil {
+		t.Fatal("expected spawn to fail before initialize")
+	}
+	if spawnErr.Error() != "federation hub is not initialized" {
+		t.Fatalf("expected pre-init lifecycle error, got %q", spawnErr.Error())
+	}
+	if spawnResult == nil || spawnResult.Error != "federation hub is not initialized" {
+		t.Fatalf("expected spawn result pre-init error, got %+v", spawnResult)
+	}
+}
+
+func TestNewFederationTools_AllowsNilHubAndFailsGracefully(t *testing.T) {
+	fedTools := NewFederationTools(nil)
+	if fedTools == nil {
+		t.Fatal("expected federation tools wrapper even with nil hub")
+	}
+
+	result, err := fedTools.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if err == nil {
+		t.Fatal("expected Execute to fail without configured hub")
+	}
+	if result == nil {
+		t.Fatal("expected Execute result without configured hub")
+	}
+	if err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected configured-hub error, got %q", err.Error())
+	}
+	if result.Error != "federation hub is not configured" {
+		t.Fatalf("expected result configured-hub error, got %q", result.Error)
+	}
+	if result.Success {
+		t.Fatal("expected failed Execute result without configured hub")
+	}
+}
+
+func TestNewFederationTools_AllowsZeroValueHubWrapperAndFailsGracefully(t *testing.T) {
+	hub := &FederationHub{}
+	fedTools := NewFederationTools(hub)
+	if fedTools == nil {
+		t.Fatal("expected federation tools wrapper for zero-value hub")
+	}
+
+	result, err := fedTools.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if err == nil {
+		t.Fatal("expected Execute to fail for zero-value hub wrapper")
+	}
+	if result == nil {
+		t.Fatal("expected Execute result for zero-value hub wrapper")
+	}
+	if err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected configured-hub error, got %q", err.Error())
+	}
+	if result.Error != "federation hub is not configured" {
+		t.Fatalf("expected result configured-hub error, got %q", result.Error)
+	}
+	if result.Success {
+		t.Fatal("expected failed Execute result for zero-value hub wrapper")
+	}
+}
+
+func TestNewFederationTools_AllowsWrapperWithZeroValueInternalHubAndFailsGracefully(t *testing.T) {
+	hub := &FederationHub{internal: &federation.FederationHub{}}
+	fedTools := NewFederationTools(hub)
+	if fedTools == nil {
+		t.Fatal("expected federation tools wrapper for wrapper with zero-value internal hub")
+	}
+
+	result, err := fedTools.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if err == nil {
+		t.Fatal("expected Execute to fail for wrapper with zero-value internal hub")
+	}
+	if result == nil {
+		t.Fatal("expected Execute result for wrapper with zero-value internal hub")
+	}
+	if err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected configured-hub error, got %q", err.Error())
+	}
+	if result.Error != "federation hub is not configured" {
+		t.Fatalf("expected result configured-hub error, got %q", result.Error)
+	}
+	if result.Success {
+		t.Fatal("expected failed Execute result for wrapper with zero-value internal hub")
+	}
+}
+
+func TestNewFederationTools_UnknownToolErrorsTakePrecedence(t *testing.T) {
+	tests := []struct {
+		name string
+		hub  *FederationHub
+	}{
+		{
+			name: "nil wrapper",
+			hub:  nil,
+		},
+		{
+			name: "zero-value wrapper",
+			hub:  &FederationHub{},
+		},
+		{
+			name: "wrapper with zero-value internal hub",
+			hub:  &FederationHub{internal: &federation.FederationHub{}},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fedTools := NewFederationTools(tc.hub)
+			if fedTools == nil {
+				t.Fatal("expected federation tools wrapper")
+			}
+
+			result, err := fedTools.Execute(context.Background(), "federation/not-real", map[string]interface{}{})
+			if err == nil {
+				t.Fatal("expected Execute unknown-tool error")
+			}
+			if result == nil {
+				t.Fatal("expected Execute result for unknown tool")
+			}
+			expectedErr := "unknown tool: federation/not-real"
+			if err.Error() != expectedErr {
+				t.Fatalf("expected unknown-tool error %q, got %q", expectedErr, err.Error())
+			}
+			if result.Error != expectedErr {
+				t.Fatalf("expected unknown-tool result error %q, got %q", expectedErr, result.Error)
+			}
+			if result.Success {
+				t.Fatal("expected failed Execute result for unknown tool")
+			}
+		})
+	}
+}
+
+func TestNewFederationTools_WithShutdownHubPreservesLifecycleContracts(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if hub == nil {
+		t.Fatal("expected federation hub wrapper")
+	}
+	if err := hub.Initialize(); err != nil {
+		t.Fatalf("failed to initialize federation hub wrapper: %v", err)
+	}
+	if err := hub.RegisterSwarm(SwarmRegistration{
+		SwarmID:   "shutdown-tools-existing",
+		Name:      "Shutdown Tools Existing",
+		MaxAgents: 1,
+	}); err != nil {
+		t.Fatalf("failed to register initial swarm: %v", err)
+	}
+	if err := hub.Shutdown(); err != nil {
+		t.Fatalf("failed to shutdown federation hub wrapper: %v", err)
+	}
+
+	fedTools := NewFederationTools(hub)
+	if fedTools == nil {
+		t.Fatal("expected federation tools wrapper for shutdown hub")
+	}
+
+	statusResult, statusErr := fedTools.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if statusErr != nil {
+		t.Fatalf("expected status read to succeed after shutdown, got %v", statusErr)
+	}
+	if statusResult == nil {
+		t.Fatal("expected status result after shutdown")
+	}
+	if !statusResult.Success {
+		t.Fatalf("expected status success after shutdown, got %+v", statusResult)
+	}
+
+	mutatingToolCases := []struct {
+		tool string
+		args map[string]interface{}
+	}{
+		{
+			tool: "federation/register-swarm",
+			args: map[string]interface{}{
+				"swarmId":   "shutdown-tools-blocked",
+				"name":      "Shutdown Tools Blocked",
+				"maxAgents": 1,
+			},
+		},
+		{
+			tool: "federation/spawn-ephemeral",
+			args: map[string]interface{}{
+				"type": "coder",
+				"task": "shutdown spawn blocked",
+			},
+		},
+		{
+			tool: "federation/terminate-ephemeral",
+			args: map[string]interface{}{
+				"agentId": "shutdown-agent",
+			},
+		},
+		{
+			tool: "federation/broadcast",
+			args: map[string]interface{}{
+				"sourceSwarmId": "shutdown-tools-existing",
+				"payload":       map[string]interface{}{"event": "shutdown"},
+			},
+		},
+		{
+			tool: "federation/propose",
+			args: map[string]interface{}{
+				"proposerId":   "shutdown-tools-existing",
+				"proposalType": "shutdown-check",
+				"value":        map[string]interface{}{"ok": true},
+			},
+		},
+		{
+			tool: "federation/vote",
+			args: map[string]interface{}{
+				"voterId":    "shutdown-tools-existing",
+				"proposalId": "shutdown-proposal",
+				"approve":    true,
+			},
+		},
+	}
+
+	const expectedErr = "federation hub is shut down"
+	for _, tc := range mutatingToolCases {
+		result, err := fedTools.Execute(context.Background(), tc.tool, tc.args)
+		if err == nil {
+			t.Fatalf("expected %s to fail after shutdown", tc.tool)
+		}
+		if result == nil {
+			t.Fatalf("expected %s result after shutdown", tc.tool)
+		}
+		if err.Error() != expectedErr {
+			t.Fatalf("expected %s shutdown error %q, got %q", tc.tool, expectedErr, err.Error())
+		}
+		if result.Error != expectedErr {
+			t.Fatalf("expected %s result error %q, got %q", tc.tool, expectedErr, result.Error)
+		}
+		if result.Success {
+			t.Fatalf("expected %s failure after shutdown", tc.tool)
+		}
+	}
+
+	unknownResult, unknownErr := fedTools.Execute(context.Background(), "federation/not-real", map[string]interface{}{})
+	if unknownErr == nil {
+		t.Fatal("expected unknown-tool error after shutdown")
+	}
+	if unknownResult == nil {
+		t.Fatal("expected unknown-tool result after shutdown")
+	}
+	const expectedUnknownErr = "unknown tool: federation/not-real"
+	if unknownErr.Error() != expectedUnknownErr {
+		t.Fatalf("expected unknown-tool error %q, got %q", expectedUnknownErr, unknownErr.Error())
+	}
+	if unknownResult.Error != expectedUnknownErr {
+		t.Fatalf("expected unknown-tool result error %q, got %q", expectedUnknownErr, unknownResult.Error)
+	}
+	if unknownResult.Success {
+		t.Fatal("expected unknown-tool failure after shutdown")
+	}
+}
+
+func TestNewFederationTools_WithUninitializedHubPreservesLifecycleContracts(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+	if hub == nil {
+		t.Fatal("expected federation hub wrapper")
+	}
+
+	fedTools := NewFederationTools(hub)
+	if fedTools == nil {
+		t.Fatal("expected federation tools wrapper for uninitialized hub")
+	}
+
+	statusResult, statusErr := fedTools.Execute(context.Background(), "federation/status", map[string]interface{}{})
+	if statusErr != nil {
+		t.Fatalf("expected status read to succeed before initialize, got %v", statusErr)
+	}
+	if statusResult == nil {
+		t.Fatal("expected status result before initialize")
+	}
+	if !statusResult.Success {
+		t.Fatalf("expected status success before initialize, got %+v", statusResult)
+	}
+
+	registerResult, registerErr := fedTools.Execute(context.Background(), "federation/register-swarm", map[string]interface{}{
+		"swarmId":   "uninit-tools-blocked",
+		"name":      "Uninit Tools Blocked",
+		"maxAgents": 1,
+	})
+	if registerErr == nil {
+		t.Fatal("expected register-swarm to fail before initialize")
+	}
+	if registerResult == nil {
+		t.Fatal("expected register-swarm result before initialize")
+	}
+	const expectedErr = "federation hub is not initialized"
+	if registerErr.Error() != expectedErr {
+		t.Fatalf("expected pre-init error %q, got %q", expectedErr, registerErr.Error())
+	}
+	if registerResult.Error != expectedErr {
+		t.Fatalf("expected register result error %q, got %q", expectedErr, registerResult.Error)
+	}
+	if registerResult.Success {
+		t.Fatal("expected register-swarm failure before initialize")
+	}
+
+	unknownResult, unknownErr := fedTools.Execute(context.Background(), "federation/not-real", map[string]interface{}{})
+	if unknownErr == nil {
+		t.Fatal("expected unknown-tool error before initialize")
+	}
+	if unknownResult == nil {
+		t.Fatal("expected unknown-tool result before initialize")
+	}
+	const expectedUnknownErr = "unknown tool: federation/not-real"
+	if unknownErr.Error() != expectedUnknownErr {
+		t.Fatalf("expected unknown-tool error %q, got %q", expectedUnknownErr, unknownErr.Error())
+	}
+	if unknownResult.Error != expectedUnknownErr {
+		t.Fatalf("expected unknown-tool result error %q, got %q", expectedUnknownErr, unknownResult.Error)
+	}
+	if unknownResult.Success {
+		t.Fatal("expected unknown-tool failure before initialize")
+	}
+}
+
+func TestFederationHub_PublicLifecycleReadsAvailableBeforeInitialize(t *testing.T) {
+	hub := NewFederationHubWithDefaults()
+
+	if swarms := hub.GetSwarms(); len(swarms) != 0 {
+		t.Fatalf("expected zero swarms before initialize, got %d", len(swarms))
+	}
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected zero agents before initialize, got %d", len(agents))
+	}
+	if messages := hub.GetMessages(0); len(messages) != 0 {
+		t.Fatalf("expected zero messages before initialize, got %d", len(messages))
+	}
+	if proposals := hub.GetProposals(); len(proposals) != 0 {
+		t.Fatalf("expected zero proposals before initialize, got %d", len(proposals))
+	}
+	if events := hub.GetEvents(0); len(events) != 0 {
+		t.Fatalf("expected zero events before initialize, got %d", len(events))
+	}
+}
+
+func TestFederationHub_PublicZeroValueMethodsFailGracefully(t *testing.T) {
+	var hub FederationHub
+
+	if err := hub.Initialize(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected initialize configuration error, got %v", err)
+	}
+	if err := hub.Shutdown(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected shutdown configuration error, got %v", err)
+	}
+	if err := hub.RegisterSwarm(SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected register configuration error, got %v", err)
+	}
+	if err := hub.UnregisterSwarm("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected unregister configuration error, got %v", err)
+	}
+	if err := hub.Heartbeat("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected heartbeat configuration error, got %v", err)
+	}
+
+	spawnResult, spawnErr := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{Type: "coder", Task: "zero value"})
+	if spawnErr == nil || spawnErr.Error() != "federation hub is not configured" {
+		t.Fatalf("expected spawn configuration error, got %v", spawnErr)
+	}
+	if spawnResult == nil || spawnResult.Error != "federation hub is not configured" {
+		t.Fatalf("expected spawn result configuration error, got %+v", spawnResult)
+	}
+	if err := hub.CompleteAgent("agent", map[string]interface{}{"ok": true}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected complete-agent configuration error, got %v", err)
+	}
+	if err := hub.TerminateAgent("agent", "err"); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected terminate-agent configuration error, got %v", err)
+	}
+	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"hello": "world"}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected send-message configuration error, got %v", err)
+	}
+	if _, err := hub.Broadcast("source", map[string]interface{}{"hello": "all"}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected broadcast configuration error, got %v", err)
+	}
+	if _, err := hub.Propose("source", "task", map[string]interface{}{"vote": true}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected propose configuration error, got %v", err)
+	}
+	if err := hub.Vote("source", "proposal", true); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected vote configuration error, got %v", err)
+	}
+
+	if swarms := hub.GetSwarms(); len(swarms) != 0 {
+		t.Fatalf("expected zero-value swarms empty, got %d", len(swarms))
+	}
+	if activeSwarms := hub.GetActiveSwarms(); len(activeSwarms) != 0 {
+		t.Fatalf("expected zero-value active swarms empty, got %d", len(activeSwarms))
+	}
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected zero-value agents empty, got %d", len(agents))
+	}
+	if activeAgents := hub.GetActiveAgents(); len(activeAgents) != 0 {
+		t.Fatalf("expected zero-value active agents empty, got %d", len(activeAgents))
+	}
+	if agentsBySwarm := hub.GetAgentsBySwarm("swarm"); len(agentsBySwarm) != 0 {
+		t.Fatalf("expected zero-value agents-by-swarm empty, got %d", len(agentsBySwarm))
+	}
+	if agentsByStatus := hub.GetAgentsByStatus(EphemeralStatusActive); len(agentsByStatus) != 0 {
+		t.Fatalf("expected zero-value agents-by-status empty, got %d", len(agentsByStatus))
+	}
+	if _, ok := hub.GetSwarm("swarm"); ok {
+		t.Fatal("expected zero-value GetSwarm to fail")
+	}
+	if _, ok := hub.GetAgent("agent"); ok {
+		t.Fatal("expected zero-value GetAgent to fail")
+	}
+	if messages := hub.GetMessages(10); len(messages) != 0 {
+		t.Fatalf("expected zero-value messages empty, got %d", len(messages))
+	}
+	if messagesBySwarm := hub.GetMessagesBySwarm("swarm", 10); len(messagesBySwarm) != 0 {
+		t.Fatalf("expected zero-value messages-by-swarm empty, got %d", len(messagesBySwarm))
+	}
+	if _, ok := hub.GetMessage("message"); ok {
+		t.Fatal("expected zero-value GetMessage to fail")
+	}
+	if proposals := hub.GetProposals(); len(proposals) != 0 {
+		t.Fatalf("expected zero-value proposals empty, got %d", len(proposals))
+	}
+	if pending := hub.GetPendingProposals(); len(pending) != 0 {
+		t.Fatalf("expected zero-value pending proposals empty, got %d", len(pending))
+	}
+	if _, ok := hub.GetProposal("proposal"); ok {
+		t.Fatal("expected zero-value GetProposal to fail")
+	}
+	if active, required, quorum := hub.GetQuorumInfo(); active != 0 || required != 0 || quorum != 0 {
+		t.Fatalf("expected zero-value quorum defaults 0, got active=%d required=%d quorum=%v", active, required, quorum)
+	}
+	if events := hub.GetEvents(10); len(events) != 0 {
+		t.Fatalf("expected zero-value events empty, got %d", len(events))
+	}
+	if stats := hub.GetStats(); stats != (FederationStats{}) {
+		t.Fatalf("expected zero-value stats default, got %+v", stats)
+	}
+	expectedConfig := DefaultFederationConfig()
+	if config := hub.GetConfig(); !reflect.DeepEqual(config, expectedConfig) {
+		t.Fatalf("expected zero-value config %+v, got %+v", expectedConfig, config)
+	}
+
+	// Should be a no-op and not panic for unconfigured wrapper.
+	hub.SetEventHandler(func(event FederationEvent) {})
+}
+
+func TestFederationHub_PublicNilReceiverMethodsFailGracefully(t *testing.T) {
+	var hub *FederationHub
+
+	if err := hub.Initialize(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil initialize configuration error, got %v", err)
+	}
+	if err := hub.Shutdown(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil shutdown configuration error, got %v", err)
+	}
+	if err := hub.RegisterSwarm(SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil register configuration error, got %v", err)
+	}
+	if err := hub.UnregisterSwarm("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil unregister configuration error, got %v", err)
+	}
+	if err := hub.Heartbeat("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil heartbeat configuration error, got %v", err)
+	}
+
+	spawnResult, spawnErr := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{Type: "coder", Task: "nil receiver"})
+	if spawnErr == nil || spawnErr.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil spawn configuration error, got %v", spawnErr)
+	}
+	if spawnResult == nil || spawnResult.Error != "federation hub is not configured" {
+		t.Fatalf("expected nil spawn result configuration error, got %+v", spawnResult)
+	}
+	if err := hub.CompleteAgent("agent", map[string]interface{}{"ok": true}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil complete-agent configuration error, got %v", err)
+	}
+	if err := hub.TerminateAgent("agent", "err"); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil terminate-agent configuration error, got %v", err)
+	}
+	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"hello": "world"}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil send-message configuration error, got %v", err)
+	}
+	if _, err := hub.Broadcast("source", map[string]interface{}{"hello": "all"}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil broadcast configuration error, got %v", err)
+	}
+	if _, err := hub.Propose("source", "task", map[string]interface{}{"vote": true}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil propose configuration error, got %v", err)
+	}
+	if err := hub.Vote("source", "proposal", true); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected nil vote configuration error, got %v", err)
+	}
+
+	if swarms := hub.GetSwarms(); len(swarms) != 0 {
+		t.Fatalf("expected nil receiver swarms empty, got %d", len(swarms))
+	}
+	if activeSwarms := hub.GetActiveSwarms(); len(activeSwarms) != 0 {
+		t.Fatalf("expected nil receiver active swarms empty, got %d", len(activeSwarms))
+	}
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected nil receiver agents empty, got %d", len(agents))
+	}
+	if activeAgents := hub.GetActiveAgents(); len(activeAgents) != 0 {
+		t.Fatalf("expected nil receiver active agents empty, got %d", len(activeAgents))
+	}
+	if agentsBySwarm := hub.GetAgentsBySwarm("swarm"); len(agentsBySwarm) != 0 {
+		t.Fatalf("expected nil receiver agents-by-swarm empty, got %d", len(agentsBySwarm))
+	}
+	if agentsByStatus := hub.GetAgentsByStatus(EphemeralStatusActive); len(agentsByStatus) != 0 {
+		t.Fatalf("expected nil receiver agents-by-status empty, got %d", len(agentsByStatus))
+	}
+	if _, ok := hub.GetSwarm("swarm"); ok {
+		t.Fatal("expected nil receiver GetSwarm to fail")
+	}
+	if _, ok := hub.GetAgent("agent"); ok {
+		t.Fatal("expected nil receiver GetAgent to fail")
+	}
+	if messages := hub.GetMessages(10); len(messages) != 0 {
+		t.Fatalf("expected nil receiver messages empty, got %d", len(messages))
+	}
+	if messagesBySwarm := hub.GetMessagesBySwarm("swarm", 10); len(messagesBySwarm) != 0 {
+		t.Fatalf("expected nil receiver messages-by-swarm empty, got %d", len(messagesBySwarm))
+	}
+	if _, ok := hub.GetMessage("message"); ok {
+		t.Fatal("expected nil receiver GetMessage to fail")
+	}
+	if proposals := hub.GetProposals(); len(proposals) != 0 {
+		t.Fatalf("expected nil receiver proposals empty, got %d", len(proposals))
+	}
+	if pending := hub.GetPendingProposals(); len(pending) != 0 {
+		t.Fatalf("expected nil receiver pending proposals empty, got %d", len(pending))
+	}
+	if _, ok := hub.GetProposal("proposal"); ok {
+		t.Fatal("expected nil receiver GetProposal to fail")
+	}
+	if active, required, quorum := hub.GetQuorumInfo(); active != 0 || required != 0 || quorum != 0 {
+		t.Fatalf("expected nil receiver quorum defaults 0, got active=%d required=%d quorum=%v", active, required, quorum)
+	}
+	if events := hub.GetEvents(10); len(events) != 0 {
+		t.Fatalf("expected nil receiver events empty, got %d", len(events))
+	}
+	if stats := hub.GetStats(); stats != (FederationStats{}) {
+		t.Fatalf("expected nil receiver stats default, got %+v", stats)
+	}
+	expectedConfig := DefaultFederationConfig()
+	if config := hub.GetConfig(); !reflect.DeepEqual(config, expectedConfig) {
+		t.Fatalf("expected nil receiver config %+v, got %+v", expectedConfig, config)
+	}
+
+	// Should be a no-op and not panic for nil unconfigured wrapper.
+	hub.SetEventHandler(func(event FederationEvent) {})
+}
+
+func TestFederationHub_PublicUnconfiguredReadDefaults(t *testing.T) {
+	var hub *FederationHub
+
+	if proposals := hub.GetPendingProposals(); len(proposals) != 0 {
+		t.Fatalf("expected nil receiver pending proposals empty, got %d", len(proposals))
+	}
+	if messages := hub.GetMessagesBySwarm("swarm", 10); len(messages) != 0 {
+		t.Fatalf("expected nil receiver swarm messages empty, got %d", len(messages))
+	}
+	if _, ok := hub.GetMessage("msg-id"); ok {
+		t.Fatal("expected nil receiver GetMessage to fail")
+	}
+	if _, ok := hub.GetProposal("proposal-id"); ok {
+		t.Fatal("expected nil receiver GetProposal to fail")
+	}
+
+	activeSwarms, requiredVotes, quorum := hub.GetQuorumInfo()
+	if activeSwarms != 0 || requiredVotes != 0 || quorum != 0 {
+		t.Fatalf("expected nil receiver quorum defaults 0, got active=%d required=%d quorum=%v", activeSwarms, requiredVotes, quorum)
+	}
+
+	if stats := hub.GetStats(); stats != (FederationStats{}) {
+		t.Fatalf("expected nil receiver stats zero-value, got %+v", stats)
+	}
+
+	expectedConfig := DefaultFederationConfig()
+	if config := hub.GetConfig(); !reflect.DeepEqual(config, expectedConfig) {
+		t.Fatalf("expected nil receiver default config %+v, got %+v", expectedConfig, config)
+	}
+
+	// Should be a no-op and not panic for unconfigured wrapper.
+	hub.SetEventHandler(func(event FederationEvent) {})
+}
+
+func TestFederationHub_PublicWrapperWithZeroValueInternalHubFailsGracefully(t *testing.T) {
+	hub := &FederationHub{internal: &federation.FederationHub{}}
+
+	if err := hub.Initialize(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected initialize configuration error, got %v", err)
+	}
+	if err := hub.Shutdown(); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected shutdown configuration error, got %v", err)
+	}
+	if err := hub.RegisterSwarm(SwarmRegistration{SwarmID: "swarm", Name: "swarm", MaxAgents: 1}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected register configuration error, got %v", err)
+	}
+	if err := hub.UnregisterSwarm("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected unregister configuration error, got %v", err)
+	}
+	if err := hub.Heartbeat("swarm"); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected heartbeat configuration error, got %v", err)
+	}
+
+	spawnResult, spawnErr := hub.SpawnEphemeralAgent(SpawnEphemeralOptions{Type: "coder", Task: "wrapped zero internal"})
+	if spawnErr == nil || spawnErr.Error() != "federation hub is not configured" {
+		t.Fatalf("expected spawn configuration error, got %v", spawnErr)
+	}
+	if spawnResult == nil || spawnResult.Error != "federation hub is not configured" {
+		t.Fatalf("expected spawn result configuration error, got %+v", spawnResult)
+	}
+	if err := hub.CompleteAgent("agent", map[string]interface{}{"ok": true}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected complete-agent configuration error, got %v", err)
+	}
+	if err := hub.TerminateAgent("agent", "err"); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected terminate-agent configuration error, got %v", err)
+	}
+	if _, err := hub.SendMessage("source", "target", map[string]interface{}{"hello": "world"}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected send-message configuration error, got %v", err)
+	}
+	if _, err := hub.Broadcast("source", map[string]interface{}{"hello": "all"}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected broadcast configuration error, got %v", err)
+	}
+	if _, err := hub.Propose("source", "task", map[string]interface{}{"vote": true}); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected propose configuration error, got %v", err)
+	}
+	if err := hub.Vote("source", "proposal", true); err == nil || err.Error() != "federation hub is not configured" {
+		t.Fatalf("expected vote configuration error, got %v", err)
+	}
+
+	if swarms := hub.GetSwarms(); len(swarms) != 0 {
+		t.Fatalf("expected malformed wrapper swarms empty, got %d", len(swarms))
+	}
+	if activeSwarms := hub.GetActiveSwarms(); len(activeSwarms) != 0 {
+		t.Fatalf("expected malformed wrapper active swarms empty, got %d", len(activeSwarms))
+	}
+	if agents := hub.GetAgents(); len(agents) != 0 {
+		t.Fatalf("expected malformed wrapper agents empty, got %d", len(agents))
+	}
+	if activeAgents := hub.GetActiveAgents(); len(activeAgents) != 0 {
+		t.Fatalf("expected malformed wrapper active agents empty, got %d", len(activeAgents))
+	}
+	if agentsBySwarm := hub.GetAgentsBySwarm("swarm"); len(agentsBySwarm) != 0 {
+		t.Fatalf("expected malformed wrapper agents-by-swarm empty, got %d", len(agentsBySwarm))
+	}
+	if agentsByStatus := hub.GetAgentsByStatus(EphemeralStatusActive); len(agentsByStatus) != 0 {
+		t.Fatalf("expected malformed wrapper agents-by-status empty, got %d", len(agentsByStatus))
+	}
+	if _, ok := hub.GetSwarm("swarm"); ok {
+		t.Fatal("expected malformed wrapper GetSwarm to fail")
+	}
+	if _, ok := hub.GetAgent("agent"); ok {
+		t.Fatal("expected malformed wrapper GetAgent to fail")
+	}
+	if messages := hub.GetMessages(10); len(messages) != 0 {
+		t.Fatalf("expected malformed wrapper messages empty, got %d", len(messages))
+	}
+	if messagesBySwarm := hub.GetMessagesBySwarm("swarm", 10); len(messagesBySwarm) != 0 {
+		t.Fatalf("expected malformed wrapper messages-by-swarm empty, got %d", len(messagesBySwarm))
+	}
+	if _, ok := hub.GetMessage("message"); ok {
+		t.Fatal("expected malformed wrapper GetMessage to fail")
+	}
+	if proposals := hub.GetProposals(); len(proposals) != 0 {
+		t.Fatalf("expected malformed wrapper proposals empty, got %d", len(proposals))
+	}
+	if pending := hub.GetPendingProposals(); len(pending) != 0 {
+		t.Fatalf("expected malformed wrapper pending proposals empty, got %d", len(pending))
+	}
+	if _, ok := hub.GetProposal("proposal"); ok {
+		t.Fatal("expected malformed wrapper GetProposal to fail")
+	}
+	if events := hub.GetEvents(10); len(events) != 0 {
+		t.Fatalf("expected malformed wrapper events empty, got %d", len(events))
+	}
+	if stats := hub.GetStats(); stats != (FederationStats{}) {
+		t.Fatalf("expected malformed wrapper stats zero-value, got %+v", stats)
+	}
+
+	activeSwarms, requiredVotes, quorum := hub.GetQuorumInfo()
+	if activeSwarms != 0 || requiredVotes != 0 || quorum != 0 {
+		t.Fatalf("expected malformed wrapper quorum defaults 0, got active=%d required=%d quorum=%v", activeSwarms, requiredVotes, quorum)
+	}
+	expectedConfig := DefaultFederationConfig()
+	if config := hub.GetConfig(); !reflect.DeepEqual(config, expectedConfig) {
+		t.Fatalf("expected malformed wrapper default config %+v, got %+v", expectedConfig, config)
+	}
+
+	// Should be a no-op and not panic for malformed wrapper.
+	hub.SetEventHandler(func(event FederationEvent) {})
+}

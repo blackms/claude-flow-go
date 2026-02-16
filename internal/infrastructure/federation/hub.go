@@ -4,6 +4,8 @@ package federation
 import (
 	"context"
 	"fmt"
+	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,7 +28,7 @@ type FederationHub struct {
 	ephemeralAgents map[string]*shared.EphemeralAgent
 
 	// O(1) indexes
-	agentsBySwarm  map[string]map[string]bool                    // swarmID -> set of agentIDs
+	agentsBySwarm  map[string]map[string]bool                      // swarmID -> set of agentIDs
 	agentsByStatus map[shared.EphemeralAgentStatus]map[string]bool // status -> set of agentIDs
 
 	// Messaging
@@ -41,16 +43,18 @@ type FederationHub struct {
 	eventHandler EventHandler
 
 	// Statistics
-	stats          shared.FederationStats
-	spawnTimes     []int64
-	messageTimes   []int64
+	stats           shared.FederationStats
+	spawnTimes      []int64
+	messageTimes    []int64
 	statsMaxSamples int
 
 	// Background processing
-	ctx          context.Context
-	cancel       context.CancelFunc
-	syncTicker   *time.Ticker
+	ctx           context.Context
+	cancel        context.CancelFunc
+	syncTicker    *time.Ticker
 	cleanupTicker *time.Ticker
+	initialized   bool
+	shutdown      bool
 
 	mu sync.RWMutex
 }
@@ -89,8 +93,77 @@ func NewFederationHubWithDefaults() *FederationHub {
 	return NewFederationHub(shared.DefaultFederationConfig())
 }
 
+func (fh *FederationHub) isConfigured() bool {
+	if fh == nil {
+		return false
+	}
+	if fh.ctx == nil || fh.cancel == nil {
+		return false
+	}
+	if fh.swarms == nil || fh.ephemeralAgents == nil || fh.agentsBySwarm == nil || fh.agentsByStatus == nil {
+		return false
+	}
+	if fh.messages == nil || fh.proposals == nil || fh.events == nil {
+		return false
+	}
+	if fh.spawnTimes == nil || fh.messageTimes == nil {
+		return false
+	}
+	return true
+}
+
+// IsConfigured reports whether the federation hub instance is constructed and safe to use.
+func (fh *FederationHub) IsConfigured() bool {
+	return fh.isConfigured()
+}
+
+func (fh *FederationHub) configuredOrError() error {
+	if !fh.isConfigured() {
+		return fmt.Errorf("federation hub is not configured")
+	}
+	return nil
+}
+
 // Initialize starts the federation hub background processes.
 func (fh *FederationHub) Initialize() error {
+	if err := fh.configuredOrError(); err != nil {
+		return err
+	}
+
+	maxTickerIntervalMs := int64(math.MaxInt64 / int64(time.Millisecond))
+
+	if fh.config.HeartbeatInterval <= 0 {
+		return fmt.Errorf("heartbeat interval must be greater than 0")
+	}
+	if fh.config.HeartbeatInterval > math.MaxInt64/6 {
+		return fmt.Errorf("heartbeat interval is out of range")
+	}
+	if fh.config.SyncInterval <= 0 {
+		return fmt.Errorf("sync interval must be greater than 0")
+	}
+	if fh.config.SyncInterval > maxTickerIntervalMs {
+		return fmt.Errorf("sync interval is out of range")
+	}
+	if fh.config.AutoCleanupEnabled && fh.config.CleanupInterval <= 0 {
+		return fmt.Errorf("cleanup interval must be greater than 0")
+	}
+	if fh.config.AutoCleanupEnabled && fh.config.CleanupInterval > maxTickerIntervalMs {
+		return fmt.Errorf("cleanup interval is out of range")
+	}
+	if fh.config.MaxMessageHistory <= 0 {
+		return fmt.Errorf("max message history must be greater than 0")
+	}
+
+	fh.mu.Lock()
+	defer fh.mu.Unlock()
+
+	if fh.shutdown {
+		return fmt.Errorf("federation hub is shut down")
+	}
+	if fh.initialized {
+		return fmt.Errorf("federation hub is already initialized")
+	}
+
 	// Start sync loop
 	fh.syncTicker = time.NewTicker(time.Duration(fh.config.SyncInterval) * time.Millisecond)
 	go fh.syncLoop()
@@ -101,26 +174,39 @@ func (fh *FederationHub) Initialize() error {
 		go fh.cleanupLoop()
 	}
 
+	fh.initialized = true
+
 	return nil
 }
 
 // Shutdown stops the federation hub and cleans up resources.
 func (fh *FederationHub) Shutdown() error {
-	fh.cancel()
-
-	if fh.syncTicker != nil {
-		fh.syncTicker.Stop()
-	}
-	if fh.cleanupTicker != nil {
-		fh.cleanupTicker.Stop()
+	if err := fh.configuredOrError(); err != nil {
+		return err
 	}
 
-	// Terminate all ephemeral agents
 	fh.mu.Lock()
+	if fh.shutdown {
+		fh.mu.Unlock()
+		return nil
+	}
+	fh.shutdown = true
+	fh.initialized = false
+	syncTicker := fh.syncTicker
+	cleanupTicker := fh.cleanupTicker
+
+	fh.cancel()
 	for agentID := range fh.ephemeralAgents {
 		fh.terminateAgentInternal(agentID, "federation shutdown")
 	}
 	fh.mu.Unlock()
+
+	if syncTicker != nil {
+		syncTicker.Stop()
+	}
+	if cleanupTicker != nil {
+		cleanupTicker.Stop()
+	}
 
 	return nil
 }
@@ -131,8 +217,40 @@ func (fh *FederationHub) Shutdown() error {
 
 // RegisterSwarm registers a swarm with the federation.
 func (fh *FederationHub) RegisterSwarm(swarm shared.SwarmRegistration) error {
+	if err := fh.configuredOrError(); err != nil {
+		return err
+	}
+
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return fmt.Errorf("federation hub is shut down")
+	}
+	if !fh.initialized {
+		return fmt.Errorf("federation hub is not initialized")
+	}
+
+	swarmID := strings.TrimSpace(swarm.SwarmID)
+	if swarmID == "" {
+		return fmt.Errorf("swarmId is required")
+	}
+	name := strings.TrimSpace(swarm.Name)
+	if name == "" {
+		return fmt.Errorf("name is required")
+	}
+	if swarm.MaxAgents <= 0 {
+		return fmt.Errorf("maxAgents must be greater than 0")
+	}
+
+	swarm.SwarmID = swarmID
+	swarm.Name = name
+	swarm.Endpoint = strings.TrimSpace(swarm.Endpoint)
+	swarm.Capabilities = normalizeStringValues(swarm.Capabilities)
+	swarm.Metadata = cloneStringInterfaceMap(swarm.Metadata)
+
+	if _, exists := fh.swarms[swarm.SwarmID]; exists {
+		return fmt.Errorf("swarm %s already exists", swarm.SwarmID)
+	}
 
 	now := shared.Now()
 	swarm.RegisteredAt = now
@@ -156,8 +274,23 @@ func (fh *FederationHub) RegisterSwarm(swarm shared.SwarmRegistration) error {
 
 // UnregisterSwarm removes a swarm from the federation.
 func (fh *FederationHub) UnregisterSwarm(swarmID string) error {
+	if err := fh.configuredOrError(); err != nil {
+		return err
+	}
+
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return fmt.Errorf("federation hub is shut down")
+	}
+	if !fh.initialized {
+		return fmt.Errorf("federation hub is not initialized")
+	}
+
+	swarmID = strings.TrimSpace(swarmID)
+	if swarmID == "" {
+		return fmt.Errorf("swarmId is required")
+	}
 
 	swarm, exists := fh.swarms[swarmID]
 	if !exists {
@@ -187,8 +320,23 @@ func (fh *FederationHub) UnregisterSwarm(swarmID string) error {
 
 // Heartbeat updates the heartbeat for a swarm.
 func (fh *FederationHub) Heartbeat(swarmID string) error {
+	if err := fh.configuredOrError(); err != nil {
+		return err
+	}
+
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return fmt.Errorf("federation hub is shut down")
+	}
+	if !fh.initialized {
+		return fmt.Errorf("federation hub is not initialized")
+	}
+
+	swarmID = strings.TrimSpace(swarmID)
+	if swarmID == "" {
+		return fmt.Errorf("swarmId is required")
+	}
 
 	swarm, exists := fh.swarms[swarmID]
 	if !exists {
@@ -212,35 +360,56 @@ func (fh *FederationHub) Heartbeat(swarmID string) error {
 
 // GetSwarm returns a swarm by ID.
 func (fh *FederationHub) GetSwarm(swarmID string) (*shared.SwarmRegistration, bool) {
+	if !fh.isConfigured() {
+		return nil, false
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
+	swarmID = strings.TrimSpace(swarmID)
+	if swarmID == "" {
+		return nil, false
+	}
 	swarm, exists := fh.swarms[swarmID]
-	return swarm, exists
+	if !exists {
+		return nil, false
+	}
+	return cloneSwarmRegistration(swarm), true
 }
 
 // GetSwarms returns all registered swarms.
 func (fh *FederationHub) GetSwarms() []*shared.SwarmRegistration {
+	if !fh.isConfigured() {
+		return []*shared.SwarmRegistration{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
 	swarms := make([]*shared.SwarmRegistration, 0, len(fh.swarms))
 	for _, swarm := range fh.swarms {
-		swarms = append(swarms, swarm)
+		swarms = append(swarms, cloneSwarmRegistration(swarm))
 	}
+	sortSwarmRegistrationsByID(swarms)
 	return swarms
 }
 
 // GetActiveSwarms returns all active swarms.
 func (fh *FederationHub) GetActiveSwarms() []*shared.SwarmRegistration {
+	if !fh.isConfigured() {
+		return []*shared.SwarmRegistration{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
 	swarms := make([]*shared.SwarmRegistration, 0)
 	for _, swarm := range fh.swarms {
 		if swarm.Status == shared.SwarmStatusActive {
-			swarms = append(swarms, swarm)
+			swarms = append(swarms, cloneSwarmRegistration(swarm))
 		}
 	}
+	sortSwarmRegistrationsByID(swarms)
 	return swarms
 }
 
@@ -274,6 +443,12 @@ func (fh *FederationHub) cleanupLoop() {
 func (fh *FederationHub) syncFederation() {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	if fh.shutdown {
+		return
+	}
+	if !fh.initialized {
+		return
+	}
 
 	now := shared.Now()
 	heartbeatThreshold := fh.config.HeartbeatInterval * 3 // 3x heartbeat = degraded
@@ -325,25 +500,45 @@ func (fh *FederationHub) syncFederation() {
 
 // SetEventHandler sets the event handler for federation events.
 func (fh *FederationHub) SetEventHandler(handler EventHandler) {
+	if !fh.isConfigured() {
+		return
+	}
+
+	fh.mu.Lock()
+	defer fh.mu.Unlock()
 	fh.eventHandler = handler
 }
 
 // emitEvent emits a federation event.
 func (fh *FederationHub) emitEvent(event shared.FederationEvent) {
-	fh.events = append(fh.events, &event)
+	handler := fh.eventHandler
+	historyEvent := event
+	historyEvent.Data = cloneInterfaceValue(event.Data)
+	fh.events = append(fh.events, &historyEvent)
 
 	// Limit event history
 	if len(fh.events) > fh.config.MaxMessageHistory {
 		fh.events = fh.events[1:]
 	}
 
-	if fh.eventHandler != nil {
-		go fh.eventHandler(event)
+	if handler != nil {
+		handlerEvent := historyEvent
+		handlerEvent.Data = cloneInterfaceValue(historyEvent.Data)
+		go func(callback EventHandler, payload shared.FederationEvent) {
+			defer func() {
+				_ = recover()
+			}()
+			callback(payload)
+		}(handler, handlerEvent)
 	}
 }
 
 // GetEvents returns recent federation events.
 func (fh *FederationHub) GetEvents(limit int) []*shared.FederationEvent {
+	if !fh.isConfigured() {
+		return []*shared.FederationEvent{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -354,7 +549,9 @@ func (fh *FederationHub) GetEvents(limit int) []*shared.FederationEvent {
 	// Return most recent events
 	start := len(fh.events) - limit
 	result := make([]*shared.FederationEvent, limit)
-	copy(result, fh.events[start:])
+	for i, event := range fh.events[start:] {
+		result[i] = cloneFederationEvent(event)
+	}
 	return result
 }
 
@@ -364,6 +561,10 @@ func (fh *FederationHub) GetEvents(limit int) []*shared.FederationEvent {
 
 // GetStats returns federation statistics.
 func (fh *FederationHub) GetStats() shared.FederationStats {
+	if !fh.isConfigured() {
+		return shared.FederationStats{}
+	}
+
 	fh.mu.RLock()
 	defer fh.mu.RUnlock()
 
@@ -393,6 +594,10 @@ func (fh *FederationHub) GetStats() shared.FederationStats {
 
 // GetConfig returns the federation configuration.
 func (fh *FederationHub) GetConfig() shared.FederationConfig {
+	if !fh.isConfigured() {
+		return shared.DefaultFederationConfig()
+	}
+
 	return fh.config
 }
 
@@ -415,4 +620,22 @@ func (fh *FederationHub) recordMessageTime(durationMs int64) {
 // generateID generates a unique ID.
 func generateID(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, uuid.New().String()[:8])
+}
+
+func normalizeStringValues(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+
+	seen := make(map[string]bool, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		normalized = append(normalized, trimmed)
+	}
+	return normalized
 }

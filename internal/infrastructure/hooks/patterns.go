@@ -41,8 +41,12 @@ func (ps *PatternStore) Store(pattern *shared.Pattern) error {
 		// Update existing pattern
 		existing.SuccessCount = pattern.SuccessCount
 		existing.FailureCount = pattern.FailureCount
-		existing.UpdatedAt = shared.Now()
-		existing.LastUsedAt = shared.Now()
+		now := shared.Now()
+		if now <= existing.UpdatedAt {
+			now = existing.UpdatedAt + 1
+		}
+		existing.UpdatedAt = now
+		existing.LastUsedAt = now
 		return nil
 	}
 
@@ -342,7 +346,7 @@ func extractKeywords(text string) []string {
 		"have": true, "has": true, "had": true, "do": true, "does": true,
 		"did": true, "will": true, "would": true, "could": true, "should": true,
 		"may": true, "might": true, "must": true, "shall": true,
-		"to": true, "of": true, "in": true, "for": true, "on": true,
+		"of": true, "in": true, "for": true, "on": true,
 		"with": true, "at": true, "by": true, "from": true, "as": true,
 		"and": true, "or": true, "not": true, "but": true,
 		"this": true, "that": true, "these": true, "those": true,

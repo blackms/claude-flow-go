@@ -6,7 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
+	"net"
 	"net/http"
+	"reflect"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/anthropics/claude-flow-go/internal/infrastructure/hooks"
@@ -32,21 +38,21 @@ type Server struct {
 	httpServer   *http.Server
 
 	// MCP 2025-11-25 compliance components
-	resources   *resources.ResourceRegistry
-	prompts     *prompts.PromptRegistry
-	sampling    *sampling.SamplingManager
-	completion  *completion.CompletionHandler
-	logging     *logging.LogManager
+	resources    *resources.ResourceRegistry
+	prompts      *prompts.PromptRegistry
+	sampling     *sampling.SamplingManager
+	completion   *completion.CompletionHandler
+	logging      *logging.LogManager
 	capabilities *shared.MCPCapabilities
 
 	// Task management
-	tasks       *tasks.TaskManager
+	tasks *tasks.TaskManager
 
 	// Hooks system
-	hooks       *hooks.HooksManager
+	hooks *hooks.HooksManager
 
 	// Session management
-	sessions    *sessions.SessionManager
+	sessions *sessions.SessionManager
 }
 
 // Options holds configuration options for the MCP server.
@@ -61,13 +67,306 @@ type Options struct {
 	SessionConfig       *shared.SessionConfig
 }
 
+type cloneVisit struct {
+	typ reflect.Type
+	ptr uintptr
+}
+
+func (s *Server) isConfigured() bool {
+	if s == nil {
+		return false
+	}
+	if s.toolRegistry == nil {
+		return false
+	}
+	if s.resources == nil || s.prompts == nil || s.sampling == nil || s.completion == nil || s.logging == nil {
+		return false
+	}
+	if s.capabilities == nil || s.tasks == nil || s.hooks == nil || s.sessions == nil {
+		return false
+	}
+	return true
+}
+
+func (s *Server) configuredOrError() error {
+	if !s.isConfigured() {
+		return fmt.Errorf("mcp server is not initialized")
+	}
+	return nil
+}
+
+// IsConfigured reports whether the server has all required runtime dependencies initialized.
+func (s *Server) IsConfigured() bool {
+	return s.isConfigured()
+}
+
+func cloneCapabilities(c *shared.MCPCapabilities) *shared.MCPCapabilities {
+	if c == nil {
+		return nil
+	}
+
+	cloned := *c
+	if c.Experimental != nil {
+		cloned.Experimental = cloneMapStringInterface(c.Experimental)
+	}
+	if c.Logging != nil {
+		logging := *c.Logging
+		cloned.Logging = &logging
+	}
+	if c.Prompts != nil {
+		prompts := *c.Prompts
+		cloned.Prompts = &prompts
+	}
+	if c.Resources != nil {
+		resources := *c.Resources
+		cloned.Resources = &resources
+	}
+	if c.Tools != nil {
+		tools := *c.Tools
+		cloned.Tools = &tools
+	}
+	if c.Sampling != nil {
+		sampling := *c.Sampling
+		cloned.Sampling = &sampling
+	}
+	return &cloned
+}
+
+func normalizeToolName(name string) string {
+	return strings.TrimSpace(name)
+}
+
+func buildListenAddress(host string, port int) string {
+	return net.JoinHostPort(host, strconv.Itoa(port))
+}
+
+func cloneInterfaceValue(value interface{}) interface{} {
+	if value == nil {
+		return nil
+	}
+
+	cloned := cloneReflectValue(reflect.ValueOf(value), make(map[cloneVisit]reflect.Value))
+	if !cloned.IsValid() {
+		return nil
+	}
+	return cloned.Interface()
+}
+
+func cloneReflectValue(value reflect.Value, seen map[cloneVisit]reflect.Value) reflect.Value {
+	if !value.IsValid() {
+		return value
+	}
+
+	switch value.Kind() {
+	case reflect.Map:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if visit.ptr != 0 {
+			if cached, ok := seen[visit]; ok {
+				return cached
+			}
+		}
+
+		clonedMap := reflect.MakeMapWithSize(value.Type(), value.Len())
+		if visit.ptr != 0 {
+			seen[visit] = clonedMap
+		}
+		for _, key := range value.MapKeys() {
+			clonedKey := cloneReflectValue(key, seen)
+			clonedValue := cloneReflectValue(value.MapIndex(key), seen)
+			clonedMap.SetMapIndex(clonedKey, clonedValue)
+		}
+		return clonedMap
+
+	case reflect.Slice:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if visit.ptr != 0 {
+			if cached, ok := seen[visit]; ok {
+				return cached
+			}
+		}
+
+		clonedSlice := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+		if visit.ptr != 0 {
+			seen[visit] = clonedSlice
+		}
+		for i := 0; i < value.Len(); i++ {
+			clonedSlice.Index(i).Set(cloneReflectValue(value.Index(i), seen))
+		}
+		return clonedSlice
+
+	case reflect.Array:
+		clonedArray := reflect.New(value.Type()).Elem()
+		for i := 0; i < value.Len(); i++ {
+			clonedArray.Index(i).Set(cloneReflectValue(value.Index(i), seen))
+		}
+		return clonedArray
+
+	case reflect.Ptr:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+
+		visit := cloneVisit{typ: value.Type(), ptr: value.Pointer()}
+		if cached, ok := seen[visit]; ok {
+			return cached
+		}
+
+		clonedPointer := reflect.New(value.Type().Elem())
+		seen[visit] = clonedPointer
+		clonedPointer.Elem().Set(cloneReflectValue(value.Elem(), seen))
+		return clonedPointer
+
+	case reflect.Interface:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		return cloneReflectValue(value.Elem(), seen)
+
+	case reflect.Struct:
+		clonedStruct := reflect.New(value.Type()).Elem()
+		clonedStruct.Set(value)
+		for i := 0; i < value.NumField(); i++ {
+			destinationField := clonedStruct.Field(i)
+			if !destinationField.CanSet() {
+				continue
+			}
+
+			clonedField := cloneReflectValue(value.Field(i), seen)
+			if !clonedField.IsValid() {
+				continue
+			}
+
+			if clonedField.Type().AssignableTo(destinationField.Type()) {
+				destinationField.Set(clonedField)
+			} else if clonedField.Type().ConvertibleTo(destinationField.Type()) {
+				destinationField.Set(clonedField.Convert(destinationField.Type()))
+			}
+		}
+		return clonedStruct
+
+	default:
+		return value
+	}
+}
+
+func cloneMapStringInterface(value map[string]interface{}) map[string]interface{} {
+	if value == nil {
+		return nil
+	}
+	cloned, ok := cloneInterfaceValue(value).(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return cloned
+}
+
+func cloneParamsOrEmpty(value map[string]interface{}) map[string]interface{} {
+	if value == nil {
+		return map[string]interface{}{}
+	}
+	cloned := cloneMapStringInterface(value)
+	if cloned == nil {
+		return map[string]interface{}{}
+	}
+	return cloned
+}
+
+func parsePageSize(value interface{}, fallback int) int {
+	switch typed := value.(type) {
+	case float64:
+		if math.IsNaN(typed) || math.IsInf(typed, 0) {
+			return fallback
+		}
+		if math.Trunc(typed) != typed {
+			return fallback
+		}
+		if typed <= 0 || typed > float64(math.MaxInt) {
+			return fallback
+		}
+		return int(typed)
+	case int:
+		if typed <= 0 {
+			return fallback
+		}
+		return typed
+	case int64:
+		if typed <= 0 || typed > int64(math.MaxInt) {
+			return fallback
+		}
+		return int(typed)
+	case json.Number:
+		parsed, err := typed.Int64()
+		if err != nil {
+			return fallback
+		}
+		if parsed <= 0 || parsed > int64(math.MaxInt) {
+			return fallback
+		}
+		return int(parsed)
+	default:
+		return fallback
+	}
+}
+
+func normalizeAndCloneTool(tool shared.MCPTool) (shared.MCPTool, bool) {
+	toolName := normalizeToolName(tool.Name)
+	if toolName == "" {
+		return shared.MCPTool{}, false
+	}
+	tool.Name = toolName
+	tool.Parameters = cloneMapStringInterface(tool.Parameters)
+	return tool, true
+}
+
+func providerGetTools(provider shared.MCPToolProvider) (tools []shared.MCPTool) {
+	if provider == nil {
+		return nil
+	}
+
+	defer func() {
+		if recover() != nil {
+			tools = nil
+		}
+	}()
+
+	return provider.GetTools()
+}
+
+func providerExecute(
+	provider shared.MCPToolProvider,
+	ctx context.Context,
+	toolName string,
+	params map[string]interface{},
+) (result *shared.MCPToolResult, err error) {
+	if provider == nil {
+		return nil, fmt.Errorf("provider is nil")
+	}
+
+	defer func() {
+		if recover() != nil {
+			result = nil
+			err = fmt.Errorf("provider execution panic")
+		}
+	}()
+
+	return provider.Execute(ctx, toolName, params)
+}
+
 // NewServer creates a new MCP server.
 func NewServer(opts Options) *Server {
 	port := opts.Port
 	if port == 0 {
 		port = 3000
 	}
-	host := opts.Host
+	host := strings.TrimSpace(opts.Host)
 	if host == "" {
 		host = "localhost"
 	}
@@ -144,8 +443,14 @@ func NewServer(opts Options) *Server {
 
 	// Combine user-provided tools with built-in tools
 	allTools := make([]shared.MCPToolProvider, 0, len(opts.Tools)+1)
-	allTools = append(allTools, opts.Tools...)
-	allTools = append(allTools, hooksTools)
+	for _, provider := range opts.Tools {
+		if provider != nil {
+			allTools = append(allTools, provider)
+		}
+	}
+	if hooksTools != nil {
+		allTools = append(allTools, hooksTools)
+	}
 
 	return &Server{
 		tools:        allTools,
@@ -166,6 +471,19 @@ func NewServer(opts Options) *Server {
 
 // Start starts the MCP server.
 func (s *Server) Start() error {
+	if err := s.configuredOrError(); err != nil {
+		return err
+	}
+
+	if s.port <= 0 || s.port > 65535 {
+		return fmt.Errorf("invalid port: %d", s.port)
+	}
+
+	trimmedHost := strings.TrimSpace(s.host)
+	if trimmedHost == "" {
+		return fmt.Errorf("host is required")
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -196,8 +514,12 @@ func (s *Server) Start() error {
 
 	// Build tool registry
 	for _, provider := range s.tools {
-		for _, tool := range provider.GetTools() {
-			s.toolRegistry[tool.Name] = tool
+		for _, tool := range providerGetTools(provider) {
+			normalized, ok := normalizeAndCloneTool(tool)
+			if !ok {
+				continue
+			}
+			s.toolRegistry[normalized.Name] = normalized
 		}
 	}
 
@@ -207,17 +529,22 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/tools", s.handleListTools)
 	mux.HandleFunc("/health", s.handleHealth)
 
-	addr := fmt.Sprintf("%s:%d", s.host, s.port)
+	addr := buildListenAddress(trimmedHost, s.port)
 	s.httpServer = &http.Server{
 		Addr:    addr,
 		Handler: mux,
+	}
+
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
 	}
 
 	s.running = true
 
 	// Start server in goroutine
 	go func() {
-		if err := s.httpServer.ListenAndServe(); err != http.ErrServerClosed {
+		if err := s.httpServer.Serve(listener); err != http.ErrServerClosed {
 			s.mu.Lock()
 			s.running = false
 			s.mu.Unlock()
@@ -229,6 +556,10 @@ func (s *Server) Start() error {
 
 // Stop stops the MCP server.
 func (s *Server) Stop() error {
+	if err := s.configuredOrError(); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -263,14 +594,29 @@ func (s *Server) Stop() error {
 
 // RegisterTool registers a tool.
 func (s *Server) RegisterTool(tool shared.MCPTool) {
+	if s == nil {
+		return
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.toolRegistry[tool.Name] = tool
+	if s.toolRegistry == nil {
+		s.toolRegistry = make(map[string]shared.MCPTool)
+	}
+	normalized, ok := normalizeAndCloneTool(tool)
+	if !ok {
+		return
+	}
+	s.toolRegistry[normalized.Name] = normalized
 }
 
 // ListTools returns all available tools.
 func (s *Server) ListTools() []shared.MCPTool {
+	if s == nil {
+		return []shared.MCPTool{}
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -279,29 +625,71 @@ func (s *Server) ListTools() []shared.MCPTool {
 
 	// Add tools from registry
 	for _, tool := range s.toolRegistry {
-		if !seen[tool.Name] {
-			result = append(result, tool)
-			seen[tool.Name] = true
+		normalized, ok := normalizeAndCloneTool(tool)
+		if !ok {
+			continue
+		}
+		if !seen[normalized.Name] {
+			result = append(result, normalized)
+			seen[normalized.Name] = true
 		}
 	}
 
 	// Add tools from providers
 	for _, provider := range s.tools {
-		for _, tool := range provider.GetTools() {
-			if !seen[tool.Name] {
-				result = append(result, tool)
-				seen[tool.Name] = true
+		for _, tool := range providerGetTools(provider) {
+			normalized, ok := normalizeAndCloneTool(tool)
+			if !ok {
+				continue
+			}
+			if !seen[normalized.Name] {
+				result = append(result, normalized)
+				seen[normalized.Name] = true
 			}
 		}
 	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Name < result[j].Name
+	})
 
 	return result
 }
 
 // HandleRequest handles an MCP request.
 func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) shared.MCPResponse {
+	if !s.isConfigured() {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32603,
+				Message: "mcp server is not initialized",
+			},
+		}
+	}
+	if ctx == nil {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32603,
+				Message: "context is required",
+			},
+		}
+	}
+
+	method := strings.TrimSpace(request.Method)
+	if method == "" {
+		return shared.MCPResponse{
+			ID: request.ID,
+			Error: &shared.MCPError{
+				Code:    -32600,
+				Message: "Method is required",
+			},
+		}
+	}
+
 	// Handle MCP protocol methods first
-	switch request.Method {
+	switch method {
 	case "initialize":
 		return s.handleInitialize(request)
 	case "notifications/initialized":
@@ -336,9 +724,12 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 
 	// Find the tool provider that can handle this request
 	for _, provider := range providers {
-		result, err := provider.Execute(ctx, request.Method, request.Params)
+		result, err := providerExecute(provider, ctx, method, cloneParamsOrEmpty(request.Params))
 		if err != nil {
 			continue // Try next provider
+		}
+		if result == nil {
+			continue // Provider did not handle this request
 		}
 
 		return shared.MCPResponse{
@@ -351,7 +742,7 @@ func (s *Server) HandleRequest(ctx context.Context, request shared.MCPRequest) s
 		ID: request.ID,
 		Error: &shared.MCPError{
 			Code:    -32601,
-			Message: fmt.Sprintf("Method not found: %s", request.Method),
+			Message: fmt.Sprintf("Method not found: %s", method),
 		},
 	}
 }
@@ -404,7 +795,21 @@ func (s *Server) handleToolsList(request shared.MCPRequest) shared.MCPResponse {
 
 func (s *Server) handleToolsCall(ctx context.Context, request shared.MCPRequest) shared.MCPResponse {
 	toolName, _ := request.Params["name"].(string)
-	arguments, _ := request.Params["arguments"].(map[string]interface{})
+	toolName = normalizeToolName(toolName)
+	var arguments map[string]interface{}
+	if rawArgs, exists := request.Params["arguments"]; exists && rawArgs != nil {
+		var ok bool
+		arguments, ok = rawArgs.(map[string]interface{})
+		if !ok {
+			return shared.MCPResponse{
+				ID: request.ID,
+				Error: &shared.MCPError{
+					Code:    -32602,
+					Message: "Invalid params: arguments must be an object",
+				},
+			}
+		}
+	}
 
 	if toolName == "" {
 		return shared.MCPResponse{
@@ -421,11 +826,23 @@ func (s *Server) handleToolsCall(ctx context.Context, request shared.MCPRequest)
 	s.mu.RUnlock()
 
 	for _, provider := range providers {
-		result, err := provider.Execute(ctx, toolName, arguments)
+		result, err := providerExecute(provider, ctx, toolName, cloneParamsOrEmpty(arguments))
 		if err != nil {
 			continue
 		}
-		resultJSON, _ := json.Marshal(result)
+		if result == nil {
+			continue
+		}
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			return shared.MCPResponse{
+				ID: request.ID,
+				Error: &shared.MCPError{
+					Code:    -32603,
+					Message: fmt.Sprintf("Failed to serialize tool result: %v", err),
+				},
+			}
+		}
 		return shared.MCPResponse{
 			ID: request.ID,
 			Result: map[string]interface{}{
@@ -456,8 +873,8 @@ func (s *Server) handleResourcesList(request shared.MCPRequest) shared.MCPRespon
 		if c, ok := request.Params["cursor"].(string); ok {
 			cursor = c
 		}
-		if ps, ok := request.Params["pageSize"].(float64); ok {
-			pageSize = int(ps)
+		if rawPageSize, exists := request.Params["pageSize"]; exists {
+			pageSize = parsePageSize(rawPageSize, pageSize)
 		}
 	}
 
@@ -554,8 +971,8 @@ func (s *Server) handlePromptsList(request shared.MCPRequest) shared.MCPResponse
 		if c, ok := request.Params["cursor"].(string); ok {
 			cursor = c
 		}
-		if ps, ok := request.Params["pageSize"].(float64); ok {
-			pageSize = int(ps)
+		if rawPageSize, exists := request.Params["pageSize"]; exists {
+			pageSize = parsePageSize(rawPageSize, pageSize)
 		}
 	}
 
@@ -703,6 +1120,7 @@ func (s *Server) handleCompletionComplete(request shared.MCPRequest) shared.MCPR
 
 func (s *Server) handleLoggingSetLevel(request shared.MCPRequest) shared.MCPResponse {
 	level, ok := request.Params["level"].(string)
+	level = strings.TrimSpace(level)
 	if !ok || level == "" {
 		return shared.MCPResponse{
 			ID: request.ID,
@@ -725,7 +1143,7 @@ func (s *Server) handleLoggingSetLevel(request shared.MCPRequest) shared.MCPResp
 
 	// Update capabilities
 	s.mu.Lock()
-	s.capabilities.Logging.Level = shared.MCPLogLevel(level)
+	s.capabilities.Logging.Level = s.logging.GetLevel()
 	s.mu.Unlock()
 
 	return shared.MCPResponse{
@@ -738,6 +1156,13 @@ func (s *Server) handleLoggingSetLevel(request shared.MCPRequest) shared.MCPResp
 
 // GetStatus returns the server status.
 func (s *Server) GetStatus() map[string]interface{} {
+	if !s.isConfigured() {
+		return map[string]interface{}{
+			"running": false,
+			"error":   "mcp server is not initialized",
+		}
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -751,14 +1176,25 @@ func (s *Server) GetStatus() map[string]interface{} {
 
 // AddToolProvider adds a tool provider.
 func (s *Server) AddToolProvider(provider shared.MCPToolProvider) {
+	if s == nil || provider == nil {
+		return
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.toolRegistry == nil {
+		s.toolRegistry = make(map[string]shared.MCPTool)
+	}
 	s.tools = append(s.tools, provider)
 
 	// Register tools from the provider
-	for _, tool := range provider.GetTools() {
-		s.toolRegistry[tool.Name] = tool
+	for _, tool := range providerGetTools(provider) {
+		normalized, ok := normalizeAndCloneTool(tool)
+		if !ok {
+			continue
+		}
+		s.toolRegistry[normalized.Name] = normalized
 	}
 }
 
@@ -767,17 +1203,26 @@ func (s *Server) AddToolProvider(provider shared.MCPToolProvider) {
 // ============================================================================
 
 func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
+	if w == nil || r == nil {
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if r.Body == nil {
+		s.writeError(w, "", -32700, "Parse error")
+		return
+	}
+
+	defer r.Body.Close()
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.writeError(w, "", -32700, "Parse error")
 		return
 	}
-	defer r.Body.Close()
 
 	var request shared.MCPRequest
 	if err := json.Unmarshal(body, &request); err != nil {
@@ -790,6 +1235,10 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListTools(w http.ResponseWriter, r *http.Request) {
+	if w == nil || r == nil {
+		return
+	}
+
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -803,12 +1252,25 @@ func (s *Server) handleListTools(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if w == nil || r == nil {
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	status := s.GetStatus()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
 }
 
 func (s *Server) writeResponse(w http.ResponseWriter, response shared.MCPResponse) {
+	if w == nil {
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
@@ -846,8 +1308,36 @@ func NewStdioTransport(server *Server, reader io.Reader, writer io.Writer) *Stdi
 
 // Run runs the stdio transport.
 func (t *StdioTransport) Run(ctx context.Context) error {
+	if t == nil || t.server == nil {
+		return fmt.Errorf("stdio transport server is not configured")
+	}
+	if ctx == nil {
+		return fmt.Errorf("context is required")
+	}
+	if t.reader == nil {
+		return fmt.Errorf("reader is required")
+	}
+	if t.writer == nil {
+		return fmt.Errorf("writer is required")
+	}
+
 	decoder := json.NewDecoder(t.reader)
 	encoder := json.NewEncoder(t.writer)
+
+	type closeWithErrorReader interface {
+		CloseWithError(error) error
+	}
+	if readerCloser, ok := t.reader.(closeWithErrorReader); ok {
+		done := make(chan struct{})
+		defer close(done)
+		go func() {
+			select {
+			case <-ctx.Done():
+				_ = readerCloser.CloseWithError(ctx.Err())
+			case <-done:
+			}
+		}()
+	}
 
 	for {
 		select {
@@ -861,12 +1351,15 @@ func (t *StdioTransport) Run(ctx context.Context) error {
 			if err == io.EOF {
 				return nil
 			}
-			continue
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("failed to decode mcp request: %w", err)
 		}
 
 		response := t.server.HandleRequest(ctx, request)
 		if err := encoder.Encode(response); err != nil {
-			continue
+			return fmt.Errorf("failed to encode mcp response: %w", err)
 		}
 	}
 }
@@ -877,53 +1370,84 @@ func (t *StdioTransport) Run(ctx context.Context) error {
 
 // GetResources returns the resource registry.
 func (s *Server) GetResources() *resources.ResourceRegistry {
+	if s == nil {
+		return nil
+	}
 	return s.resources
 }
 
 // GetPrompts returns the prompt registry.
 func (s *Server) GetPrompts() *prompts.PromptRegistry {
+	if s == nil {
+		return nil
+	}
 	return s.prompts
 }
 
 // GetSampling returns the sampling manager.
 func (s *Server) GetSampling() *sampling.SamplingManager {
+	if s == nil {
+		return nil
+	}
 	return s.sampling
 }
 
 // GetCompletion returns the completion handler.
 func (s *Server) GetCompletion() *completion.CompletionHandler {
+	if s == nil {
+		return nil
+	}
 	return s.completion
 }
 
 // GetLogging returns the log manager.
 func (s *Server) GetLogging() *logging.LogManager {
+	if s == nil {
+		return nil
+	}
 	return s.logging
 }
 
 // GetCapabilities returns the server capabilities.
 func (s *Server) GetCapabilities() *shared.MCPCapabilities {
+	if s == nil {
+		return nil
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.capabilities
+	return cloneCapabilities(s.capabilities)
 }
 
 // RegisterMockProvider registers a mock LLM provider for testing.
 func (s *Server) RegisterMockProvider() {
+	if s == nil || s.sampling == nil {
+		return
+	}
 	mockProvider := sampling.NewMockProviderWithDefaults()
 	s.sampling.RegisterProvider(mockProvider, true)
 }
 
 // GetTasks returns the task manager.
 func (s *Server) GetTasks() *tasks.TaskManager {
+	if s == nil {
+		return nil
+	}
 	return s.tasks
 }
 
 // GetHooks returns the hooks manager.
 func (s *Server) GetHooks() *hooks.HooksManager {
+	if s == nil {
+		return nil
+	}
 	return s.hooks
 }
 
 // GetSessions returns the session manager.
 func (s *Server) GetSessions() *sessions.SessionManager {
+	if s == nil {
+		return nil
+	}
 	return s.sessions
 }
