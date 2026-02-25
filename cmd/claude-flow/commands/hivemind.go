@@ -43,6 +43,98 @@ and manages the 15-agent domain hierarchy:
   - Support Domain (Agents 13-15): TDD, performance, release`,
 }
 
+// restoreHiveMindState attempts to restore hive-mind state from disk.
+// Returns true if state was successfully restored.
+func restoreHiveMindState() bool {
+	if hiveMindState.initialized {
+		return true
+	}
+
+	persisted, err := hivemind.LoadState()
+	if err != nil || persisted == nil {
+		return false
+	}
+
+	hiveMindState.config = persisted.Config
+
+	hiveMindState.swarm = coordinator.New(coordinator.Options{
+		Topology: shared.TopologyHierarchical,
+	})
+	if err := hiveMindState.swarm.Initialize(); err != nil {
+		return false
+	}
+
+	hiveMindState.queen, err = coordinator.NewQueenCoordinator(
+		hiveMindState.swarm,
+		coordinator.DefaultQueenConfig(),
+	)
+	if err != nil {
+		return false
+	}
+
+	hiveMindState.manager, err = hivemind.NewManager(hiveMindState.queen, hiveMindState.config)
+	if err != nil {
+		return false
+	}
+
+	ctx := context.Background()
+	if err := hiveMindState.manager.Initialize(ctx); err != nil {
+		return false
+	}
+
+	if persisted.V3Mode {
+		if err := hiveMindState.queen.SpawnFullHierarchy(ctx); err != nil {
+			return false
+		}
+	}
+
+	// Re-spawn any additional agents that were manually added
+	for _, spec := range persisted.AgentSpecs {
+		cfg := shared.AgentConfig{
+			ID:     spec.ID,
+			Type:   spec.Type,
+			Role:   spec.Role,
+			Domain: spec.Domain,
+		}
+		_, _ = hiveMindState.swarm.SpawnAgent(cfg)
+	}
+
+	hiveMindState.queen.Start()
+	hiveMindState.initialized = true
+	return true
+}
+
+// persistHiveMindState saves current hive-mind state to disk.
+func persistHiveMindState() {
+	if !hiveMindState.initialized {
+		return
+	}
+
+	state := &hivemind.PersistentState{
+		Config:    hiveMindState.config,
+		Algorithm: string(hiveMindState.config.ConsensusAlgorithm),
+		V3Mode:    initV3Mode,
+		Quorum:    hiveMindState.config.DefaultQuorum,
+	}
+
+	// Collect non-hierarchy agent specs
+	if hiveMindState.swarm != nil {
+		agents := hiveMindState.swarm.ListAgents()
+		for _, a := range agents {
+			if a.GetAgentNumber() == 0 {
+				state.AgentSpecs = append(state.AgentSpecs, hivemind.AgentSpec{
+					ID:     a.ID,
+					Type:   a.Type,
+					Role:   a.Role,
+					Domain: a.Domain,
+				})
+			}
+		}
+	}
+
+	_ = hivemind.SaveState(state)
+}
+
 // ============================================================================
 // hive-mind init
 // ============================================================================
@@ -136,6 +228,8 @@ func runHiveMindInit() error {
 	hiveMindState.queen.Start()
 	hiveMindState.initialized = true
 
+	persistHiveMindState()
+
 	fmt.Printf("Hive Mind initialized successfully\n")
 	fmt.Printf("  Algorithm:  %s\n", algorithm)
 	fmt.Printf("  Quorum:     %.0f%%\n", initQuorum*100)
@@ -176,7 +270,9 @@ Use --type to specify the agent type:
 
 func runHiveMindSpawn() error {
 	if hiveMindState.swarm == nil {
-		return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		if !restoreHiveMindState() {
+			return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		}
 	}
 
 	// Parse domain
@@ -244,7 +340,9 @@ var hiveMindStatusCmd = &cobra.Command{
 
 func runHiveMindStatus() error {
 	if hiveMindState.manager == nil {
-		return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		if !restoreHiveMindState() {
+			return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		}
 	}
 
 	state := hiveMindState.manager.GetState()
@@ -333,7 +431,9 @@ var hiveMindTaskCmd = &cobra.Command{
 
 func runHiveMindTask() error {
 	if hiveMindState.queen == nil {
-		return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		if !restoreHiveMindState() {
+			return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		}
 	}
 
 	if taskDescription == "" {
@@ -426,7 +526,9 @@ var hiveMindJoinCmd = &cobra.Command{
 
 func runHiveMindJoin(agentID string) error {
 	if hiveMindState.swarm == nil {
-		return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		if !restoreHiveMindState() {
+			return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		}
 	}
 
 	if agentID == "" {
@@ -480,7 +582,9 @@ var hiveMindLeaveCmd = &cobra.Command{
 
 func runHiveMindLeave(agentID string) error {
 	if hiveMindState.swarm == nil {
-		return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		if !restoreHiveMindState() {
+			return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		}
 	}
 
 	// Check if agent exists
@@ -524,7 +628,9 @@ var consensusCreateCmd = &cobra.Command{
 
 func runConsensusCreate(proposalType, description string) error {
 	if hiveMindState.manager == nil {
-		return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		if !restoreHiveMindState() {
+			return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		}
 	}
 
 	// Parse consensus type
@@ -580,7 +686,9 @@ var consensusVoteCmd = &cobra.Command{
 
 func runConsensusVote(proposalID string) error {
 	if hiveMindState.manager == nil {
-		return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		if !restoreHiveMindState() {
+			return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		}
 	}
 
 	vote := shared.WeightedVote{
@@ -617,7 +725,9 @@ var consensusListCmd = &cobra.Command{
 
 func runConsensusList() error {
 	if hiveMindState.manager == nil {
-		return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		if !restoreHiveMindState() {
+			return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		}
 	}
 
 	proposals := hiveMindState.manager.ListProposals("")
@@ -649,7 +759,9 @@ var consensusResultCmd = &cobra.Command{
 
 func runConsensusResult(proposalID string) error {
 	if hiveMindState.manager == nil {
-		return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		if !restoreHiveMindState() {
+			return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		}
 	}
 
 	result, exists := hiveMindState.manager.GetProposalResult(proposalID)
@@ -694,7 +806,9 @@ var hiveMindBroadcastCmd = &cobra.Command{
 
 func runHiveMindBroadcast(message string) error {
 	if hiveMindState.queen == nil {
-		return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		if !restoreHiveMindState() {
+			return fmt.Errorf("hive mind not initialized. Run 'hive-mind init' first")
+		}
 	}
 
 	// Parse domain
@@ -909,8 +1023,10 @@ var hiveMindShutdownCmd = &cobra.Command{
 
 func runHiveMindShutdown() error {
 	if !hiveMindState.initialized {
-		fmt.Println("Hive Mind is not running")
-		return nil
+		if !restoreHiveMindState() {
+			fmt.Println("Hive Mind is not running")
+			return nil
+		}
 	}
 
 	fmt.Println("Shutting down Hive Mind...")
@@ -945,6 +1061,8 @@ func runHiveMindShutdown() error {
 	hiveMindState.manager = nil
 	hiveMindState.queen = nil
 	hiveMindState.swarm = nil
+
+	_ = hivemind.ClearState()
 
 	fmt.Println("Hive Mind shutdown complete")
 	return nil
