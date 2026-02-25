@@ -3,6 +3,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -329,6 +330,7 @@ func runHiveMindSpawn() error {
 // ============================================================================
 
 var statusVerbose bool
+var statusFormat string
 
 var hiveMindStatusCmd = &cobra.Command{
 	Use:   "status",
@@ -347,6 +349,40 @@ func runHiveMindStatus() error {
 
 	state := hiveMindState.manager.GetState()
 
+	if statusFormat == "json" {
+		output := map[string]interface{}{
+			"initialized":     state.Initialized,
+			"algorithm":       state.Algorithm,
+			"activeProposals": state.ActiveProposals,
+			"totalAgents":     state.TotalAgents,
+			"activeAgents":    state.ActiveAgents,
+			"queenAgentId":    state.QueenAgentID,
+			"domainsActive":   state.DomainsActive,
+		}
+
+		if statusVerbose && hiveMindState.queen != nil {
+			output["domainHealth"] = hiveMindState.queen.GetDomainHealth()
+
+			agents := hiveMindState.swarm.ListAgents()
+			agentList := make([]map[string]interface{}, 0, len(agents))
+			for _, a := range agents {
+				sharedAgent := a.ToShared()
+				agentList = append(agentList, map[string]interface{}{
+					"id":     a.ID,
+					"type":   a.Type,
+					"role":   a.Role,
+					"status": sharedAgent.Status,
+					"domain": a.Domain,
+				})
+			}
+			output["agents"] = agentList
+		}
+
+		data, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Println(string(data))
+		return nil
+	}
+
 	fmt.Println("=== Hive Mind Status ===")
 	fmt.Printf("Initialized:      %v\n", state.Initialized)
 	fmt.Printf("Algorithm:        %s\n", state.Algorithm)
@@ -357,7 +393,6 @@ func runHiveMindStatus() error {
 		fmt.Printf("Queen Agent:      %s\n", state.QueenAgentID)
 	}
 
-	// Show domains
 	if len(state.DomainsActive) > 0 {
 		fmt.Printf("\nActive Domains:\n")
 		for _, d := range state.DomainsActive {
@@ -365,7 +400,6 @@ func runHiveMindStatus() error {
 		}
 	}
 
-	// Show domain health if verbose
 	if statusVerbose && hiveMindState.queen != nil {
 		fmt.Println("\n=== Domain Health ===")
 		health := hiveMindState.queen.GetDomainHealth()
@@ -380,7 +414,6 @@ func runHiveMindStatus() error {
 		}
 		w.Flush()
 
-		// Show agents
 		fmt.Println("\n=== Agents ===")
 		agents := hiveMindState.swarm.ListAgents()
 		w = tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
@@ -393,7 +426,6 @@ func runHiveMindStatus() error {
 		w.Flush()
 	}
 
-	// Show proposals
 	if hiveMindState.manager != nil {
 		proposals := hiveMindState.manager.ListProposals("")
 		if len(proposals) > 0 {
@@ -416,6 +448,7 @@ var taskPriority string
 var taskDomain string
 var taskConsensusType string
 var taskDescription string
+var taskFormat string
 
 var hiveMindTaskCmd = &cobra.Command{
 	Use:   "task [description]",
@@ -486,6 +519,29 @@ func runHiveMindTask() error {
 		return fmt.Errorf("failed to analyze task: %w", err)
 	}
 
+	if domain != "" {
+		if err := hiveMindState.queen.AssignTaskToDomain(ctx, task, domain); err != nil {
+			return fmt.Errorf("failed to assign task to domain: %w", err)
+		}
+	}
+
+	if taskFormat == "json" {
+		output := map[string]interface{}{
+			"id":                task.ID,
+			"description":      taskDescription,
+			"priority":         priority,
+			"complexity":       analysis.ComplexityScore,
+			"recommendedDomain": analysis.RecommendedDomain,
+			"estimatedDuration": analysis.EstimatedDuration,
+		}
+		if domain != "" {
+			output["assignedDomain"] = domain
+		}
+		data, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Println(string(data))
+		return nil
+	}
+
 	fmt.Printf("Task created: %s\n", task.ID)
 	fmt.Printf("  Description:  %s\n", taskDescription)
 	fmt.Printf("  Priority:     %s\n", priority)
@@ -493,11 +549,7 @@ func runHiveMindTask() error {
 	fmt.Printf("  Recommended:  %s domain\n", analysis.RecommendedDomain)
 	fmt.Printf("  Est. Time:    %dms\n", analysis.EstimatedDuration)
 
-	// Submit to domain if specified
 	if domain != "" {
-		if err := hiveMindState.queen.AssignTaskToDomain(ctx, task, domain); err != nil {
-			return fmt.Errorf("failed to assign task to domain: %w", err)
-		}
 		fmt.Printf("  Assigned to:  %s domain\n", domain)
 	}
 
@@ -1092,6 +1144,8 @@ func init() {
 	// hive-mind status flags
 	hiveMindStatusCmd.Flags().BoolVarP(&statusVerbose, "verbose", "v", false,
 		"Show detailed status including all agents")
+	hiveMindStatusCmd.Flags().StringVarP(&statusFormat, "format", "f", "text",
+		"Output format (text|json)")
 
 	// hive-mind task flags
 	hiveMindTaskCmd.Flags().StringVar(&taskPriority, "priority", "medium",
@@ -1102,6 +1156,8 @@ func init() {
 		"Required consensus type for task approval")
 	hiveMindTaskCmd.Flags().StringVar(&taskDescription, "description", "",
 		"Task description")
+	hiveMindTaskCmd.Flags().StringVarP(&taskFormat, "format", "f", "text",
+		"Output format (text|json)")
 
 	// hive-mind join flags
 	hiveMindJoinCmd.Flags().StringVar(&joinAgentType, "type", "coder", "Agent type")

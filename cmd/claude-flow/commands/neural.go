@@ -57,6 +57,7 @@ var (
 
 	// status flags
 	neuralStatusVerbose bool
+	neuralStatusFormat  string
 )
 
 // NeuralCmd is the parent command for all neural subcommands.
@@ -394,6 +395,25 @@ var statusCmd = &cobra.Command{
 
 		status := service.GetStatus()
 
+		if neuralStatusFormat == "json" {
+			output := map[string]interface{}{
+				"initialized":       status.Initialized,
+				"patternCount":      status.PatternCount,
+				"totalUsage":        status.TotalUsage,
+				"averageConfidence": status.AverageConfidence,
+				"storagePath":       status.StoragePath,
+			}
+			if status.LastUpdated != "" {
+				output["lastUpdated"] = status.LastUpdated
+			}
+			if neuralStatusVerbose {
+				output["basePath"] = service.GetBasePath()
+			}
+			data, _ := json.MarshalIndent(output, "", "  ")
+			fmt.Println(string(data))
+			return nil
+		}
+
 		fmt.Println("Neural System Status")
 		fmt.Println(strings.Repeat("-", 40))
 		fmt.Printf("  Initialized:    %v\n", status.Initialized)
@@ -456,6 +476,7 @@ func init() {
 
 	// status command flags
 	statusCmd.Flags().BoolVarP(&neuralStatusVerbose, "verbose", "v", false, "Show detailed metrics")
+	statusCmd.Flags().StringVarP(&neuralStatusFormat, "format", "f", "text", "Output format (text|json)")
 
 	// Add subcommands to neural
 	NeuralCmd.AddCommand(trainCmd)
