@@ -30,6 +30,7 @@ Thumbs.db
 # Build
 /bin/
 /dist/
+/claude-flow
 
 # Database files
 *.db
