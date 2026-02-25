@@ -259,11 +259,6 @@ func TestFederationHub_IsConfigured(t *testing.T) {
 }
 
 func TestFederationHub_IsConfiguredRejectsPartiallyConstructedHub(t *testing.T) {
-	base := NewFederationHubWithDefaults()
-	if !base.IsConfigured() {
-		t.Fatal("expected baseline constructor hub to be configured")
-	}
-
 	testCases := []struct {
 		name   string
 		mutate func(h *FederationHub)
@@ -338,9 +333,9 @@ func TestFederationHub_IsConfiguredRejectsPartiallyConstructedHub(t *testing.T) 
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			hubCopy := *base
-			tc.mutate(&hubCopy)
-			if hubCopy.IsConfigured() {
+			hub := NewFederationHubWithDefaults()
+			tc.mutate(hub)
+			if hub.IsConfigured() {
 				t.Fatalf("expected partially constructed hub to be unconfigured when %s", tc.name)
 			}
 		})

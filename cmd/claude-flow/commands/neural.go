@@ -115,8 +115,14 @@ var trainCmd = &cobra.Command{
 
 		// Progress callback
 		progressFn := func(epoch int, loss float64) {
-			bar := strings.Repeat("█", epoch*30/config.Epochs)
-			spaces := strings.Repeat("░", 30-len(bar))
+			filled := epoch * 30 / config.Epochs
+			if filled < 0 {
+				filled = 0
+			} else if filled > 30 {
+				filled = 30
+			}
+			bar := strings.Repeat("█", filled)
+			spaces := strings.Repeat("░", 30-filled)
 			fmt.Printf("\rEpoch %3d/%d [%s%s] Loss: %.4f", epoch, config.Epochs, bar, spaces, loss)
 		}
 

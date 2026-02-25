@@ -358,10 +358,7 @@ func NeedsRebalancing(utilizations []float64, config LoadConfig) bool {
 	// Standard deviation / mean = coefficient of variation
 	cv := 0.0
 	if mean > 0 {
-		cv = (variance / (mean * mean))
-		if cv > 0 {
-			cv = cv // sqrt would be here but we're comparing squared values
-		}
+		cv = variance / (mean * mean)
 	}
 
 	return cv > config.ImbalanceThreshold*config.ImbalanceThreshold
